@@ -20,6 +20,9 @@ public class EnergyShield : MonoBehaviour
     public bool IsDown { get; private set; }
     public float Normalized => Current / maxShield;
 
+    /// <summary>Root of whoever landed the most recent hit (for score attribution).</summary>
+    public Transform LastAttacker { get; private set; }
+
     /// <summary>(damage, worldHitPoint)</summary>
     public event Action<float, Vector3> OnDamaged;
     public event Action OnDeRezzed;
@@ -32,11 +35,12 @@ public class EnergyShield : MonoBehaviour
         Current = maxShield;
     }
 
-    public void TakeHit(float damage, Vector3 hitPoint)
+    public void TakeHit(float damage, Vector3 hitPoint, Transform attacker = null)
     {
         if (IsDown)
             return;
 
+        LastAttacker = attacker;
         Current = Mathf.Max(0f, Current - damage);
         _lastHitTime = Time.time;
         OnDamaged?.Invoke(damage, hitPoint);

@@ -28,22 +28,10 @@ public class PlayerBrain : MonoBehaviour
         if (Local == this) Local = null;
     }
 
-    void Start()
-    {
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-    }
+    // Cursor locking and the Escape key are owned by GameModeController.
 
     void Update()
     {
-        // Escape toggles the cursor so kids (and parents) can bail out easily.
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            bool locked = Cursor.lockState == CursorLockMode.Locked;
-            Cursor.lockState = locked ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = locked;
-        }
-
         if (Cursor.lockState == CursorLockMode.Locked)
         {
             _motor.AddLook(new Vector2(

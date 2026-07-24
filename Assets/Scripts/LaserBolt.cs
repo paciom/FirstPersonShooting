@@ -36,6 +36,13 @@ public class LaserBolt : MonoBehaviour
         trail.endWidth = 0f;
         trail.material = VfxUtil.MakeGlowMaterial(color, 2f);
 
+        // Small light so bolts paint the floor and walls as they fly.
+        var light = go.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = color;
+        light.intensity = 2.2f;
+        light.range = 3.5f;
+
         var bolt = go.AddComponent<LaserBolt>();
         bolt._direction = direction.normalized;
         bolt.speed = speed;
@@ -68,9 +75,9 @@ public class LaserBolt : MonoBehaviour
 
             var shield = hit.transform.root.GetComponent<EnergyShield>();
             if (shield != null && shield.teamId != teamId)
-                shield.TakeHit(damage, hit.point);
+                shield.TakeHit(damage, hit.point, ownerRoot);
 
-            VfxUtil.SpawnBurst(hit.point, color, 12, 3f, 0.08f);
+            VfxUtil.ImpactBurst(hit.point + hit.normal * 0.05f, color);
             Destroy(gameObject);
             return;
         }

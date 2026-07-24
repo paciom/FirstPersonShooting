@@ -40,7 +40,13 @@ public static class ArenaBuilder
     [MenuItem("Photon Arena/Build Greybox Arena")]
     public static void BuildAll()
     {
+        // Text serialization: diffable scenes for version control and tooling.
+        EditorSettings.serializationMode = SerializationMode.ForceText;
+
+        System.IO.Directory.CreateDirectory("Assets/Materials");
         ConfigureUrp();
+        RepairModelImports();
+        SpriteForge.GenerateAll();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -51,6 +57,7 @@ public static class ArenaBuilder
         BuildPlayer();
         BuildDummies();
         BuildBots();
+        BuildGameController(environment);
 
         System.IO.Directory.CreateDirectory("Assets/Scenes");
         EditorSceneManager.SaveScene(scene, ScenePath);
@@ -63,18 +70,52 @@ public static class ArenaBuilder
 
     static void ConfigureUrp()
     {
-        System.IO.Directory.CreateDirectory("Assets/Settings");
+        // Idempotent: recreating these assets over live ones briefly leaves the
+        // active pipeline without a renderer, which breaks every import that
+        // depends on the render pipeline (e.g. glTFast material generation).
+        const string pipelinePath = "Assets/Settings/PhotonArena_URP.asset";
+        var pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(pipelinePath);
+        if (pipeline == null)
+        {
+            System.IO.Directory.CreateDirectory("Assets/Settings");
 
-        var rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
-        AssetDatabase.CreateAsset(rendererData, "Assets/Settings/PhotonArena_Renderer.asset");
+            var rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
+            AssetDatabase.CreateAsset(rendererData, "Assets/Settings/PhotonArena_Renderer.asset");
 
-        var pipeline = UniversalRenderPipelineAsset.Create(rendererData);
-        pipeline.supportsHDR = true;   // HDR emissives feed bloom — the whole neon look
-        AssetDatabase.CreateAsset(pipeline, "Assets/Settings/PhotonArena_URP.asset");
+            pipeline = UniversalRenderPipelineAsset.Create(rendererData);
+            pipeline.supportsHDR = true;   // HDR emissives feed bloom — the whole neon look
+            AssetDatabase.CreateAsset(pipeline, pipelinePath);
+        }
 
         GraphicsSettings.defaultRenderPipeline = pipeline;
         QualitySettings.renderPipeline = pipeline;
         Debug.Log("[ArenaBuilder] URP configured.");
+    }
+
+    /// <summary>
+    /// Reimport any model whose cached import result is broken (e.g. imported
+    /// while the render pipeline was in a transitional state).
+    /// </summary>
+    static void RepairModelImports()
+    {
+        if (!System.IO.Directory.Exists("Assets/Models"))
+            return;
+        foreach (var file in System.IO.Directory.GetFiles("Assets/Models", "*.glb"))
+        {
+            string path = file.Replace('\\', '/');
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
+            {
+                Debug.Log($"[ArenaBuilder] Reimporting broken model: {path}");
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            }
+
+            var main = AssetDatabase.LoadMainAssetAtPath(path);
+            Debug.Log($"[ArenaBuilder] {path}: main={(main == null ? "NULL" : main.GetType().Name)}, " +
+                      $"asGameObject={(AssetDatabase.LoadAssetAtPath<GameObject>(path) == null ? "NULL" : "ok")}");
+            foreach (var sub in AssetDatabase.LoadAllAssetRepresentationsAtPath(path))
+                if (sub != null)
+                    Debug.Log($"[ArenaBuilder]   sub: {sub.GetType().Name} '{sub.name}'");
+        }
     }
 
     // ---------- Materials ----------
@@ -91,6 +132,56 @@ public static class ArenaBuilder
         }
         AssetDatabase.CreateAsset(mat, $"Assets/Materials/{name}.mat");
         return mat;
+    }
+
+    // ---------- Imported models (Meshy) ----------
+
+    static GameObject LoadModel(string name)
+    {
+        return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/{name}.glb")
+            ?? AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/{name}.fbx");
+    }
+
+    /// <summary>Instantiate a model, scale to targetHeight, sit its base on groundPosition.</summary>
+    static GameObject PlaceProp(GameObject prefab, GameObject parent, Vector3 groundPosition,
+        float targetHeight, float yRotation, bool addBoxCollider)
+    {
+        var instance = (GameObject)UnityEngine.Object.Instantiate(prefab, parent.transform);
+        instance.name = prefab.name;
+        instance.transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
+        instance.transform.position = groundPosition;
+
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return instance;
+
+        var bounds = CombinedBounds(renderers);
+        float scale = targetHeight / Mathf.Max(0.01f, bounds.size.y);
+        instance.transform.localScale *= scale;
+
+        bounds = CombinedBounds(renderers);
+        instance.transform.position += new Vector3(
+            groundPosition.x - bounds.center.x,
+            groundPosition.y - bounds.min.y,
+            groundPosition.z - bounds.center.z);
+
+        if (addBoxCollider)
+        {
+            bounds = CombinedBounds(renderers);
+            var box = instance.AddComponent<BoxCollider>();
+            box.center = instance.transform.InverseTransformPoint(bounds.center);
+            var lossy = instance.transform.lossyScale;
+            box.size = new Vector3(bounds.size.x / lossy.x, bounds.size.y / lossy.y, bounds.size.z / lossy.z);
+        }
+        return instance;
+    }
+
+    static Bounds CombinedBounds(Renderer[] renderers)
+    {
+        var bounds = renderers[0].bounds;
+        foreach (var r in renderers)
+            bounds.Encapsulate(r.bounds);
+        return bounds;
     }
 
     // ---------- Environment ----------
@@ -143,6 +234,24 @@ public static class ArenaBuilder
         Box(root, "PillarSE", new Vector3(16, 2f, -16), new Vector3(0.8f, 4f, 0.8f), trimMagenta);
         Box(root, "PillarSW", new Vector3(-16, 2f, -16), new Vector3(0.8f, 4f, 0.8f), trimCyan);
 
+        // Meshy-generated props — placed before the NavMesh bake so bots path
+        // around them. Silently skipped until the models exist on disk.
+        var crate = LoadModel("energy-crate");
+        if (crate != null)
+        {
+            PlaceProp(crate, root, new Vector3(10, 0, -12), 1.3f, 0f, true);
+            PlaceProp(crate, root, new Vector3(-7, 0, -13), 1.3f, 0f, true);
+            PlaceProp(crate, root, new Vector3(16.5f, 0, 8), 1.3f, 0f, true);
+            PlaceProp(crate, root, new Vector3(-16.5f, 0, -8), 1.3f, 0f, true);
+        }
+
+        var portal = LoadModel("spawn-portal");
+        if (portal != null)
+        {
+            PlaceProp(portal, root, new Vector3(0, 0, -18.2f), 3.2f, 0f, false);
+            PlaceProp(portal, root, new Vector3(0, 0, 18.2f), 3.2f, 180f, false);
+        }
+
         return root;
     }
 
@@ -183,7 +292,7 @@ public static class ArenaBuilder
         lightGo.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
 
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.12f, 0.14f, 0.22f);
+        RenderSettings.ambientLight = new Color(0.18f, 0.20f, 0.30f);
 
         // Corner accent lights for the neon mood.
         PointLight(new Vector3(16, 3.5f, 16), NeonCyan);
@@ -210,14 +319,23 @@ public static class ArenaBuilder
 
         var bloom = profile.Add<Bloom>();
         bloom.active = true;
-        bloom.intensity.Override(1.6f);
-        bloom.threshold.Override(0.9f);
+        bloom.intensity.Override(2.2f);
+        bloom.threshold.Override(0.8f);
+        bloom.scatter.Override(0.75f);
 
         var tonemapping = profile.Add<Tonemapping>();
         tonemapping.mode.Override(TonemappingMode.ACES);
 
         var vignette = profile.Add<Vignette>();
         vignette.intensity.Override(0.22f);
+
+        // VolumeProfile.Add only creates in-memory components; without
+        // registering them as sub-assets the profile serializes EMPTY and the
+        // whole neon look silently dies on the next editor restart.
+        AssetDatabase.AddObjectToAsset(bloom, profile);
+        AssetDatabase.AddObjectToAsset(tonemapping, profile);
+        AssetDatabase.AddObjectToAsset(vignette, profile);
+        EditorUtility.SetDirty(profile);
 
         var volumeGo = new GameObject("Global Volume");
         var volume = volumeGo.AddComponent<Volume>();
@@ -257,22 +375,64 @@ public static class ArenaBuilder
         var camData = head.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = true;
 
-        // Blaster hangs off the head so it aims with the view.
-        var blasterGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        blasterGo.name = "Blaster";
-        UnityEngine.Object.DestroyImmediate(blasterGo.GetComponent<Collider>());
-        blasterGo.transform.SetParent(head.transform, false);
-        blasterGo.transform.localPosition = new Vector3(0.32f, -0.28f, 0.45f);
-        blasterGo.transform.localScale = new Vector3(0.09f, 0.09f, 0.42f);
-        blasterGo.GetComponent<MeshRenderer>().sharedMaterial =
-            MakeLitMaterial("BlasterBody", new Color(0.1f, 0.1f, 0.14f), NeonCyan, 2f);
+        // Blaster hangs off the head so it aims with the view. Uses the Meshy
+        // viewmodel when available, otherwise the greybox cube.
+        var blasterBodyMat = MakeLitMaterial("BlasterBody", new Color(0.1f, 0.1f, 0.14f), NeonCyan, 2f);
+        GameObject blasterGo;
+        Transform muzzleT;
+        var blasterModel = LoadModel("laser-blaster");
+        if (blasterModel != null)
+        {
+            blasterGo = (GameObject)UnityEngine.Object.Instantiate(blasterModel);
+            blasterGo.name = "Blaster";
+            blasterGo.transform.SetParent(head.transform, false);
+            blasterGo.transform.localPosition = new Vector3(0.32f, -0.30f, 0.35f);
+            blasterGo.transform.localRotation = Quaternion.identity;
 
-        var muzzle = new GameObject("Muzzle");
-        muzzle.transform.SetParent(blasterGo.transform, false);
-        muzzle.transform.localPosition = new Vector3(0, 0, 0.6f);
+            var renderers = blasterGo.GetComponentsInChildren<Renderer>();
+            var muzzleGo = new GameObject("Muzzle");
+            if (renderers.Length > 0)
+            {
+                // Point the model's longest axis forward (+Z) — generated guns
+                // often have the barrel along X.
+                var bounds = CombinedBounds(renderers);
+                if (bounds.size.x >= bounds.size.y && bounds.size.x >= bounds.size.z)
+                    blasterGo.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+                else if (bounds.size.y > bounds.size.z)
+                    blasterGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+                // Multiply, never replace — the glTF root may carry its own scale.
+                bounds = CombinedBounds(renderers);
+                blasterGo.transform.localScale *= 0.5f / Mathf.Max(0.01f, bounds.size.z);
+                bounds = CombinedBounds(renderers);
+                muzzleGo.transform.SetParent(blasterGo.transform, true);
+                muzzleGo.transform.position = new Vector3(bounds.center.x, bounds.center.y, bounds.max.z);
+            }
+            else
+            {
+                muzzleGo.transform.SetParent(blasterGo.transform, false);
+                muzzleGo.transform.localPosition = Vector3.forward * 0.5f;
+            }
+            muzzleT = muzzleGo.transform;
+        }
+        else
+        {
+            blasterGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            blasterGo.name = "Blaster";
+            UnityEngine.Object.DestroyImmediate(blasterGo.GetComponent<Collider>());
+            blasterGo.transform.SetParent(head.transform, false);
+            blasterGo.transform.localPosition = new Vector3(0.32f, -0.28f, 0.45f);
+            blasterGo.transform.localScale = new Vector3(0.09f, 0.09f, 0.42f);
+            blasterGo.GetComponent<MeshRenderer>().sharedMaterial = blasterBodyMat;
+
+            var muzzle = new GameObject("Muzzle");
+            muzzle.transform.SetParent(blasterGo.transform, false);
+            muzzle.transform.localPosition = new Vector3(0, 0, 0.6f);
+            muzzleT = muzzle.transform;
+        }
 
         var blaster = blasterGo.AddComponent<LaserBlaster>();
-        blaster.muzzle = muzzle.transform;
+        blaster.muzzle = muzzleT;
         blaster.ownerRoot = player.transform;
         blaster.boltColor = NeonCyan;
 
@@ -290,60 +450,87 @@ public static class ArenaBuilder
         deRez.burstColor = NeonCyan;
 
         player.AddComponent<HudController>();
+
+        var bubble = player.AddComponent<ShieldBubble>();
+        bubble.color = NeonCyan;
     }
 
     static void BuildDummies()
     {
-        var dummyMat = MakeLitMaterial("Dummy", new Color(0.5f, 0.25f, 0.1f), NeonOrange, 2f);
+        var armor = MakeLitMaterial("DummyArmor", new Color(0.45f, 0.28f, 0.12f));
+        var glow = MakeLitMaterial("DummyGlow", Color.black, NeonOrange, 4f);
+        var darkMetal = MakeLitMaterial("DarkMetal", new Color(0.10f, 0.10f, 0.13f));
         var positions = new[]
         {
             new Vector3(-6, 0, 8), new Vector3(6, 0, 9),
             new Vector3(-12, 0, -4), new Vector3(13, 0, 2),
         };
 
+        var robotModel = LoadModel("hover-robot");
         foreach (var pos in positions)
         {
             var dummy = new GameObject("TargetDummy");
             dummy.transform.position = pos;
 
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(dummy.transform, false);
-            body.transform.localPosition = new Vector3(0, 1f, 0);
-            body.GetComponent<MeshRenderer>().sharedMaterial = dummyMat;
+            var body = robotModel != null
+                ? RobotFactory.BuildFromModel(dummy, robotModel, NeonOrange, glow)
+                : RobotFactory.Build(dummy, armor, glow, darkMetal);
+
+            var hitCapsule = dummy.AddComponent<CapsuleCollider>();
+            hitCapsule.center = new Vector3(0, 1f, 0);
+            hitCapsule.height = 2f;
+            hitCapsule.radius = 0.45f;
 
             var shield = dummy.AddComponent<EnergyShield>();
             shield.teamId = 1;
             shield.regenDelay = 2f;
 
             var deRez = dummy.AddComponent<DeRezEffect>();
-            deRez.body = body.transform;
+            deRez.body = body;
             deRez.burstColor = NeonOrange;
             deRez.respawnDelay = 2.5f;
 
             dummy.AddComponent<TargetDummy>();
+            dummy.AddComponent<HoverBob>();
+            var bubble = dummy.AddComponent<ShieldBubble>();
+            bubble.color = NeonOrange;
         }
     }
 
     static void BuildBots()
     {
-        var botMat = MakeLitMaterial("Bot", new Color(0.45f, 0.12f, 0.4f), NeonMagenta, 1.5f);
-        var positions = new[]
-        {
-            new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15),
-        };
+        var enemyArmor = MakeLitMaterial("BotArmor", new Color(0.32f, 0.12f, 0.30f));
+        var enemyGlow = MakeLitMaterial("BotGlow", Color.black, NeonMagenta, 4f);
+        var allyArmor = MakeLitMaterial("AllyArmor", new Color(0.12f, 0.24f, 0.34f));
+        var allyGlow = MakeLitMaterial("AllyGlow", Color.black, NeonCyan, 4f);
 
+        // Magenta enemies (team 1) at the north spawn, cyan allies (team 0)
+        // flanking the player at the south spawn.
+        BuildBotTeam("Bot", 1, NeonMagenta, enemyArmor, enemyGlow, 180f,
+            new[] { new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15) });
+        BuildBotTeam("Ally", 0, NeonCyan, allyArmor, allyGlow, 0f,
+            new[] { new Vector3(-8, 0, -15), new Vector3(-4, 0, -16), new Vector3(8, 0, -15) });
+    }
+
+    static void BuildBotTeam(string namePrefix, int teamId, Color teamColor,
+        Material armor, Material glow, float yRotation, Vector3[] positions)
+    {
+        var darkMetal = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/DarkMetal.mat");
+        var robotModel = LoadModel("hover-robot");
         for (int i = 0; i < positions.Length; i++)
         {
-            var bot = new GameObject($"Bot_{i + 1}");
+            var bot = new GameObject($"{namePrefix}_{i + 1}");
             bot.transform.position = positions[i];
-            bot.transform.rotation = Quaternion.Euler(0, 180f, 0);
+            bot.transform.rotation = Quaternion.Euler(0, yRotation, 0);
 
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(bot.transform, false);
-            body.transform.localPosition = new Vector3(0, 1f, 0);
-            body.GetComponent<MeshRenderer>().sharedMaterial = botMat;
+            var body = robotModel != null
+                ? RobotFactory.BuildFromModel(bot, robotModel, teamColor, glow)
+                : RobotFactory.Build(bot, armor, glow, darkMetal);
+
+            var hitCapsule = bot.AddComponent<CapsuleCollider>();
+            hitCapsule.center = new Vector3(0, 1f, 0);
+            hitCapsule.height = 2f;
+            hitCapsule.radius = 0.45f;
 
             var agent = bot.AddComponent<NavMeshAgent>();
             agent.speed = 4.5f;
@@ -355,8 +542,9 @@ public static class ArenaBuilder
             var blasterGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
             blasterGo.name = "Blaster";
             UnityEngine.Object.DestroyImmediate(blasterGo.GetComponent<Collider>());
-            blasterGo.transform.SetParent(bot.transform, false);
-            blasterGo.transform.localPosition = new Vector3(0.3f, 1.3f, 0.4f);
+            // Under the Body rig so the gun shrinks away with the robot on de-rez.
+            blasterGo.transform.SetParent(body, false);
+            blasterGo.transform.localPosition = new Vector3(0.3f, 0.3f, 0.4f);
             blasterGo.transform.localScale = new Vector3(0.09f, 0.09f, 0.42f);
             blasterGo.GetComponent<MeshRenderer>().sharedMaterial =
                 AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/BlasterBody.mat");
@@ -366,12 +554,12 @@ public static class ArenaBuilder
             muzzle.transform.localPosition = new Vector3(0, 0, 0.6f);
 
             var shield = bot.AddComponent<EnergyShield>();
-            shield.teamId = 1;
+            shield.teamId = teamId;
 
             var blaster = blasterGo.AddComponent<LaserBlaster>();
             blaster.muzzle = muzzle.transform;
             blaster.ownerRoot = bot.transform;
-            blaster.boltColor = NeonMagenta;
+            blaster.boltColor = teamColor;
             blaster.shotsPerSecond = 2.5f;
             blaster.boltDamage = 12f;
 
@@ -379,10 +567,24 @@ public static class ArenaBuilder
             brain.blaster = blaster;
 
             var deRez = bot.AddComponent<DeRezEffect>();
-            deRez.body = body.transform;
-            deRez.burstColor = NeonMagenta;
+            deRez.body = body;
+            deRez.burstColor = teamColor;
 
-            bot.AddComponent<TargetDummy>();
+            // Only enemy de-rezzes score points for the player.
+            if (teamId != 0)
+                bot.AddComponent<TargetDummy>();
+            bot.AddComponent<HoverBob>();
+            var bubble = bot.AddComponent<ShieldBubble>();
+            bubble.color = teamColor;
         }
+    }
+
+    static void BuildGameController(GameObject environment)
+    {
+        var controller = new GameObject("GameController");
+        var randomizer = controller.AddComponent<ArenaRandomizer>();
+        randomizer.environmentRoot = environment.transform;
+        randomizer.coverMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Cover.mat");
+        controller.AddComponent<GameModeController>();
     }
 }

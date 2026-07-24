@@ -10,6 +10,9 @@
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
+# API keys and local secrets — never commit
+.secrets/
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/

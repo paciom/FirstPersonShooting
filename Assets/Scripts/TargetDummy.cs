@@ -23,6 +23,9 @@ public class TargetDummy : MonoBehaviour
 
     void HandleDeRez()
     {
-        ScoreKeeper.AddPoint();
+        // Only the player's own de-rezzes score — allies farming dummies
+        // shouldn't inflate the number on the HUD.
+        if (_shield.LastAttacker != null && _shield.LastAttacker.GetComponent<PlayerBrain>() != null)
+            ScoreKeeper.AddPoint();
     }
 }

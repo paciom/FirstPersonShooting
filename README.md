@@ -7,13 +7,32 @@ See [PLAN.md](PLAN.md) for the full project plan.
 No one ever "dies" in Photon Arena: laser hits drain an **energy shield**, and characters
 who lose their shield **de-rez** into light and re-materialize moments later.
 
-## Current status — Phase 1 greybox
+## Game modes
+
+The game opens on a main menu with three modes:
+
+- **AI v AI** — cyan and magenta robot teams fight autonomously while an
+  auto-directed spectator camera orbits the action and cuts between bots
+  (the seed of the broadcast CameraDirector).
+- **Player v AI** — you + 3 cyan ally bots vs 3 magenta hunters (4v4 feel).
+  Only your own de-rezzes add to the HUD score.
+- **Arena Builder** — free-fly camera; press **R** to generate a randomized
+  cover layout (NavMesh rebakes live). The layout persists for the next match.
+
+**Esc** returns to the menu from any mode; click to re-lock the cursor after alt-tab.
+
+## Current status — Phase 1 greybox + visual upgrade
 
 - First-person movement (WASD + mouse, Shift sprint, Space jump, Esc frees the cursor)
-- Laser blaster (hold left mouse) firing glowing bolts with trails
+- Laser blaster (hold left mouse) firing glowing bolts with trails and light halos
 - Energy shields with regen, de-rez dissolve + re-materialize cycle
-- 4 orange target dummies + 3 magenta AI bots that chase and shoot back
-  (with human-like reaction delay and aim error)
+- **Hover-robot enemies** built by `RobotFactory` (glowing visor, chest core, antenna,
+  hover ring + thruster, idle bob animation) — 4 orange dummies, 3 magenta hunters
+  with human-like reaction delay and aim error
+- **Force-field bubbles** (`ShieldBubble` + fresnel/hex `PA_ForceField` shader) that
+  flash when characters take hits
+- **Multi-stage explosions** (core flash, shockwave ring, stretched sparks, glow motes)
+  from procedurally generated sprites (`SpriteForge` → `Assets/Resources/VFX`)
 - Neon greybox arena: emissive trim, corner pillars, accent lights, bloom post-processing
 - HUD: crosshair, shield bar (cyan → orange as it drains), de-rez score
 

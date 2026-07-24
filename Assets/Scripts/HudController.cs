@@ -13,6 +13,7 @@ public class HudController : MonoBehaviour
     EnergyShield _shield;
     Image _shieldFill;
     Text _scoreText;
+    GameObject _canvasGo;
 
     void Awake()
     {
@@ -33,6 +34,15 @@ public class HudController : MonoBehaviour
 
     void Update()
     {
+        // The combat HUD only belongs in Player v AI (it bleeds through the
+        // translucent menu backdrop otherwise).
+        if (_canvasGo != null && GameModeController.Instance != null)
+        {
+            bool show = GameModeController.Instance.Mode == GameMode.PlayerVsAI;
+            if (_canvasGo.activeSelf != show)
+                _canvasGo.SetActive(show);
+        }
+
         if (_shield != null && _shieldFill != null)
         {
             _shieldFill.fillAmount = _shield.Normalized;
@@ -50,6 +60,9 @@ public class HudController : MonoBehaviour
     void BuildCanvas()
     {
         var canvasGo = new GameObject("HUD");
+        _canvasGo = canvasGo;
+        // Child of the player so the HUD disappears with them (e.g. AI v AI mode).
+        canvasGo.transform.SetParent(transform, false);
         var canvas = canvasGo.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         var scaler = canvasGo.AddComponent<CanvasScaler>();

@@ -44,9 +44,25 @@ public class DeRezEffect : MonoBehaviour
         StartCoroutine(DeRezRoutine());
     }
 
+    /// <summary>
+    /// Force-complete an in-flight de-rez cycle. Deactivating a GameObject
+    /// kills its coroutines permanently, so the mode controller calls this
+    /// before hiding characters (and on every mode entry) to avoid stranding
+    /// them invisible/invulnerable mid-cycle. Safe to call anytime.
+    /// </summary>
+    public void CancelAndRestore()
+    {
+        StopAllCoroutines();
+        if (body != null)
+            body.localScale = _bodyScale;
+        SetControlEnabled(true);
+        if (_shield.IsDown)
+            _shield.Rematerialize();
+    }
+
     IEnumerator DeRezRoutine()
     {
-        VfxUtil.SpawnBurst(body.position + Vector3.up * 0.8f, burstColor, 40, 5f);
+        VfxUtil.Explosion(transform.position + Vector3.up * 1f, burstColor, 1.3f);
         SetControlEnabled(false);
 
         // Shrink into nothing — dissolving into light, never dying.
@@ -59,15 +75,19 @@ public class DeRezEffect : MonoBehaviour
 
         yield return new WaitForSeconds(respawnDelay);
 
-        // Re-materialize at the spawn point.
+        // Re-materialize at the spawn point. NavMeshAgents must Warp — setting
+        // transform.position while an agent is enabled makes it fight the move.
         var motor = GetComponent<CharacterMotor>();
+        var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         if (motor != null)
             motor.Teleport(_spawnPosition);
+        else if (agent != null && agent.enabled)
+            agent.Warp(_spawnPosition);
         else
             transform.position = _spawnPosition;
         transform.rotation = _spawnRotation;
 
-        VfxUtil.SpawnBurst(_spawnPosition + Vector3.up * 0.8f, burstColor, 25, 3f);
+        VfxUtil.Explosion(_spawnPosition + Vector3.up * 1f, burstColor, 0.7f);
         for (float t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
         {
             body.localScale = _bodyScale * t;
@@ -86,6 +106,14 @@ public class DeRezEffect : MonoBehaviour
 
         var aiBrain = GetComponent<AIBrain>();
         if (aiBrain != null) aiBrain.SetActive(enabled);
+
+        // Clear stale input so a de-rezzed player doesn't keep gliding.
+        if (!enabled)
+        {
+            var motor = GetComponent<CharacterMotor>();
+            if (motor != null)
+                motor.SetMoveInput(Vector2.zero);
+        }
 
         foreach (var col in GetComponentsInChildren<Collider>())
             if (!(col is CharacterController))
