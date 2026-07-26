@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-6977256496365328010
+--- !u!114 &-8710513620192718247
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -50,7 +50,7 @@ MonoBehaviour:
   dirtIntensity:
     m_OverrideState: 0
     m_Value: 0
---- !u!114 &-2924674274695997409
+--- !u!114 &-844212296617417014
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
@@ -91,10 +91,10 @@ MonoBehaviour:
   m_Name: PhotonArena_PostFX
   m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.VolumeProfile
   components:
-  - {fileID: -6977256496365328010}
-  - {fileID: 599978946141959356}
-  - {fileID: -2924674274695997409}
---- !u!114 &599978946141959356
+  - {fileID: -8710513620192718247}
+  - {fileID: 4464467911870885583}
+  - {fileID: -844212296617417014}
+--- !u!114 &4464467911870885583
 MonoBehaviour:
   m_ObjectHideFlags: 3
   m_CorrespondingSourceObject: {fileID: 0}
