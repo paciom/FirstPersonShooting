@@ -157,7 +157,10 @@ public static class RobotSelectMenu
 
             var spin = new GameObject("Spin");
             spin.transform.SetParent(rig.transform, false);
-            spin.AddComponent<RobotPreviewSpinner>();
+            var spinner = spin.AddComponent<RobotPreviewSpinner>();
+            // Spread the fleet evenly around the cycle so the row always has
+            // something mid-transformation rather than all nine snapping at once.
+            spinner.phaseDegrees = n > 1 ? i * (360f / n) : 0f;
             if (roster.robots[i].modelPrefab != null)
                 NormalizeToCenter(Object.Instantiate(roster.robots[i].modelPrefab, spin.transform),
                     spin.transform);
@@ -306,12 +309,82 @@ public class RobotSelectState : MonoBehaviour
     }
 }
 
-/// <summary>Slow turntable spin for robot select previews.</summary>
+/// <summary>
+/// Turntable for the robot-select previews, and the showcase for vehicle form:
+/// one full revolution as a robot, fold, another full revolution as a vehicle,
+/// unfold, repeat. Tying the transformation to a completed revolution rather
+/// than a timer means you always see the robot from every side before it
+/// changes, and the same for the vehicle afterwards.
+///
+/// Cards are given a staggered head start so the row never transforms in
+/// unison — with nine of them there is almost always one mid-fold to look at.
+///
+/// Robots with no forged vehicle clips (the procedural blockbot, the primitive
+/// fallback) just spin, exactly as this did before.
+/// </summary>
 public class RobotPreviewSpinner : MonoBehaviour
 {
+    public float degreesPerSecond = 40f;
+
+    [Tooltip("Head start in degrees, so a row of cards doesn't fold in unison.")]
+    public float phaseDegrees;
+
+    [Tooltip("How far the folded vehicle rises to stay framed. Purely a preview " +
+             "framing aid — the vehicle sits on the floor in the actual game.")]
+    public float vehicleLift = 0.35f;
+
+    Animator _animator;
+    bool _canTransform;
+    float _turned;
+    bool _vehicle;
+    Vector3 _restPosition;
+    float _lift;
+
+    // Start, not Awake: AddComponent runs Awake immediately, which is before
+    // the caller has set phaseDegrees and before the model has been parented
+    // under us — an Awake lookup finds no Animator at all.
+    void Start()
+    {
+        _restPosition = transform.localPosition;
+        _turned = phaseDegrees;
+
+        _animator = GetComponentInChildren<Animator>();
+        _canTransform = HasVehicleParameter(_animator);
+    }
+
     void Update()
     {
-        transform.Rotate(0f, 40f * Time.deltaTime, 0f);
+        float step = degreesPerSecond * Time.deltaTime;
+        transform.Rotate(0f, step, 0f);
+
+        if (!_canTransform)
+            return;
+
+        _turned += step;
+        if (_turned >= 360f)
+        {
+            _turned -= 360f;
+            _vehicle = !_vehicle;
+            _animator.SetBool(TransformMode.VehicleParameter, _vehicle);
+        }
+
+        // Ride the lift in over the same window the fold takes, so the model
+        // rises with the fold instead of sliding afterwards.
+        float target = _vehicle ? vehicleLift : 0f;
+        _lift = Mathf.MoveTowards(_lift, target,
+            vehicleLift / Mathf.Max(0.01f, TransformMode.FoldSeconds) * Time.deltaTime);
+        transform.localPosition = _restPosition + Vector3.up * _lift;
+    }
+
+    static bool HasVehicleParameter(Animator animator)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null)
+            return false;
+        foreach (var parameter in animator.parameters)
+            if (parameter.type == AnimatorControllerParameterType.Bool &&
+                parameter.name == TransformMode.VehicleParameter)
+                return true;
+        return false;
     }
 }
 
