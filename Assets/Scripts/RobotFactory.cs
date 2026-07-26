@@ -55,6 +55,71 @@ public static class RobotFactory
         body.SetParent(root.transform, false);
         body.localPosition = new Vector3(0f, 1.0f, 0f);
 
+        InstantiateNormalized(modelPrefab, body, teamTint);
+
+        // Team marker under the robot for instant team readability on camera:
+        // a crisp team-colored donut ring plus a faint wider glow wash — flat
+        // sprites on the floor instead of the old solid cylinder, which bloom
+        // blew out into a plain white blob. The additive shader is two-sided
+        // and ZWrite Off, so the flat quads can't z-fight the floor.
+        // (ringGlow material kept in the signature for the primitive-robot path.)
+        var ringRoot = new GameObject("TeamRing");
+        ringRoot.transform.SetParent(body, false);
+        ringRoot.transform.localPosition = new Vector3(0f, -0.85f, 0f);
+        FlatGlowQuad(ringRoot.transform, "Ring", "VFX/ring", teamTint, 1.5f, 1.5f, 0.02f);
+        FlatGlowQuad(ringRoot.transform, "Wash", "VFX/glow", teamTint, 0.35f, 2.4f, 0f);
+
+        return body;
+    }
+
+    /// <summary>A floor-flat additive sprite quad (team rings, hover washes).</summary>
+    static void FlatGlowQuad(Transform parent, string name, string texturePath, Color color,
+        float intensity, float size, float yOffset)
+    {
+        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        quad.name = name;
+        var collider = quad.GetComponent<Collider>();
+        if (Application.isPlaying) Object.Destroy(collider);
+        else Object.DestroyImmediate(collider);
+        quad.transform.SetParent(parent, false);
+        quad.transform.localPosition = new Vector3(0f, yOffset, 0f);
+        quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat
+        quad.transform.localScale = Vector3.one * size;
+
+        var mat = new Material(Shader.Find("PhotonArena/Additive"));
+        mat.SetTexture("_MainTex", Resources.Load<Texture2D>(texturePath));
+        mat.SetColor("_Color", color);
+        mat.SetFloat("_Intensity", intensity);
+        quad.GetComponent<MeshRenderer>().sharedMaterial = mat;
+    }
+
+    /// <summary>
+    /// Runtime robot swap: replaces the model inside an existing "Body" rig
+    /// with a different roster robot, keeping the Blaster (weapon components
+    /// live on it) and the TeamRing untouched. Everything DeRezEffect /
+    /// HoverBob / ShieldBubble reference is the Body transform itself, so the
+    /// swap is invisible to them.
+    /// </summary>
+    public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint)
+    {
+        for (int i = body.childCount - 1; i >= 0; i--)
+        {
+            var child = body.GetChild(i);
+            if (child.name == "Blaster" || child.name == "TeamRing")
+                continue;
+            Object.Destroy(child.gameObject);
+        }
+        InstantiateNormalized(modelPrefab, body, teamTint);
+    }
+
+    /// <summary>
+    /// Instantiates a model under <paramref name="body"/> as "Model",
+    /// normalizes it to character height (multiplying — never replacing — the
+    /// glTF unit-conversion scale), recenters it, and tints copies of its
+    /// materials toward the team color.
+    /// </summary>
+    public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body, Color teamTint)
+    {
         var instance = Object.Instantiate(modelPrefab, body);
         instance.name = "Model";
         instance.transform.localPosition = Vector3.zero;
@@ -73,7 +138,23 @@ public static class RobotFactory
             float scale = 1.6f / Mathf.Max(0.01f, bounds.size.y);
             instance.transform.localScale *= scale;
             Vector3 localCenter = body.InverseTransformPoint(bounds.center);
-            instance.transform.localPosition = -localCenter * scale;
+
+            // Hovering robots sit centred on the Body pivot; legged ones (the
+            // rigged walkers, which carry a RobotLocomotion) must have their
+            // feet on the floor instead, i.e. at the character root's own y.
+            if (instance.GetComponentInChildren<RobotLocomotion>(true) != null)
+            {
+                Vector3 localBottom = body.InverseTransformPoint(
+                    new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+                instance.transform.localPosition = new Vector3(
+                    -localCenter.x * scale,
+                    -localBottom.y * scale - body.localPosition.y,
+                    -localCenter.z * scale);
+            }
+            else
+            {
+                instance.transform.localPosition = -localCenter * scale;
+            }
 
             // Tint copies of the imported materials — never the shared import assets.
             foreach (var r in renderers)
@@ -93,19 +174,7 @@ public static class RobotFactory
                 r.sharedMaterials = materials;
             }
         }
-
-        // Glowing team ring under the robot for instant team readability on camera.
-        var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        ring.name = "TeamRing";
-        var ringCollider = ring.GetComponent<Collider>();
-        if (Application.isPlaying) Object.Destroy(ringCollider);
-        else Object.DestroyImmediate(ringCollider);
-        ring.transform.SetParent(body, false);
-        ring.transform.localPosition = new Vector3(0f, -0.85f, 0f);
-        ring.transform.localScale = new Vector3(0.6f, 0.025f, 0.6f);
-        ring.GetComponent<MeshRenderer>().sharedMaterial = ringGlow;
-
-        return body;
+        return instance;
     }
 
     static void Part(Transform parent, PrimitiveType type, Vector3 localPos, Vector3 scale,

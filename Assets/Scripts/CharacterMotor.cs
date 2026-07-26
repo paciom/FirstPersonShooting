@@ -19,6 +19,18 @@ public class CharacterMotor : MonoBehaviour
     public float minPitch = -85f;
     public float maxPitch = 85f;
 
+    [Tooltip("External speed scale (X-Ray scope, future shrink gadget, etc.).")]
+    public float speedMultiplier = 1f;
+
+    [Tooltip("Second speed scale owned by StatusEffects (slow/freeze/goo). Multiplies with speedMultiplier.")]
+    [HideInInspector] public float statusSpeedMultiplier = 1f;
+
+    [Tooltip("Impulse velocity from knockback weapons; decays automatically.")]
+    [HideInInspector] public Vector3 externalVelocity;
+
+    [Tooltip("While true, gravity is replaced by a gentle upward drift (Moonboots / bubble trap).")]
+    [HideInInspector] public bool floatMode;
+
     CharacterController _controller;
     Vector2 _moveInput;
     bool _sprinting;
@@ -60,14 +72,23 @@ public class CharacterMotor : MonoBehaviour
 
     void Update()
     {
-        float speed = _sprinting ? sprintSpeed : walkSpeed;
+        float speed = (_sprinting ? sprintSpeed : walkSpeed) * speedMultiplier * statusSpeedMultiplier;
         Vector3 planar = transform.TransformDirection(new Vector3(_moveInput.x, 0f, _moveInput.y)) * speed;
 
-        if (_controller.isGrounded && _verticalVelocity < 0f)
-            _verticalVelocity = -2f;
-        _verticalVelocity += gravity * Time.deltaTime;
+        if (floatMode)
+        {
+            // Anti-grav: drift gently upward instead of falling.
+            _verticalVelocity = Mathf.MoveTowards(_verticalVelocity, 1.2f, 10f * Time.deltaTime);
+        }
+        else
+        {
+            if (_controller.isGrounded && _verticalVelocity < 0f)
+                _verticalVelocity = -2f;
+            _verticalVelocity += gravity * Time.deltaTime;
+        }
 
-        Vector3 motion = planar + Vector3.up * _verticalVelocity;
+        Vector3 motion = planar + Vector3.up * _verticalVelocity + externalVelocity;
         _controller.Move(motion * Time.deltaTime);
+        externalVelocity = Vector3.MoveTowards(externalVelocity, Vector3.zero, 18f * Time.deltaTime);
     }
 }

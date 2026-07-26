@@ -24,6 +24,24 @@ public class HoverBob : MonoBehaviour
         _phase = Random.value * 10f;
     }
 
+    /// <summary>
+    /// Restores the Body rig to its resting pose and switches the bob off.
+    /// Called by RobotLocomotion when a legged robot is fitted — a walker that
+    /// also floats up and down reads as broken.
+    /// </summary>
+    public void StopAndReset()
+    {
+        if (_body == null)
+        {
+            // Disabled before Start() ever ran: nothing has been offset yet.
+            enabled = false;
+            return;
+        }
+        _body.localPosition = _basePosition;
+        _body.localRotation = Quaternion.identity;
+        enabled = false;
+    }
+
     void Update()
     {
         if (_body == null)

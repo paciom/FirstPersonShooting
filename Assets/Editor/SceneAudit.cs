@@ -34,9 +34,20 @@ public static class SceneAudit
                 bubbles += root.GetComponentsInChildren<ShieldBubble>(true).Length;
             }
 
-            int controllers = 0;
+            int controllers = 0, lasers = 0, beams = 0, plasmas = 0, rails = 0, scopes = 0, blocks = 0, blockMgrs = 0;
             foreach (var root in scene.GetRootGameObjects())
+            {
                 controllers += root.GetComponentsInChildren<GameModeController>(true).Length;
+                blocks += root.GetComponentsInChildren<ArenaBlock>(true).Length;
+                blockMgrs += root.GetComponentsInChildren<ArenaBlockManager>(true).Length;
+                lasers += root.GetComponentsInChildren<LaserBlaster>(true).Length;
+                beams += root.GetComponentsInChildren<PhotonBeam>(true).Length;
+                plasmas += root.GetComponentsInChildren<PlasmaLobber>(true).Length;
+                rails += root.GetComponentsInChildren<RailZapper>(true).Length;
+                scopes += root.GetComponentsInChildren<XRayScope>(true).Length;
+            }
+            Debug.Log($"[SceneAudit] weapons: laser={lasers} beam={beams} plasma={plasmas} rail={rails} xrayScope={scopes}");
+            Debug.Log($"[SceneAudit] dynamic cover: arenaBlocks={blocks} blockManagers={blockMgrs}");
 
             Debug.Log($"[SceneAudit] crates={crates} portals={portals} robotModels={models} " +
                       $"teamRings={rings} aiBrains={brains} scorers={scorers} shieldBubbles={bubbles} " +

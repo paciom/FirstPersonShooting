@@ -13,6 +13,7 @@ public class HudController : MonoBehaviour
     EnergyShield _shield;
     Image _shieldFill;
     Text _scoreText;
+    Text _weaponText;
     GameObject _canvasGo;
 
     void Awake()
@@ -48,6 +49,19 @@ public class HudController : MonoBehaviour
             _shieldFill.fillAmount = _shield.Normalized;
             // Shield bar cools from cyan to warning orange as it drains.
             _shieldFill.color = Color.Lerp(new Color(1f, 0.5f, 0.1f, 0.9f), HoloCyan, _shield.Normalized);
+        }
+
+        if (_weaponText != null && PlayerBrain.Local != null)
+        {
+            // Airdropped guns are on a clock — show it, since it's the whole
+            // reason to go and grab the next pod.
+            float left = PlayerBrain.Local.TreasureSecondsLeft;
+            string timer = left > 0f && !float.IsInfinity(left) ? $"   {left:0}s" : "";
+            _weaponText.text =
+                $"[{PlayerBrain.Local.WeaponSlotLabel}] {PlayerBrain.Local.CurrentWeaponName}{timer}";
+            // Label glows in the weapon's signature color — instant read of what's equipped.
+            Color c = PlayerBrain.Local.CurrentWeaponColor;
+            _weaponText.color = new Color(c.r, c.g, c.b, 0.95f);
         }
     }
 
@@ -102,6 +116,21 @@ public class HudController : MonoBehaviour
         scoreRect.anchorMin = scoreRect.anchorMax = new Vector2(0.5f, 1f);
         scoreRect.anchoredPosition = new Vector2(0, -50);
         scoreRect.sizeDelta = new Vector2(400, 60);
+
+        // Weapon name (bottom-right).
+        var weaponGo = new GameObject("Weapon");
+        weaponGo.transform.SetParent(canvas.transform, false);
+        _weaponText = weaponGo.AddComponent<Text>();
+        _weaponText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _weaponText.fontSize = 26;
+        _weaponText.fontStyle = FontStyle.Bold;
+        _weaponText.alignment = TextAnchor.MiddleRight;
+        _weaponText.color = HoloCyan;
+        var weaponRect = _weaponText.rectTransform;
+        weaponRect.anchorMin = weaponRect.anchorMax = new Vector2(1f, 0f);
+        weaponRect.pivot = new Vector2(1f, 0f);
+        weaponRect.anchoredPosition = new Vector2(-50, 46);
+        weaponRect.sizeDelta = new Vector2(420, 40);
     }
 
     void BuildCrosshairBar(Transform parent, Vector2 offset, Vector2 size)

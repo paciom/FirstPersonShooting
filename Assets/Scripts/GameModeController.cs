@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
@@ -16,13 +17,25 @@ public class GameModeController : MonoBehaviour
     public GameMode Mode { get; private set; } = GameMode.Menu;
 
     GameObject _menuCanvas;
+    GameObject _robotSelect;
+    RobotRoster _roster;
+    GameMode _pendingMode;
+    int _cyanRobot;
+    int _magentaRobot;
+    // The scene is built with roster entry 0 (the default rigged walker) on
+    // every bot, so an initial 0/0 selection needs no reskin.
+    int _appliedCyan;
+    int _appliedMagenta;
     Text _overlayText;
     GameObject _overlayCanvas;
     GameObject _player;
     PlayerBrain _playerBrain;
     CharacterMotor _playerMotor;
-    AIBrain[] _bots;
-    ArenaRandomizer _randomizer;
+    // A list, not an array: teams grow mid-match when a team banks enough gold
+    // to build a reinforcement (see RobotReinforcements).
+    readonly List<AIBrain> _bots = new List<AIBrain>();
+    ArenaBlockManager _blockManager;
+    TreasureSpawner _treasureSpawner;
     GameObject _spectatorRig;
     DeRezEffect[] _deRezEffects;
 
@@ -44,9 +57,11 @@ public class GameModeController : MonoBehaviour
             _player = _playerBrain.gameObject;
             _playerMotor = _player.GetComponent<CharacterMotor>();
         }
-        _bots = FindObjectsByType<AIBrain>(FindObjectsSortMode.None);
+        _bots.AddRange(FindObjectsByType<AIBrain>(FindObjectsSortMode.None));
         _deRezEffects = FindObjectsByType<DeRezEffect>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        _randomizer = GetComponent<ArenaRandomizer>();
+        _blockManager = GetComponent<ArenaBlockManager>();
+        _treasureSpawner = GetComponent<TreasureSpawner>();
+        _roster = GetComponent<RobotRoster>();
 
         _menuCanvas = MainMenu.Build(this);
         BuildOverlay();
@@ -61,8 +76,15 @@ public class GameModeController : MonoBehaviour
             return;
         }
 
-        if (Mode == GameMode.ArenaPreview && Input.GetKeyDown(KeyCode.R) && _randomizer != null)
-            _randomizer.Regenerate();
+        // Escape backs out of the robot select screen (still Menu mode).
+        if (Mode == GameMode.Menu && _robotSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelRobotSelect();
+            return;
+        }
+
+        if (Mode == GameMode.ArenaPreview && Input.GetKeyDown(KeyCode.R) && _blockManager != null)
+            _blockManager.Reshuffle();
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
         if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview)
@@ -95,10 +117,32 @@ public class GameModeController : MonoBehaviour
                 effect.CancelAndRestore();
     }
 
+    /// <summary>Track a robot built mid-match so mode switches still control it.</summary>
+    public void RegisterBot(AIBrain bot)
+    {
+        if (bot != null && !_bots.Contains(bot))
+            _bots.Add(bot);
+    }
+
+    public void UnregisterBot(AIBrain bot) => _bots.Remove(bot);
+
+    /// <summary>
+    /// Reset everything a match owns: airdrops off the field, banked gold back
+    /// to zero, and bought robots removed so team sizes never leak from one
+    /// match into the next.
+    /// </summary>
+    void ResetMatchState()
+    {
+        _treasureSpawner?.EndMatch();
+        RobotReinforcements.DespawnAll();
+        TeamBank.Reset();
+    }
+
     public void EnterMenu()
     {
         Mode = GameMode.Menu;
         DestroySpectatorRig();
+        ResetMatchState();
         RestoreAllDeRez();
 
         if (_player != null)
@@ -110,15 +154,95 @@ public class GameModeController : MonoBehaviour
         }
         SetBotsActive(false);
 
+        CloseRobotSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
 
+    /// <summary>
+    /// Main-menu entry for both AI modes: show the robot select screen first.
+    /// Falls straight through to the match when no roster exists yet (scene
+    /// built before any robot models were downloaded).
+    /// </summary>
+    public void OpenRobotSelect(GameMode mode)
+    {
+        if (_roster == null || !_roster.HasRobots)
+        {
+            if (mode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+            return;
+        }
+
+        _pendingMode = mode;
+        _menuCanvas.SetActive(false);
+        CloseRobotSelect();
+        _robotSelect = RobotSelectMenu.Build(this, _roster, mode, _cyanRobot, _magentaRobot);
+    }
+
+    public void CancelRobotSelect()
+    {
+        CloseRobotSelect();
+        _menuCanvas.SetActive(true);
+    }
+
+    public void LaunchSelectedMatch(int cyanIndex, int magentaIndex)
+    {
+        _cyanRobot = cyanIndex;
+        _magentaRobot = magentaIndex;
+        CloseRobotSelect();
+        ApplyRobotSelection();
+        if (_pendingMode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+    }
+
+    void CloseRobotSelect()
+    {
+        if (_robotSelect != null)
+        {
+            Destroy(_robotSelect);
+            _robotSelect = null;
+        }
+    }
+
+    /// <summary>
+    /// Swaps every bot's model to its team's selected robot. Runs from the
+    /// menu, where RestoreAllDeRez has already reset every Body to full scale.
+    /// </summary>
+    void ApplyRobotSelection()
+    {
+        if (_roster == null || !_roster.HasRobots)
+            return;
+        if (_appliedCyan == _cyanRobot && _appliedMagenta == _magentaRobot)
+            return;
+        _appliedCyan = _cyanRobot;
+        _appliedMagenta = _magentaRobot;
+
+        foreach (var bot in _bots)
+        {
+            if (bot == null)
+                continue;
+            var shield = bot.GetComponent<EnergyShield>();
+            int team = shield != null ? shield.teamId : 1;
+            var entry = _roster.Get(team == 0 ? _cyanRobot : _magentaRobot);
+            if (entry.modelPrefab == null)
+                continue;
+            var body = bot.transform.Find("Body");
+            if (body == null)
+                continue;
+            Color tint = team == 0 ? new Color(0.2f, 0.9f, 1f) : new Color(1f, 0.25f, 0.9f);
+            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+        }
+
+        // Old silhouette duplicates died with the old models; rebuild on next scope.
+        var scope = FindFirstObjectByType<XRayScope>(FindObjectsInactive.Include);
+        if (scope != null)
+            scope.InvalidateSilhouettes();
+    }
+
     public void StartPlayerVsAI()
     {
         Mode = GameMode.PlayerVsAI;
+        ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
 
@@ -128,6 +252,7 @@ public class GameModeController : MonoBehaviour
             _playerBrain.enabled = true;
         }
         SetBotsActive(true);
+        _treasureSpawner?.BeginMatch();
 
         _menuCanvas.SetActive(false);
         ShowOverlay("ESC — Menu");
@@ -138,12 +263,14 @@ public class GameModeController : MonoBehaviour
     public void StartAIvAI()
     {
         Mode = GameMode.AIvAI;
+        ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
 
         if (_player != null)
             _player.SetActive(false);
         SetBotsActive(true);
+        _treasureSpawner?.BeginMatch();
 
         _spectatorRig = BuildCameraRig("SpectatorCamera", new Vector3(0, 8, -14));
         _spectatorRig.AddComponent<SpectatorCamera>();
@@ -157,6 +284,7 @@ public class GameModeController : MonoBehaviour
     public void StartArenaPreview()
     {
         Mode = GameMode.ArenaPreview;
+        ResetMatchState();
         RestoreAllDeRez();
 
         if (_player != null)

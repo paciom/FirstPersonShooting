@@ -14,6 +14,13 @@ public static class VfxUtil
     static Texture2D Ring => _ring != null ? _ring : _ring = Resources.Load<Texture2D>("VFX/ring");
     static Texture2D Puff => _puff != null ? _puff : _puff = Resources.Load<Texture2D>("VFX/puff");
 
+    // Public sprites for other systems' particles — a null texture on the
+    // additive shader renders as a hard SQUARE, so particles must use these.
+    public static Texture2D GlowTexture => Glow;
+    public static Texture2D SparkTexture => Spark;
+    public static Texture2D PuffTexture => Puff;
+    public static Texture2D RingTexture => Ring;
+
     public static Material MakeAdditiveMaterial(Texture2D texture, Color color, float intensity = 1f)
     {
         var mat = new Material(Shader.Find("PhotonArena/Additive"));

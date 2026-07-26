@@ -13,6 +13,11 @@
 # API keys and local secrets — never commit
 .secrets/
 
+# Rejected/superseded Meshy models, parked outside Assets/ so Unity ignores
+# them. Kept on disk for reference but not versioned — ~120 MB of LFS quota
+# for geometry the game never loads.
+/RetiredModels/
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/

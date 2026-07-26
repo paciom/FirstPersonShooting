@@ -18,6 +18,13 @@ public static class ArenaBuilder
 {
     const string ScenePath = "Assets/Scenes/GreyboxArena.unity";
 
+    /// <summary>
+    /// Robot every character is built with, and roster entry 0. Must be a
+    /// rigged walker: the arena is a ground game, so the default has to have
+    /// legs that move (the old static hover-robot is retired).
+    /// </summary>
+    const string DefaultRobot = "ranger";
+
     static readonly Color NeonCyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color NeonMagenta = new Color(1f, 0.25f, 0.9f);
     static readonly Color NeonOrange = new Color(1f, 0.55f, 0.1f);
@@ -45,17 +52,25 @@ public static class ArenaBuilder
 
         System.IO.Directory.CreateDirectory("Assets/Materials");
         ConfigureUrp();
+        EnsureShadersIncluded("PhotonArena/Additive", "PhotonArena/ForceField", "PhotonArena/XRay",
+            "PhotonArena/SciFiPanel");
         RepairModelImports();
         SpriteForge.GenerateAll();
+        // Rigged walkers are assets, not scene objects: forge any that are
+        // missing before the roster scan so one build produces a complete list.
+        // (WalkerRigForge's procedural block robot is deliberately NOT forged
+        // here — it's a no-credits fallback, kept out of the roster because the
+        // Meshy fleet looks far better. Run its menu item to bring it back.)
+        MeshyWalkerForge.ForgeIfMissing();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         var environment = BuildEnvironment();
         BakeNavMesh(environment);
+        BuildDynamicCover(environment);   // after bake: blocks carve the navmesh
         BuildLighting();
         BuildPostProcessing();
         BuildPlayer();
-        BuildDummies();
         BuildBots();
         BuildGameController(environment);
 
@@ -93,6 +108,34 @@ public static class ArenaBuilder
     }
 
     /// <summary>
+    /// Ensure runtime-loaded custom shaders (Shader.Find from code) are compiled
+    /// into player builds, not just kept alive by editor references.
+    /// </summary>
+    static void EnsureShadersIncluded(params string[] shaderNames)
+    {
+        var settings = GraphicsSettings.GetGraphicsSettings();
+        var so = new SerializedObject(settings);
+        var list = so.FindProperty("m_AlwaysIncludedShaders");
+        foreach (var name in shaderNames)
+        {
+            var shader = Shader.Find(name);
+            if (shader == null)
+                continue;
+
+            bool present = false;
+            for (int i = 0; i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader) { present = true; break; }
+
+            if (!present)
+            {
+                list.InsertArrayElementAtIndex(list.arraySize);
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+            }
+        }
+        so.ApplyModifiedProperties();
+    }
+
+    /// <summary>
     /// Reimport any model whose cached import result is broken (e.g. imported
     /// while the render pipeline was in a transitional state).
     /// </summary>
@@ -100,7 +143,9 @@ public static class ArenaBuilder
     {
         if (!System.IO.Directory.Exists("Assets/Models"))
             return;
-        foreach (var file in System.IO.Directory.GetFiles("Assets/Models", "*.glb"))
+        // Recursive: the Meshy rig/walk/run sources live in Assets/Models/Meshy.
+        foreach (var file in System.IO.Directory.GetFiles("Assets/Models", "*.glb",
+                     System.IO.SearchOption.AllDirectories))
         {
             string path = file.Replace('\\', '/');
             if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
@@ -134,12 +179,43 @@ public static class ArenaBuilder
         return mat;
     }
 
+    /// <summary>
+    /// Creates a sci-fi panel material (triplanar grooves + glowing seams) for
+    /// arena surfaces. panelSize is the world-space panel spacing in metres.
+    /// </summary>
+    static Material MakeSciFiMaterial(string name, Color baseColor, Color seamColor,
+        float panelSize, float seamGlow = 1.5f, int patternMode = 0, Color? accent = null)
+    {
+        var mat = new Material(Shader.Find("PhotonArena/SciFiPanel")) { name = name };
+        mat.SetColor("_BaseColor", baseColor);
+        mat.SetColor("_PanelColor", baseColor * 0.35f);
+        mat.SetColor("_SeamColor", seamColor);
+        mat.SetFloat("_Tiling", panelSize);
+        mat.SetFloat("_SeamGlow", seamGlow);
+        mat.SetFloat("_PatternMode", patternMode);
+        mat.SetColor("_AccentColor", accent ?? new Color(1f, 0.6f, 0.1f));
+        AssetDatabase.CreateAsset(mat, $"Assets/Materials/{name}.mat");
+        return mat;
+    }
+
+    static readonly Color WarnAmber = new Color(1f, 0.62f, 0.12f);
+
     // ---------- Imported models (Meshy) ----------
 
     static GameObject LoadModel(string name)
     {
         return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/{name}.glb")
             ?? AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/{name}.fbx");
+    }
+
+    /// <summary>
+    /// Loads a roster robot by bare name, preferring the forged rigged prefab
+    /// (walk/run animated) over a plain static .glb of the same name.
+    /// </summary>
+    static GameObject LoadRobotModel(string name)
+    {
+        return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/Generated/{name}-robot.prefab")
+            ?? LoadModel($"{name}-robot");
     }
 
     /// <summary>Instantiate a model, scale to targetHeight, sit its base on groundPosition.</summary>
@@ -190,9 +266,10 @@ public static class ArenaBuilder
     {
         var root = new GameObject("Environment");
 
-        var floorMat = MakeLitMaterial("Floor", new Color(0.12f, 0.13f, 0.18f));
-        var wallMat = MakeLitMaterial("Wall", new Color(0.16f, 0.17f, 0.25f));
-        var coverMat = MakeLitMaterial("Cover", new Color(0.22f, 0.2f, 0.35f));
+        // Darker gunmetal plating with a fine tech grid — reads as a ship deck,
+        // not a neon box. Walls get bolted hull plates.
+        var floorMat = MakeSciFiMaterial("Floor", new Color(0.12f, 0.13f, 0.16f), NeonCyan, 3.5f, 0.7f, 2);
+        var wallMat = MakeSciFiMaterial("Wall", new Color(0.16f, 0.18f, 0.23f), NeonCyan, 3.0f, 0.7f, 3);
         var trimCyan = MakeLitMaterial("TrimCyan", Color.black, NeonCyan, 4f);
         var trimMagenta = MakeLitMaterial("TrimMagenta", Color.black, NeonMagenta, 4f);
 
@@ -208,25 +285,8 @@ public static class ArenaBuilder
         Trim(root, new Vector3(20, 3.05f, 0), new Vector3(0.12f, 0.12f, 40), trimMagenta);
         Trim(root, new Vector3(-20, 3.05f, 0), new Vector3(0.12f, 0.12f, 40), trimMagenta);
 
-        // Cover blocks — varied sizes, camera-friendly sight lines.
-        var coverSpecs = new (Vector3 pos, Vector3 size, float yRot)[]
-        {
-            (new Vector3(-8, 0.75f, -6), new Vector3(3, 1.5f, 1.2f), 15f),
-            (new Vector3(7, 0.75f, -8), new Vector3(2.5f, 1.5f, 1.2f), -20f),
-            (new Vector3(-10, 1f, 4), new Vector3(1.5f, 2f, 1.5f), 0f),
-            (new Vector3(11, 1f, 5), new Vector3(1.5f, 2f, 1.5f), 45f),
-            (new Vector3(0, 0.75f, 0), new Vector3(4, 1.5f, 1.2f), 90f),
-            (new Vector3(-4, 0.75f, 10), new Vector3(3, 1.5f, 1.2f), -30f),
-            (new Vector3(5, 0.75f, 12), new Vector3(2.5f, 1.5f, 1.2f), 10f),
-            (new Vector3(14, 0.6f, -3), new Vector3(2, 1.2f, 2), 0f),
-            (new Vector3(-14, 0.6f, -1), new Vector3(2, 1.2f, 2), 0f),
-            (new Vector3(2, 1.25f, -13), new Vector3(1.8f, 2.5f, 1.8f), 30f),
-        };
-        foreach (var (pos, size, yRot) in coverSpecs)
-        {
-            var block = Box(root, "Cover", pos, size, coverMat);
-            block.transform.rotation = Quaternion.Euler(0, yRot, 0);
-        }
+        // Cover blocks are created after the NavMesh bake (see BuildDynamicCover)
+        // so they can carve the navmesh dynamically as they move and regrow.
 
         // Four glowing corner pillars — landmarks that read on camera.
         Box(root, "PillarNE", new Vector3(16, 2f, 16), new Vector3(0.8f, 4f, 0.8f), trimCyan);
@@ -253,6 +313,91 @@ public static class ArenaBuilder
         }
 
         return root;
+    }
+
+    /// <summary>
+    /// Dynamic cover: destructible/regrowing/moving ArenaBlocks with carving
+    /// NavMeshObstacles. Created after the bake so their carving drives bot
+    /// pathing instead of a static bake.
+    /// </summary>
+    static void BuildDynamicCover(GameObject environment)
+    {
+        // A spread of ship-interior surfaces so the cover looks varied and
+        // high-tech rather than a row of identical neon boxes.
+        var coverMats = new[]
+        {
+            MakeSciFiMaterial("Cover_Gunmetal", new Color(0.19f, 0.20f, 0.23f), NeonCyan, 1.6f, 0.8f, 0),
+            MakeSciFiMaterial("Cover_Hull", new Color(0.16f, 0.19f, 0.27f), NeonCyan, 2.2f, 0.9f, 3),
+            MakeSciFiMaterial("Cover_Hazard", new Color(0.22f, 0.20f, 0.15f), WarnAmber, 1.4f, 1.1f, 1, WarnAmber),
+            MakeSciFiMaterial("Cover_Vent", new Color(0.14f, 0.15f, 0.18f), NeonCyan, 1.2f, 0.7f, 2),
+            MakeSciFiMaterial("Cover_Reactor", new Color(0.20f, 0.15f, 0.26f), NeonMagenta, 1.5f, 1.5f, 0),
+        };
+        var coverSpecs = new (Vector3 pos, Vector3 size, float yRot)[]
+        {
+            (new Vector3(-8, 0.75f, -6), new Vector3(3, 1.5f, 1.2f), 15f),
+            (new Vector3(7, 0.75f, -8), new Vector3(2.5f, 1.5f, 1.2f), -20f),
+            (new Vector3(-10, 1f, 4), new Vector3(1.5f, 2f, 1.5f), 0f),
+            (new Vector3(11, 1f, 5), new Vector3(1.5f, 2f, 1.5f), 45f),
+            (new Vector3(0, 0.75f, 0), new Vector3(4, 1.5f, 1.2f), 90f),
+            (new Vector3(-4, 0.75f, 10), new Vector3(3, 1.5f, 1.2f), -30f),
+            (new Vector3(5, 0.75f, 12), new Vector3(2.5f, 1.5f, 1.2f), 10f),
+            (new Vector3(14, 0.6f, -3), new Vector3(2, 1.2f, 2), 0f),
+            (new Vector3(-14, 0.6f, -1), new Vector3(2, 1.2f, 2), 0f),
+            (new Vector3(2, 1.25f, -13), new Vector3(1.8f, 2.5f, 1.8f), 30f),
+        };
+
+        // Quadrupled cover density (user request): 30 extra blocks scattered on
+        // a FIXED seed (deterministic rebuilds) join the 10 hand-placed ones.
+        // Guards: spawn strips (|z| > 12) stay clear so teams never materialize
+        // inside cover, and blocks keep clearance from each other and the
+        // corner pillars so walkways survive.
+        var allSpecs = new System.Collections.Generic.List<(Vector3 pos, Vector3 size, float yRot)>(coverSpecs);
+        var rng = new System.Random(7261);
+        int attempts = 0;
+        while (allSpecs.Count < coverSpecs.Length * 4 && attempts++ < 600)
+        {
+            float NextRange(float min, float max) => Mathf.Lerp(min, max, (float)rng.NextDouble());
+
+            var size = new Vector3(NextRange(1.4f, 3.4f), NextRange(1.2f, 2.4f), NextRange(1f, 1.9f));
+            var pos = new Vector3(NextRange(-15f, 15f), size.y * 0.5f, NextRange(-11.5f, 11.5f));
+
+            bool blocked = false;
+            foreach (var existing in allSpecs)
+            {
+                Vector3 delta = existing.pos - pos;
+                delta.y = 0f;
+                if (delta.magnitude < 3f) { blocked = true; break; }
+            }
+            for (int cx = -1; cx <= 1 && !blocked; cx += 2)
+                for (int cz = -1; cz <= 1; cz += 2)
+                    if (Vector2.Distance(new Vector2(pos.x, pos.z), new Vector2(cx * 16f, cz * 16f)) < 2.6f)
+                    { blocked = true; break; }
+            if (blocked)
+                continue;
+
+            allSpecs.Add((pos, size, NextRange(-45f, 45f)));
+        }
+
+        for (int i = 0; i < allSpecs.Count; i++)
+        {
+            var (pos, size, yRot) = allSpecs[i];
+            var block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = "Cover";
+            block.transform.SetParent(environment.transform);
+            block.transform.position = pos;
+            block.transform.rotation = Quaternion.Euler(0, yRot, 0);
+            block.transform.localScale = size;
+            block.GetComponent<MeshRenderer>().sharedMaterial = coverMats[i % coverMats.Length];
+
+            var obstacle = block.AddComponent<UnityEngine.AI.NavMeshObstacle>();
+            obstacle.shape = UnityEngine.AI.NavMeshObstacleShape.Box;
+            obstacle.size = Vector3.one;   // scaled by the transform to match the cube
+            obstacle.carving = true;
+
+            var ab = block.AddComponent<ArenaBlock>();
+            ab.color = NeonMagenta;
+            ab.maxHealth = 55f;
+        }
     }
 
     static GameObject Box(GameObject parent, string name, Vector3 position, Vector3 size, Material mat)
@@ -375,66 +520,14 @@ public static class ArenaBuilder
         var camData = head.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = true;
 
-        // Blaster hangs off the head so it aims with the view. Uses the Meshy
-        // viewmodel when available, otherwise the greybox cube.
+        // Blaster hangs off the head so it aims with the view.
         var blasterBodyMat = MakeLitMaterial("BlasterBody", new Color(0.1f, 0.1f, 0.14f), NeonCyan, 2f);
-        GameObject blasterGo;
-        Transform muzzleT;
-        var blasterModel = LoadModel("laser-blaster");
-        if (blasterModel != null)
-        {
-            blasterGo = (GameObject)UnityEngine.Object.Instantiate(blasterModel);
-            blasterGo.name = "Blaster";
-            blasterGo.transform.SetParent(head.transform, false);
-            blasterGo.transform.localPosition = new Vector3(0.32f, -0.30f, 0.35f);
-            blasterGo.transform.localRotation = Quaternion.identity;
+        var blasterGo = BuildBlaster(head.transform, new Vector3(0.32f, -0.30f, 0.35f), 0.5f,
+            blasterBodyMat, out Transform muzzleT);
 
-            var renderers = blasterGo.GetComponentsInChildren<Renderer>();
-            var muzzleGo = new GameObject("Muzzle");
-            if (renderers.Length > 0)
-            {
-                // Point the model's longest axis forward (+Z) — generated guns
-                // often have the barrel along X.
-                var bounds = CombinedBounds(renderers);
-                if (bounds.size.x >= bounds.size.y && bounds.size.x >= bounds.size.z)
-                    blasterGo.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
-                else if (bounds.size.y > bounds.size.z)
-                    blasterGo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-
-                // Multiply, never replace — the glTF root may carry its own scale.
-                bounds = CombinedBounds(renderers);
-                blasterGo.transform.localScale *= 0.5f / Mathf.Max(0.01f, bounds.size.z);
-                bounds = CombinedBounds(renderers);
-                muzzleGo.transform.SetParent(blasterGo.transform, true);
-                muzzleGo.transform.position = new Vector3(bounds.center.x, bounds.center.y, bounds.max.z);
-            }
-            else
-            {
-                muzzleGo.transform.SetParent(blasterGo.transform, false);
-                muzzleGo.transform.localPosition = Vector3.forward * 0.5f;
-            }
-            muzzleT = muzzleGo.transform;
-        }
-        else
-        {
-            blasterGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            blasterGo.name = "Blaster";
-            UnityEngine.Object.DestroyImmediate(blasterGo.GetComponent<Collider>());
-            blasterGo.transform.SetParent(head.transform, false);
-            blasterGo.transform.localPosition = new Vector3(0.32f, -0.28f, 0.45f);
-            blasterGo.transform.localScale = new Vector3(0.09f, 0.09f, 0.42f);
-            blasterGo.GetComponent<MeshRenderer>().sharedMaterial = blasterBodyMat;
-
-            var muzzle = new GameObject("Muzzle");
-            muzzle.transform.SetParent(blasterGo.transform, false);
-            muzzle.transform.localPosition = new Vector3(0, 0, 0.6f);
-            muzzleT = muzzle.transform;
-        }
-
-        var blaster = blasterGo.AddComponent<LaserBlaster>();
-        blaster.muzzle = muzzleT;
-        blaster.ownerRoot = player.transform;
-        blaster.boltColor = NeonCyan;
+        // All 54 weapon components ride on the one viewmodel, but only the two
+        // basics are unlocked — see AttachArsenal / BasicWeaponIndices.
+        var playerWeapons = AttachArsenal(blasterGo, muzzleT, player.transform, NeonCyan, botTuning: false);
 
         var shield = player.AddComponent<EnergyShield>();
         shield.teamId = 0;
@@ -442,8 +535,15 @@ public static class ArenaBuilder
         var motor = player.AddComponent<CharacterMotor>();
         motor.head = head.transform;
 
+        var scope = player.AddComponent<XRayScope>();
+
+        var loadout = player.AddComponent<WeaponLoadout>();
+        loadout.all = playerWeapons;
+        loadout.basicIndices = BasicWeaponIndices;
+
         var brain = player.AddComponent<PlayerBrain>();
-        brain.blaster = blaster;
+        brain.weapons = new[] { playerWeapons[BasicWeaponIndices[0]], playerWeapons[BasicWeaponIndices[1]] };
+        brain.scope = scope;
 
         var deRez = player.AddComponent<DeRezEffect>();
         deRez.body = body.transform;
@@ -455,46 +555,166 @@ public static class ArenaBuilder
         bubble.color = NeonCyan;
     }
 
-    static void BuildDummies()
+    /// <summary>
+    /// Builds a blaster viewmodel under <paramref name="parent"/> using the
+    /// Meshy laser-blaster model (falls back to a glowing cube), normalizes it
+    /// to <paramref name="targetLength"/>, and returns its muzzle transform.
+    /// Shared by the player and every bot so they all hold the real gun.
+    /// </summary>
+    static GameObject BuildBlaster(Transform parent, Vector3 localPos, float targetLength,
+        Material cubeMat, out Transform muzzle)
     {
-        var armor = MakeLitMaterial("DummyArmor", new Color(0.45f, 0.28f, 0.12f));
-        var glow = MakeLitMaterial("DummyGlow", Color.black, NeonOrange, 4f);
-        var darkMetal = MakeLitMaterial("DarkMetal", new Color(0.10f, 0.10f, 0.13f));
-        var positions = new[]
+        var model = LoadModel("laser-blaster");
+        if (model != null)
         {
-            new Vector3(-6, 0, 8), new Vector3(6, 0, 9),
-            new Vector3(-12, 0, -4), new Vector3(13, 0, 2),
-        };
+            var go = (GameObject)UnityEngine.Object.Instantiate(model);
+            go.name = "Blaster";
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.identity;
 
-        var robotModel = LoadModel("hover-robot");
-        foreach (var pos in positions)
-        {
-            var dummy = new GameObject("TargetDummy");
-            dummy.transform.position = pos;
+            var muzzleGo = new GameObject("Muzzle");
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                // Point the model's longest axis forward (+Z), then scale to length.
+                var bounds = CombinedBounds(renderers);
+                if (bounds.size.x >= bounds.size.y && bounds.size.x >= bounds.size.z)
+                    go.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+                else if (bounds.size.y > bounds.size.z)
+                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
-            var body = robotModel != null
-                ? RobotFactory.BuildFromModel(dummy, robotModel, NeonOrange, glow)
-                : RobotFactory.Build(dummy, armor, glow, darkMetal);
-
-            var hitCapsule = dummy.AddComponent<CapsuleCollider>();
-            hitCapsule.center = new Vector3(0, 1f, 0);
-            hitCapsule.height = 2f;
-            hitCapsule.radius = 0.45f;
-
-            var shield = dummy.AddComponent<EnergyShield>();
-            shield.teamId = 1;
-            shield.regenDelay = 2f;
-
-            var deRez = dummy.AddComponent<DeRezEffect>();
-            deRez.body = body;
-            deRez.burstColor = NeonOrange;
-            deRez.respawnDelay = 2.5f;
-
-            dummy.AddComponent<TargetDummy>();
-            dummy.AddComponent<HoverBob>();
-            var bubble = dummy.AddComponent<ShieldBubble>();
-            bubble.color = NeonOrange;
+                bounds = CombinedBounds(renderers);
+                go.transform.localScale *= targetLength / Mathf.Max(0.01f, bounds.size.z);
+                bounds = CombinedBounds(renderers);
+                muzzleGo.transform.SetParent(go.transform, true);
+                muzzleGo.transform.position = new Vector3(bounds.center.x, bounds.center.y, bounds.max.z);
+            }
+            else
+            {
+                muzzleGo.transform.SetParent(go.transform, false);
+                muzzleGo.transform.localPosition = Vector3.forward * targetLength;
+            }
+            muzzle = muzzleGo.transform;
+            return go;
         }
+
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = "Blaster";
+        UnityEngine.Object.DestroyImmediate(cube.GetComponent<Collider>());
+        cube.transform.SetParent(parent, false);
+        cube.transform.localPosition = localPos;
+        cube.transform.localScale = new Vector3(0.09f, 0.09f, targetLength * 0.85f);
+        cube.GetComponent<MeshRenderer>().sharedMaterial = cubeMat;
+
+        var m = new GameObject("Muzzle");
+        m.transform.SetParent(cube.transform, false);
+        m.transform.localPosition = new Vector3(0, 0, 0.6f);
+        muzzle = m.transform;
+        return cube;
+    }
+
+    /// <summary>Attach and configure a weapon component on a host object.</summary>
+    static T AddWeapon<T>(GameObject host, Transform muzzle, Transform owner, Color color) where T : Weapon
+    {
+        var w = host.AddComponent<T>();
+        w.muzzle = muzzle;
+        w.ownerRoot = owner;
+        w.color = color;
+        return w;
+    }
+
+    enum WeaponKind { Laser, Beam, Plasma, Rail }
+
+    /// <summary>
+    /// Which slots of the canonical 54-weapon order every character starts
+    /// with: the Laser Blaster (steady all-rounder) and the Plasma Lobber
+    /// (slow arcing splash). The other 52 components are attached but locked —
+    /// they only ever come out of a Weapon Pod airdrop. See WeaponLoadout.
+    /// </summary>
+    static readonly int[] BasicWeaponIndices = { 0, 2 };
+
+    /// <summary>
+    /// Attach all 54 weapon components to a blaster viewmodel in the canonical
+    /// order (index i == debug console number i+1): the four originals first,
+    /// then the expanded catalogue. <paramref name="botTuning"/> applies the
+    /// gentler per-shot numbers bots fight with.
+    /// </summary>
+    static Weapon[] AttachArsenal(GameObject host, Transform muzzle, Transform owner, Color color, bool botTuning)
+    {
+        var core = botTuning
+            ? new[]
+            {
+                AddBotWeapon(host, WeaponKind.Laser, muzzle, owner, color),
+                AddBotWeapon(host, WeaponKind.Beam, muzzle, owner, color),
+                AddBotWeapon(host, WeaponKind.Plasma, muzzle, owner, color),
+                AddBotWeapon(host, WeaponKind.Rail, muzzle, owner, color),
+            }
+            : new Weapon[]
+            {
+                AddWeapon<LaserBlaster>(host, muzzle, owner, color),
+                AddWeapon<PhotonBeam>(host, muzzle, owner, color),
+                AddWeapon<PlasmaLobber>(host, muzzle, owner, color),
+                AddWeapon<RailZapper>(host, muzzle, owner, color),
+            };
+
+        var extras = WeaponCatalog.AttachAll(host, muzzle, owner);
+        var all = new Weapon[core.Length + extras.Length];
+        core.CopyTo(all, 0);
+        extras.CopyTo(all, core.Length);
+        return all;
+    }
+
+    static Weapon AddBotWeapon(GameObject host, WeaponKind kind, Transform muzzle, Transform owner, Color color)
+    {
+        switch (kind)
+        {
+            case WeaponKind.Beam:
+            {
+                var w = AddWeapon<PhotonBeam>(host, muzzle, owner, color);
+                w.damagePerSecond = 34f;
+                return w;
+            }
+            case WeaponKind.Plasma:
+            {
+                var w = AddWeapon<PlasmaLobber>(host, muzzle, owner, color);
+                w.damage = 26f;
+                w.shotsPerSecond = 0.9f;
+                return w;
+            }
+            case WeaponKind.Rail:
+            {
+                var w = AddWeapon<RailZapper>(host, muzzle, owner, color);
+                w.damage = 45f;
+                w.chargeTime = 1.6f;
+                return w;
+            }
+            default:
+            {
+                var w = AddWeapon<LaserBlaster>(host, muzzle, owner, color);
+                w.damage = 12f;
+                w.shotsPerSecond = 2.5f;
+                return w;
+            }
+        }
+    }
+
+    // Target dummies removed 2026-07-25: with real bot teams fighting, the
+    // team-1 dummies just distracted cyan bots mid-match (and confused the
+    // "why three robot types?" read of the arena). TargetDummy the component
+    // lives on: enemy bots carry it for player score attribution.
+
+    /// <summary>
+    /// Per-bot personality. With only two basic guns, what separates one robot
+    /// from another on camera is how it plays the drops: how far it will detour
+    /// for a crate, how twitchy it is, how well it shoots.
+    /// </summary>
+    struct BotPersona
+    {
+        public int favoriteBasic;    // 0 = Laser Blaster, 1 = Plasma Lobber
+        public float greed;          // 0-1: appetite for chasing airdrops
+        public float reactionDelay;
+        public float aimError;
     }
 
     static void BuildBots()
@@ -505,18 +725,32 @@ public static class ArenaBuilder
         var allyGlow = MakeLitMaterial("AllyGlow", Color.black, NeonCyan, 4f);
 
         // Magenta enemies (team 1) at the north spawn, cyan allies (team 0)
-        // flanking the player at the south spawn.
+        // flanking the player at the south spawn. Each team gets a hoarder, a
+        // brawler and a middle-of-the-road bot so the scramble for a crate is
+        // never three identical robots running the same line.
         BuildBotTeam("Bot", 1, NeonMagenta, enemyArmor, enemyGlow, 180f,
-            new[] { new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15) });
+            new[] { new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15) },
+            new[]
+            {
+                new BotPersona { favoriteBasic = 1, greed = 0.45f, reactionDelay = 0.45f, aimError = 5.5f },
+                new BotPersona { favoriteBasic = 0, greed = 0.95f, reactionDelay = 0.25f, aimError = 3.5f },
+                new BotPersona { favoriteBasic = 1, greed = 0.70f, reactionDelay = 0.35f, aimError = 4.5f },
+            });
         BuildBotTeam("Ally", 0, NeonCyan, allyArmor, allyGlow, 0f,
-            new[] { new Vector3(-8, 0, -15), new Vector3(-4, 0, -16), new Vector3(8, 0, -15) });
+            new[] { new Vector3(-8, 0, -15), new Vector3(-4, 0, -16), new Vector3(8, 0, -15) },
+            new[]
+            {
+                new BotPersona { favoriteBasic = 0, greed = 0.85f, reactionDelay = 0.30f, aimError = 4.0f },
+                new BotPersona { favoriteBasic = 1, greed = 0.50f, reactionDelay = 0.40f, aimError = 5.0f },
+                new BotPersona { favoriteBasic = 0, greed = 1.00f, reactionDelay = 0.28f, aimError = 4.5f },
+            });
     }
 
     static void BuildBotTeam(string namePrefix, int teamId, Color teamColor,
-        Material armor, Material glow, float yRotation, Vector3[] positions)
+        Material armor, Material glow, float yRotation, Vector3[] positions, BotPersona[] personas)
     {
         var darkMetal = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/DarkMetal.mat");
-        var robotModel = LoadModel("hover-robot");
+        var robotModel = LoadRobotModel(DefaultRobot);
         for (int i = 0; i < positions.Length; i++)
         {
             var bot = new GameObject($"{namePrefix}_{i + 1}");
@@ -539,32 +773,35 @@ public static class ArenaBuilder
             agent.radius = 0.4f;
             agent.height = 2f;
 
-            var blasterGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            blasterGo.name = "Blaster";
-            UnityEngine.Object.DestroyImmediate(blasterGo.GetComponent<Collider>());
-            // Under the Body rig so the gun shrinks away with the robot on de-rez.
-            blasterGo.transform.SetParent(body, false);
-            blasterGo.transform.localPosition = new Vector3(0.3f, 0.3f, 0.4f);
-            blasterGo.transform.localScale = new Vector3(0.09f, 0.09f, 0.42f);
-            blasterGo.GetComponent<MeshRenderer>().sharedMaterial =
-                AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/BlasterBody.mat");
-
-            var muzzle = new GameObject("Muzzle");
-            muzzle.transform.SetParent(blasterGo.transform, false);
-            muzzle.transform.localPosition = new Vector3(0, 0, 0.6f);
+            // The real Meshy blaster, parented under the Body rig so it shrinks
+            // away with the robot on de-rez.
+            var cubeMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/BlasterBody.mat");
+            var blasterGo = BuildBlaster(body, new Vector3(0.35f, 0.15f, 0.35f), 0.5f, cubeMat, out Transform muzzleT);
 
             var shield = bot.AddComponent<EnergyShield>();
             shield.teamId = teamId;
 
-            var blaster = blasterGo.AddComponent<LaserBlaster>();
-            blaster.muzzle = muzzle.transform;
-            blaster.ownerRoot = bot.transform;
-            blaster.boltColor = teamColor;
-            blaster.shotsPerSecond = 2.5f;
-            blaster.boltDamage = 12f;
+            // Every bot carries all 54 weapon components, but the loadout only
+            // unlocks the two basics — the rest have to be won off an airdrop.
+            var botWeapons = AttachArsenal(blasterGo, muzzleT, bot.transform, teamColor, botTuning: true);
 
+            var loadout = bot.AddComponent<WeaponLoadout>();
+            loadout.all = botWeapons;
+            loadout.basicIndices = BasicWeaponIndices;
+
+            var persona = personas[i % personas.Length];
             var brain = bot.AddComponent<AIBrain>();
-            brain.blaster = blaster;
+            // favoriteWeapon indexes the usable set (the two basics), not the
+            // full arsenal — the loadout is what the brain actually reads.
+            brain.weapons = new[]
+            {
+                botWeapons[BasicWeaponIndices[0]],
+                botWeapons[BasicWeaponIndices[1]],
+            };
+            brain.favoriteWeapon = persona.favoriteBasic;
+            brain.greed = persona.greed;
+            brain.reactionDelay = persona.reactionDelay;
+            brain.aimErrorDegrees = persona.aimError;
 
             var deRez = bot.AddComponent<DeRezEffect>();
             deRez.body = body;
@@ -582,9 +819,50 @@ public static class ArenaBuilder
     static void BuildGameController(GameObject environment)
     {
         var controller = new GameObject("GameController");
-        var randomizer = controller.AddComponent<ArenaRandomizer>();
-        randomizer.environmentRoot = environment.transform;
-        randomizer.coverMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Cover.mat");
+        controller.AddComponent<ArenaBlockManager>();
+        controller.AddComponent<TreasureSpawner>();   // airdrops; driven by GameModeController
         controller.AddComponent<GameModeController>();
+        BuildRobotRoster(controller);
+    }
+
+    /// <summary>
+    /// Fills the RobotRoster from every *-robot model in Assets/Models so the
+    /// runtime robot select screen can list them. DefaultRobot stays entry 0 —
+    /// the scene's bots are built with it, so it must be the default pick.
+    /// Rigged walkers (Assets/Models/Generated/*-robot.prefab, forged by
+    /// MeshyWalkerForge and WalkerRigForge) join the same roster.
+    /// </summary>
+    static void BuildRobotRoster(GameObject controller)
+    {
+        var roster = controller.AddComponent<RobotRoster>();
+        var files = new System.Collections.Generic.List<string>(
+            System.IO.Directory.GetFiles("Assets/Models", "*-robot.glb"));
+        if (System.IO.Directory.Exists("Assets/Models/Generated"))
+            files.AddRange(System.IO.Directory.GetFiles("Assets/Models/Generated", "*-robot.prefab"));
+        files.Sort(StringComparer.OrdinalIgnoreCase);
+
+        var entries = new System.Collections.Generic.List<RobotRoster.Entry>();
+        foreach (var raw in files)
+        {
+            string path = raw.Replace('\\', '/');
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[ArenaBuilder] Robot model failed to load, skipping: {path}");
+                continue;
+            }
+            string file = System.IO.Path.GetFileNameWithoutExtension(path);
+            var entry = new RobotRoster.Entry
+            {
+                displayName = file.Replace("-robot", "").ToUpperInvariant(),
+                modelPrefab = prefab,
+            };
+            if (file == $"{DefaultRobot}-robot")
+                entries.Insert(0, entry);
+            else
+                entries.Add(entry);
+        }
+        roster.robots = entries.ToArray();
+        Debug.Log($"[ArenaBuilder] Robot roster: {entries.Count} robots.");
     }
 }

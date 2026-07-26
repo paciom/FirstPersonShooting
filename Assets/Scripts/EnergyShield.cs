@@ -30,6 +30,14 @@ public class EnergyShield : MonoBehaviour
 
     float _lastHitTime = float.NegativeInfinity;
 
+    // Overshield (airdrop pickup): maxShield is raised temporarily, so the HUD
+    // and floating bars keep reading correctly off Normalized. -1 = none active.
+    float _baseMaxShield = -1f;
+    float _overshieldUntil;
+
+    /// <summary>True while an airdrop overshield is inflating maxShield.</summary>
+    public bool HasOvershield => _baseMaxShield >= 0f;
+
     void Awake()
     {
         Current = maxShield;
@@ -48,12 +56,44 @@ public class EnergyShield : MonoBehaviour
         if (Current <= 0f)
         {
             IsDown = true;
+            DropOvershield();
             OnDeRezzed?.Invoke();
         }
     }
 
+    /// <summary>Top the shield back up (Repair Pack airdrop). No effect while de-rezzed.</summary>
+    public void Restore(float amount)
+    {
+        if (IsDown || amount <= 0f)
+            return;
+        Current = Mathf.Min(maxShield, Current + amount);
+    }
+
+    /// <summary>Raise the ceiling by <paramref name="extra"/> for a while and fill to it.</summary>
+    public void AddOvershield(float extra, float duration)
+    {
+        if (IsDown || extra <= 0f)
+            return;
+        if (_baseMaxShield < 0f)
+            _baseMaxShield = maxShield;
+        maxShield = _baseMaxShield + extra;
+        Current = maxShield;
+        _overshieldUntil = Mathf.Max(_overshieldUntil, Time.time + duration);
+    }
+
+    void DropOvershield()
+    {
+        if (_baseMaxShield < 0f)
+            return;
+        maxShield = _baseMaxShield;
+        _baseMaxShield = -1f;
+        _overshieldUntil = 0f;
+        Current = Mathf.Min(Current, maxShield);
+    }
+
     public void Rematerialize()
     {
+        DropOvershield();
         Current = maxShield;
         IsDown = false;
         OnRematerialized?.Invoke();
@@ -61,6 +101,9 @@ public class EnergyShield : MonoBehaviour
 
     void Update()
     {
+        if (HasOvershield && Time.time >= _overshieldUntil)
+            DropOvershield();
+
         if (!IsDown && Current < maxShield && Time.time - _lastHitTime > regenDelay)
             Current = Mathf.Min(maxShield, Current + regenPerSecond * Time.deltaTime);
     }
