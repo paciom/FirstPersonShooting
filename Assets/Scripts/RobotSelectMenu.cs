@@ -23,6 +23,13 @@ public static class RobotSelectMenu
     // leaving margins for the BACK button and screen edges.
     const float RowWidth = 1800f;
 
+    // Vehicle height as a fraction of the robot's, for the preview cards only —
+    // half what the arena uses. The rig cameras are framed on a robot, which is
+    // tall and narrow, but a vehicle is long and low: matched on height it runs
+    // out over the sides of the card. Gameplay keeps VehicleSkin's own default,
+    // where the vehicle has the whole arena to sit in.
+    const float PreviewVehicleHeight = 0.31f;
+
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
     {
@@ -169,6 +176,7 @@ public static class RobotSelectMenu
             var skin = spin.AddComponent<VehicleSkin>();
             skin.holder = spin.transform;
             skin.vehiclePrefab = roster.robots[i].vehiclePrefab;
+            skin.heightFraction = PreviewVehicleHeight;
 
             var camGo = new GameObject("PreviewCam");
             camGo.transform.SetParent(rig.transform, false);
