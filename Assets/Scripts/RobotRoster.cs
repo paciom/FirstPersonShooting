@@ -14,6 +14,12 @@ public class RobotRoster : MonoBehaviour
     {
         public string displayName;
         public GameObject modelPrefab;
+
+        /// <summary>
+        /// Ground-vehicle form for this robot (Assets/Models/Meshy/*-vehicle.glb).
+        /// Null for robots that have none — they fold and no more.
+        /// </summary>
+        public GameObject vehiclePrefab;
     }
 
     public Entry[] robots = new Entry[0];

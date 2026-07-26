@@ -242,6 +242,12 @@ public class GameModeController : MonoBehaviour
                 continue;
             Color tint = team == 0 ? new Color(0.2f, 0.9f, 1f) : new Color(1f, 0.25f, 0.9f);
             RobotFactory.Reskin(body, entry.modelPrefab, tint);
+
+            // A different robot transforms into a different vehicle. Rebuilt
+            // after the reskin so it measures against the new robot's height.
+            var skin = body.GetComponent<VehicleSkin>();
+            if (skin != null)
+                skin.SetVehiclePrefab(entry.vehiclePrefab, tint);
         }
 
         // Old silhouette duplicates died with the old models; rebuild on next scope.

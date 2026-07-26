@@ -221,6 +221,12 @@ public static class ArenaBuilder
             ?? LoadModel($"{name}-robot");
     }
 
+    /// <summary>Ground-vehicle form for a roster robot, or null if it has none.</summary>
+    static GameObject LoadVehicleModel(string name)
+    {
+        return AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Models/Meshy/{name}-vehicle.glb");
+    }
+
     /// <summary>Instantiate a model, scale to targetHeight, sit its base on groundPosition.</summary>
     static GameObject PlaceProp(GameObject prefab, GameObject parent, Vector3 groundPosition,
         float targetHeight, float yRotation, bool addBoxCollider)
@@ -814,6 +820,13 @@ public static class ArenaBuilder
             deRez.body = body;
             deRez.burstColor = teamColor;
 
+            // VehicleSkin sits on Body, where the "Model" child it swaps lives;
+            // TransformMode finds it with GetComponentInChildren.
+            var skin = body.gameObject.AddComponent<VehicleSkin>();
+            skin.holder = body;
+            skin.tint = teamColor;
+            skin.vehiclePrefab = LoadVehicleModel(DefaultRobot);
+
             var vehicle = bot.AddComponent<TransformMode>();
             vehicle.body = body;
             vehicle.burstColor = teamColor;
@@ -863,10 +876,14 @@ public static class ArenaBuilder
                 continue;
             }
             string file = System.IO.Path.GetFileNameWithoutExtension(path);
+            string robot = file.Replace("-robot", "");
             var entry = new RobotRoster.Entry
             {
-                displayName = file.Replace("-robot", "").ToUpperInvariant(),
+                displayName = robot.ToUpperInvariant(),
                 modelPrefab = prefab,
+                // Optional: robots without a generated vehicle just fold.
+                vehiclePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                    $"Assets/Models/Meshy/{robot}-vehicle.glb"),
             };
             if (file == $"{DefaultRobot}-robot")
                 entries.Insert(0, entry);

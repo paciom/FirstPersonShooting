@@ -165,6 +165,11 @@ public static class RobotSelectMenu
                 NormalizeToCenter(Object.Instantiate(roster.robots[i].modelPrefab, spin.transform),
                     spin.transform);
 
+            // Added after the model, so VehicleSkin's Start finds it to measure against.
+            var skin = spin.AddComponent<VehicleSkin>();
+            skin.holder = spin.transform;
+            skin.vehiclePrefab = roster.robots[i].vehiclePrefab;
+
             var camGo = new GameObject("PreviewCam");
             camGo.transform.SetParent(rig.transform, false);
             camGo.transform.localPosition = new Vector3(0f, 0.55f, 2.7f);
@@ -333,12 +338,18 @@ public class RobotPreviewSpinner : MonoBehaviour
              "framing aid — the vehicle sits on the floor in the actual game.")]
     public float vehicleLift = 0.35f;
 
+    [Tooltip("Colour of the swap burst; the select screen uses a neutral cyan.")]
+    public Color burstColor = new Color(0.2f, 0.9f, 1f);
+
     Animator _animator;
+    VehicleSkin _skin;
     bool _canTransform;
     float _turned;
     bool _vehicle;
     Vector3 _restPosition;
     float _lift;
+    float _swapAt = -1f;
+    bool _swapTo;
 
     // Start, not Awake: AddComponent runs Awake immediately, which is before
     // the caller has set phaseDegrees and before the model has been parented
@@ -349,6 +360,7 @@ public class RobotPreviewSpinner : MonoBehaviour
         _turned = phaseDegrees;
 
         _animator = GetComponentInChildren<Animator>();
+        _skin = GetComponent<VehicleSkin>();
         _canTransform = HasVehicleParameter(_animator);
     }
 
@@ -366,6 +378,21 @@ public class RobotPreviewSpinner : MonoBehaviour
             _turned -= 360f;
             _vehicle = !_vehicle;
             _animator.SetBool(TransformMode.VehicleParameter, _vehicle);
+
+            // Same timing the live fold uses, so the preview is showing the
+            // real sequence rather than an approximation of it.
+            if (_skin != null && _skin.HasVehicle)
+            {
+                _swapAt = Time.time + TransformMode.FoldSeconds * TransformMode.SwapFraction;
+                _swapTo = _vehicle;
+            }
+        }
+
+        if (_swapAt > 0f && Time.time >= _swapAt)
+        {
+            _swapAt = -1f;
+            VfxUtil.Explosion(transform.position, burstColor, 0.7f);
+            _skin.SetVehicle(_swapTo);
         }
 
         // Ride the lift in over the same window the fold takes, so the model

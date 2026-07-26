@@ -32,6 +32,15 @@ public class TransformMode : MonoBehaviour
     /// <summary>Animator bool the forged controller switches states on.</summary>
     public const string VehicleParameter = "Vehicle";
 
+    /// <summary>
+    /// How far into the fold the light burst fires and the vehicle mesh takes
+    /// over. Deliberately before halfway: by this point the robot has crouched
+    /// enough to sell the wind-up, but not far enough to look like a heap —
+    /// the deep end of the fold is only ever seen on robots with no vehicle
+    /// model, where the crouch is all there is.
+    /// </summary>
+    public const float SwapFraction = 0.42f;
+
     [Tooltip("Speed scale while driving. Routed through StatusEffects, which owns agent speed.")]
     public float vehicleSpeedMultiplier = 1.75f;
 
@@ -54,6 +63,7 @@ public class TransformMode : MonoBehaviour
     public bool CanTransform => ResolveAnimator() != null;
 
     Animator _animator;
+    VehicleSkin _skin;               // swaps in the vehicle mesh, if this robot has one
     Transform _rig;                  // wheels + thrusters, scaled in during the fold
     Coroutine _fold;
     bool _pending;
@@ -86,6 +96,7 @@ public class TransformMode : MonoBehaviour
             var found = transform.Find("Body");
             body = found != null ? found : transform;
         }
+        _skin = GetComponentInChildren<VehicleSkin>();
 
         if (_controller != null)
         {
@@ -163,6 +174,8 @@ public class TransformMode : MonoBehaviour
             animator.SetBool(VehicleParameter, false);
 
         ScaleRig(0f);
+        if (_skin != null)
+            _skin.SetVehicle(false);
         ApplyTuning(false);
     }
 
@@ -179,10 +192,13 @@ public class TransformMode : MonoBehaviour
         bool burst = false;
         for (float t = 0f; t < 1f; t += Time.deltaTime / FoldSeconds)
         {
-            if (!burst && t >= 0.5f)
+            if (!burst && t >= SwapFraction)
             {
                 burst = true;
                 VfxUtil.Explosion(transform.position + Vector3.up * 0.8f, burstColor, 1.1f);
+                // Inside the flash: the robot mesh goes, the vehicle arrives.
+                if (_skin != null)
+                    _skin.SetVehicle(vehicle);
             }
             // Props trail the fold: nothing appears until the legs are on their
             // way in, so wheels never hang off a standing robot.
