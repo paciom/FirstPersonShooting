@@ -107,14 +107,25 @@ public class GameModeController : MonoBehaviour
     /// <summary>
     /// Force-complete any in-flight de-rez cycles before switching modes —
     /// deactivating a mid-cycle character would otherwise strand it invisible.
+    ///
+    /// Vehicle form unwinds here too, and for the same reason: both effects run
+    /// as coroutines, and a deactivated GameObject loses those permanently. A
+    /// robot left mid-fold comes back with a vehicle's hitbox and one gun.
     /// </summary>
     void RestoreAllDeRez()
     {
         if (_deRezEffects == null)
             return;
         foreach (var effect in _deRezEffects)
-            if (effect != null)
-                effect.CancelAndRestore();
+        {
+            if (effect == null)
+                continue;
+            effect.CancelAndRestore();
+
+            var vehicle = effect.GetComponent<TransformMode>();
+            if (vehicle != null)
+                vehicle.ForceRobotForm();
+        }
     }
 
     /// <summary>Track a robot built mid-match so mode switches still control it.</summary>

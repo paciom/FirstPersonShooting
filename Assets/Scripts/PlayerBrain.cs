@@ -20,6 +20,7 @@ public class PlayerBrain : MonoBehaviour
 
     CharacterMotor _motor;
     WeaponLoadout _loadout;
+    TransformMode _vehicle;
     int _loadoutVersion = -1;
     int _activeWeapon;
 
@@ -46,6 +47,7 @@ public class PlayerBrain : MonoBehaviour
         Local = this;
         _motor = GetComponent<CharacterMotor>();
         _loadout = GetComponent<WeaponLoadout>();
+        _vehicle = GetComponent<TransformMode>();
         if (weapons == null || weapons.Length == 0)
             weapons = GetComponentsInChildren<Weapon>();
         if (scope == null)
@@ -94,6 +96,11 @@ public class PlayerBrain : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
             _motor.Jump();
+
+        // V folds into vehicle form and back. Ignored on robots with no forged
+        // vehicle clips, so the key is simply inert rather than half-working.
+        if (Input.GetKeyDown(KeyCode.V) && _vehicle != null)
+            _vehicle.Toggle();
 
         HandleWeaponSwitch();
 

@@ -19,6 +19,14 @@ public class StatusEffects : MonoBehaviour
     /// </summary>
     [HideInInspector] public float sprintMultiplier = 1f;
 
+    /// <summary>
+    /// Speed scale for vehicle form, owned by <see cref="TransformMode"/>. Kept
+    /// separate from <see cref="sprintMultiplier"/> rather than sharing it —
+    /// a bot dashing for a crate sets that one, and a transformed bot dashing
+    /// for a crate is doing both at once.
+    /// </summary>
+    [HideInInspector] public float vehicleMultiplier = 1f;
+
     CharacterMotor _motor;
     NavMeshAgent _agent;
     AIBrain _brain;
@@ -242,7 +250,7 @@ public class StatusEffects : MonoBehaviour
         bool slowed = Time.time < _slowUntil;
         bool hasted = Time.time < _hasteUntil;
 
-        float moveFactor = Mathf.Max(0f, sprintMultiplier);
+        float moveFactor = Mathf.Max(0f, sprintMultiplier) * Mathf.Max(0f, vehicleMultiplier);
         if (slowed) moveFactor *= _slowFactor;
         if (hasted) moveFactor *= _hasteFactor;
         if (frozen || stuck) moveFactor = 0f;

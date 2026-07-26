@@ -53,6 +53,22 @@ public class WeaponLoadout : MonoBehaviour
 
     public int TotalWeapons => all != null ? all.Length : 0;
 
+    /// <summary>
+    /// Vehicle form: one forward gun only. Set by <see cref="TransformMode"/>.
+    /// This is the cost side of transforming — speed and a small hitbox in
+    /// exchange for the rest of the loadout, including any treasure weapon,
+    /// which stays equipped and comes back the moment the robot stands up.
+    /// </summary>
+    public bool VehicleMode { get; private set; }
+
+    public void SetVehicleMode(bool vehicle)
+    {
+        if (VehicleMode == vehicle)
+            return;
+        VehicleMode = vehicle;
+        Rebuild();
+    }
+
     float _specialUntil;
     EnergyShield _shield;
 
@@ -161,6 +177,16 @@ public class WeaponLoadout : MonoBehaviour
     void Rebuild()
     {
         _built = true;
+
+        // Vehicle form collapses to the single first basic. Special is left
+        // untouched (and its timer keeps running) so unfolding restores it.
+        if (VehicleMode)
+        {
+            _available = FirstBasic();
+            _version++;
+            return;
+        }
+
         int basics = 0;
         if (all != null && basicIndices != null)
             foreach (int b in basicIndices)
@@ -178,5 +204,15 @@ public class WeaponLoadout : MonoBehaviour
 
         _available = list;
         _version++;
+    }
+
+    /// <summary>The vehicle's one gun: the first basic that actually exists.</summary>
+    Weapon[] FirstBasic()
+    {
+        if (all != null && basicIndices != null)
+            foreach (int b in basicIndices)
+                if (b >= 0 && b < all.Length && all[b] != null)
+                    return new[] { all[b] };
+        return new Weapon[0];
     }
 }

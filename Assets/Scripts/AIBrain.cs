@@ -50,6 +50,16 @@ public class AIBrain : MonoBehaviour
     [Tooltip("Speed multiplier while running for a crate — makes the intent read on camera.")]
     public float lootSprint = 1.3f;
 
+    [Header("Vehicle form")]
+    [Tooltip("Transform to cross at least this far for a crate; stay a robot for anything nearer.")]
+    public float vehicleDashRange = 18f;
+
+    [Tooltip("Stand back up once an enemy is this close — vehicle form only carries one gun.")]
+    public float vehicleSafeRange = 22f;
+
+    [Tooltip("Minimum seconds between transformations, so bots don't flicker between forms.")]
+    public float vehicleDwell = 2.5f;
+
     /// <summary>Stay at least this far from an armed mine, and back off if closer.</summary>
     const float MineDangerRadius = 4.2f;
 
@@ -63,6 +73,8 @@ public class AIBrain : MonoBehaviour
     TreasureDrop _mineToAvoid;      // armed mine too close for comfort
     TreasureDrop _mineToShoot;      // armed mine with an enemy inside its blast
     Weapon _active;
+    TransformMode _vehicle;
+    float _nextVehicleChange;
     float _nextRepath;
     float _nextTargetScan;
     float _nextTreasureScan;
@@ -78,6 +90,7 @@ public class AIBrain : MonoBehaviour
         _agent = GetComponent<NavMeshAgent>();
         _myShield = GetComponent<EnergyShield>();
         _loadout = GetComponent<WeaponLoadout>();
+        _vehicle = GetComponent<TransformMode>();
         // Created up front rather than lazily: it owns agent speed, so the
         // loot-dash multiplier has to have somewhere to live from frame one.
         _statusEffects = StatusEffects.Get(transform);
@@ -135,6 +148,12 @@ public class AIBrain : MonoBehaviour
         _mineToAvoid = null;
         _mineToShoot = null;
         SetSprinting(false);
+
+        // Menus and de-rezzes both land here. Unfold synchronously rather than
+        // playing the clip: the object is usually about to be deactivated, and
+        // that kills the coroutine mid-fold.
+        if (!active && _vehicle != null)
+            _vehicle.ForceRobotForm();
     }
 
     void Update()
@@ -263,6 +282,10 @@ public class AIBrain : MonoBehaviour
     /// </summary>
     void DriveMovement(EnergyShield target, float distance, float engageRange, bool engaged)
     {
+        // Deliberately ahead of the repath gate: which form to be in is a
+        // slower decision than where to walk, and it has its own dwell timer.
+        UpdateVehicleForm(target, distance, engaged);
+
         if (Time.time < _nextRepath || _agent == null || !_agent.isOnNavMesh)
             return;
         _nextRepath = Time.time + repathInterval;
@@ -300,6 +323,39 @@ public class AIBrain : MonoBehaviour
         _agent.isStopped = close;
         if (!close)
             _agent.SetDestination(target.transform.position);
+    }
+
+    /// <summary>
+    /// Robot or vehicle? Vehicle form is a travel decision, not a combat one:
+    /// it buys speed and a low profile at the price of the whole loadout bar one
+    /// gun, so a bot folds up only when it has somewhere to be and nobody to
+    /// shoot on the way.
+    ///
+    /// The two ranges overlap on purpose — fold to cross more than
+    /// <see cref="vehicleDashRange"/>, stand back up once the crate is closer
+    /// than half that. Matching thresholds would leave a bot transforming and
+    /// untransforming on the spot at the boundary.
+    /// </summary>
+    void UpdateVehicleForm(EnergyShield target, float distanceToTarget, bool engaged)
+    {
+        if (_vehicle == null || !_vehicle.CanTransform || Time.time < _nextVehicleChange)
+            return;
+
+        bool enemyNear = IsValidTarget(target) && distanceToTarget < vehicleSafeRange;
+        bool wounded = _myShield != null && _myShield.Normalized < woundedShieldFraction;
+
+        bool want = false;
+        if (!engaged && !enemyNear && !wounded && _treasureTarget != null)
+        {
+            float run = Vector3.Distance(transform.position, _treasureTarget.GroundPoint);
+            // Already driving? Hold form until nearly on top of the crate.
+            want = _vehicle.IsVehicle ? run > vehicleDashRange * 0.5f : run > vehicleDashRange;
+        }
+
+        if (want == _vehicle.IsVehicle)
+            return;
+        _nextVehicleChange = Time.time + vehicleDwell;
+        _vehicle.SetVehicle(want);
     }
 
     /// <summary>Break into a run (or stop running). Goes through StatusEffects — see sprintMultiplier.</summary>

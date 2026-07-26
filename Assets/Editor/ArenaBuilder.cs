@@ -62,6 +62,9 @@ public static class ArenaBuilder
         // here — it's a no-credits fallback, kept out of the roster because the
         // Meshy fleet looks far better. Run its menu item to bring it back.)
         MeshyWalkerForge.ForgeIfMissing();
+        // Must follow the walker forge: it solves against the prefabs and the
+        // idle clips that forge produces, and patches the controller it built.
+        TransformRigForge.ForgeIfMissing();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -549,6 +552,10 @@ public static class ArenaBuilder
         deRez.body = body.transform;
         deRez.burstColor = NeonCyan;
 
+        var vehicle = player.AddComponent<TransformMode>();
+        vehicle.body = body.transform;
+        vehicle.burstColor = NeonCyan;
+
         player.AddComponent<HudController>();
 
         var bubble = player.AddComponent<ShieldBubble>();
@@ -806,6 +813,10 @@ public static class ArenaBuilder
             var deRez = bot.AddComponent<DeRezEffect>();
             deRez.body = body;
             deRez.burstColor = teamColor;
+
+            var vehicle = bot.AddComponent<TransformMode>();
+            vehicle.body = body;
+            vehicle.burstColor = teamColor;
 
             // Only enemy de-rezzes score points for the player.
             if (teamId != 0)
