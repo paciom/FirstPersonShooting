@@ -234,9 +234,17 @@ public static class RobotSelectMenu
     {
         // Key from camera-right and above, cool fill opposite it, rim from
         // behind to lift the silhouette off the background.
-        AddLight(parent, new Vector3(1.7f, 1.9f, 2.1f), new Color(1f, 0.97f, 0.90f), 3.0f);
-        AddLight(parent, new Vector3(-1.9f, 0.5f, 1.7f), new Color(0.55f, 0.72f, 1f), 1.2f);
-        AddLight(parent, new Vector3(0f, 1.4f, -2.3f), new Color(0.80f, 0.90f, 1f), 1.6f);
+        //
+        // The intensities look large because point lights fall off with the
+        // square of distance and these sit ~3.3 units off a model normalised to
+        // 1.6 units tall. An intensity of 3 lands as 3/3.3^2 = 0.27 at the
+        // surface, so the robot rendered at about half its albedo and vivid
+        // orange came out as dark rust. Roughly d^2 (~11 for the key) puts a
+        // fully-facing surface near its actual albedo and lets the falloff read
+        // as shading rather than as gloom.
+        AddLight(parent, new Vector3(1.7f, 1.9f, 2.1f), new Color(1f, 0.97f, 0.90f), 11.0f);
+        AddLight(parent, new Vector3(-1.9f, 0.5f, 1.7f), new Color(0.55f, 0.72f, 1f), 4.5f);
+        AddLight(parent, new Vector3(0f, 1.4f, -2.3f), new Color(0.80f, 0.90f, 1f), 6.0f);
     }
 
     static void AddLight(Transform parent, Vector3 localPosition, Color color, float intensity)
