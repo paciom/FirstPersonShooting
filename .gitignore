@@ -18,6 +18,11 @@
 # for geometry the game never loads.
 /RetiredModels/
 
+# Raw PBR maps pulled from a retexture task. They are an intermediate — the
+# copies that matter get injected into the GLBs, which are versioned.
+/Tools/.retexture_maps/
+/Tools/__pycache__/
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/
