@@ -11,13 +11,13 @@ using UnityEngine.UI;
 /// </summary>
 public static class RobotSelectMenu
 {
-    static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
-    static readonly Color HoloMagenta = new Color(1f, 0.25f, 0.9f);
+    internal static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
+    internal static readonly Color HoloMagenta = new Color(1f, 0.25f, 0.9f);
     static readonly Color CardColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
 
     // Preview rigs live far below the arena so the tiny preview cameras
     // (short far plane) see nothing but their own robot.
-    const float PreviewDepth = -150f;
+    internal const float PreviewDepth = -150f;
 
     // Usable width for a team's card row on the 1920-wide reference canvas,
     // leaving margins for the BACK button and screen edges.
@@ -64,8 +64,12 @@ public static class RobotSelectMenu
         state.cyanIndex = Mathf.Clamp(cyanIndex, 0, count - 1);
         state.magentaIndex = Mathf.Clamp(magentaIndex, 0, count - 1);
 
-        BuildTeamRow(canvasGo.transform, "CYAN TEAM", HoloCyan, 130f, roster, previews, state, true);
-        BuildTeamRow(canvasGo.transform, "MAGENTA TEAM", HoloMagenta, -160f, roster, previews, state, false);
+        // Created before the rows so their thumbnails can capture it, but its UI
+        // is built last so the dialog draws over everything else on the canvas.
+        var inspector = RobotInspector.Create(root, roster, state);
+
+        BuildTeamRow(canvasGo.transform, "CYAN TEAM", HoloCyan, 130f, roster, previews, state, true, inspector);
+        BuildTeamRow(canvasGo.transform, "MAGENTA TEAM", HoloMagenta, -160f, roster, previews, state, false, inspector);
         state.Refresh();
 
         MakeButton(canvasGo.transform, "START  MATCH", new Vector2(0, -350), new Vector2(420, 78), 34,
@@ -73,11 +77,14 @@ public static class RobotSelectMenu
         MakeButton(canvasGo.transform, "BACK", new Vector2(-560, -350), new Vector2(200, 78), 28,
             controller.CancelRobotSelect);
 
+        inspector.BuildUI(canvasGo.transform);
+
         return root;
     }
 
     static void BuildTeamRow(Transform parent, string header, Color teamColor, float rowY,
-        RobotRoster roster, RenderTexture[] previews, RobotSelectState state, bool isCyan)
+        RobotRoster roster, RenderTexture[] previews, RobotSelectState state, bool isCyan,
+        RobotInspector inspector)
     {
         MakeText(parent, header, header, 30, teamColor, FontStyle.Bold,
             new Vector2(0.5f, 0.5f), new Vector2(0, rowY + 140f), new Vector2(600, 40));
@@ -93,13 +100,20 @@ public static class RobotSelectMenu
         {
             float x = (i - (n - 1) * 0.5f) * spacing;
             MakeCard(parent, roster.robots[i].displayName, previews[i], new Vector2(x, rowY),
-                cardWidth, teamColor, out cards[i], out bars[i]);
+                cardWidth, teamColor, out cards[i], out bars[i], out var thumbnail);
             int index = i;
             cards[i].GetComponent<Button>().onClick.AddListener(() =>
             {
                 if (isCyan) state.cyanIndex = index; else state.magentaIndex = index;
                 state.Refresh();
             });
+
+            // The thumbnail sits above the card's own button and swallows the
+            // click, so the 3D area opens the inspector while the label and the
+            // card border around it still pick the robot outright.
+            var inspect = thumbnail.gameObject.AddComponent<Button>();
+            inspect.transition = Selectable.Transition.None;
+            inspect.onClick.AddListener(() => inspector.Open(index, isCyan));
         }
 
         if (isCyan) { state.cyanCards = cards; state.cyanBars = bars; state.cyanColor = teamColor; }
@@ -107,7 +121,8 @@ public static class RobotSelectMenu
     }
 
     static void MakeCard(Transform parent, string label, RenderTexture preview, Vector2 position,
-        float width, Color teamColor, out Image background, out Image selectionBar)
+        float width, Color teamColor, out Image background, out Image selectionBar,
+        out RawImage thumbnail)
     {
         // Cards keep their height and just get narrower as the roster grows; the
         // preview and label scale with the width so nothing spills over the edge.
@@ -130,6 +145,7 @@ public static class RobotSelectMenu
         previewGo.transform.SetParent(background.transform, false);
         var raw = previewGo.AddComponent<RawImage>();
         raw.texture = preview;
+        thumbnail = raw;
         var rawRect = raw.rectTransform;
         rawRect.anchorMin = rawRect.anchorMax = new Vector2(0.5f, 0.5f);
         rawRect.anchoredPosition = new Vector2(0, 22);
@@ -192,6 +208,10 @@ public static class RobotSelectMenu
             var data = camGo.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = false;
             cams[i] = cam;
+
+            // Rigs are 25 apart and the lights reach 6, so each one lights only
+            // its own robot.
+            AddThreePointLights(rig.transform);
         }
 
         var cleanup = root.AddComponent<RobotPreviewCleanup>();
@@ -199,8 +219,41 @@ public static class RobotSelectMenu
         cleanup.cameras = cams;
     }
 
+    /// <summary>
+    /// Studio rig for a preview camera sitting on +Z looking back at the model.
+    ///
+    /// Every preview needs one. The arena's key light travels toward +Z, so it
+    /// hits the far side of anything a preview camera looks at and leaves the
+    /// visible face on ambient alone — which the Meshy robots used to hide by
+    /// re-emitting their own albedo, and no longer do.
+    ///
+    /// POINT lights with a short range on purpose: a directional light has no
+    /// position, so it would re-light the whole arena 150 units overhead.
+    /// </summary>
+    internal static void AddThreePointLights(Transform parent)
+    {
+        // Key from camera-right and above, cool fill opposite it, rim from
+        // behind to lift the silhouette off the background.
+        AddLight(parent, new Vector3(1.7f, 1.9f, 2.1f), new Color(1f, 0.97f, 0.90f), 3.0f);
+        AddLight(parent, new Vector3(-1.9f, 0.5f, 1.7f), new Color(0.55f, 0.72f, 1f), 1.2f);
+        AddLight(parent, new Vector3(0f, 1.4f, -2.3f), new Color(0.80f, 0.90f, 1f), 1.6f);
+    }
+
+    static void AddLight(Transform parent, Vector3 localPosition, Color color, float intensity)
+    {
+        var go = new GameObject("PreviewLight");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPosition;
+        var light = go.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = color;
+        light.intensity = intensity;
+        light.range = 6f;
+        light.shadows = LightShadows.None;
+    }
+
     /// <summary>Scales a preview model to ~1.6 units tall and centers it on its holder.</summary>
-    static void NormalizeToCenter(GameObject instance, Transform holder)
+    internal static void NormalizeToCenter(GameObject instance, Transform holder)
     {
         instance.name = "Model";
         instance.transform.localPosition = Vector3.zero;
@@ -221,7 +274,7 @@ public static class RobotSelectMenu
 
     // ---------- uGUI helpers (same idiom as MainMenu) ----------
 
-    static void MakeButton(Transform parent, string label, Vector2 position, Vector2 size,
+    internal static void MakeButton(Transform parent, string label, Vector2 position, Vector2 size,
         int fontSize, UnityEngine.Events.UnityAction onClick)
     {
         var image = MakeImage(parent, $"Button_{label}", CardColor);
@@ -248,7 +301,7 @@ public static class RobotSelectMenu
             new Vector2(0.5f, 0.5f), Vector2.zero, size - new Vector2(20, 12));
     }
 
-    static Image MakeImage(Transform parent, string name, Color color)
+    internal static Image MakeImage(Transform parent, string name, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -257,7 +310,7 @@ public static class RobotSelectMenu
         return img;
     }
 
-    static Text MakeText(Transform parent, string name, string content, int size, Color color,
+    internal static Text MakeText(Transform parent, string name, string content, int size, Color color,
         FontStyle style, Vector2 anchor, Vector2 position, Vector2 sizeDelta)
     {
         var go = new GameObject(name);
@@ -276,7 +329,7 @@ public static class RobotSelectMenu
         return text;
     }
 
-    static void Stretch(RectTransform rect)
+    internal static void Stretch(RectTransform rect)
     {
         rect.anchorMin = Vector2.zero;
         rect.anchorMax = Vector2.one;
@@ -420,6 +473,247 @@ public class RobotPreviewSpinner : MonoBehaviour
                 parameter.name == TransformMode.VehicleParameter)
                 return true;
         return false;
+    }
+}
+
+/// <summary>
+/// Full-screen close-up of one robot, opened by clicking a card's 3D thumbnail.
+///
+/// The cards are ~190px wide and fed by 256px render textures, which is enough
+/// to tell the robots apart and not nearly enough to judge how one is shaded.
+/// This renders a single robot to a 1024px anti-aliased target instead, on a
+/// turntable you can also drag by hand.
+///
+/// It carries its own copy of the shared three-point rig, placed 60 units below
+/// the thumbnail rigs so neither set of lights reaches the other.
+///
+/// No VehicleSkin and no transformation cycle: this is for studying one form
+/// while it holds still, so the fold showcase stays on the cards.
+/// </summary>
+public class RobotInspector : MonoBehaviour
+{
+    // Clear of the thumbnail rigs (which run from x=0 outwards at PreviewDepth)
+    // by far more than the 6-unit light range, so nothing here spills onto them.
+    const float RigDrop = -60f;
+    const int TextureSize = 1024;
+    const float DegreesPerSecond = 26f;
+    const float DegreesPerDragPixel = 0.55f;
+
+    RobotRoster _roster;
+    RobotSelectState _state;
+    Transform _turntable;
+    Camera _camera;
+    RenderTexture _texture;
+    GameObject _dialog;
+    Text _title;
+    Image _accent;
+    GameObject _model;
+    int _index;
+    bool _isCyan;
+    float _pendingDrag;
+
+    public static RobotInspector Create(GameObject root, RobotRoster roster, RobotSelectState state)
+    {
+        var inspector = root.AddComponent<RobotInspector>();
+        inspector._roster = roster;
+        inspector._state = state;
+        inspector.BuildRig(root.transform);
+        return inspector;
+    }
+
+    void BuildRig(Transform root)
+    {
+        var rig = new GameObject("InspectRig");
+        rig.transform.SetParent(root, false);
+        rig.transform.position = new Vector3(0f, RobotSelectMenu.PreviewDepth + RigDrop, 0f);
+
+        var turntable = new GameObject("Turntable");
+        turntable.transform.SetParent(rig.transform, false);
+        _turntable = turntable.transform;
+
+        _texture = new RenderTexture(TextureSize, TextureSize, 24) { antiAliasing = 4 };
+
+        var camGo = new GameObject("InspectCam");
+        camGo.transform.SetParent(rig.transform, false);
+        camGo.transform.localPosition = new Vector3(0f, 0.45f, 3.1f);
+        camGo.transform.localRotation = Quaternion.Euler(6f, 180f, 0f);
+        _camera = camGo.AddComponent<Camera>();
+        _camera.targetTexture = _texture;
+        _camera.fieldOfView = 34f;
+        _camera.nearClipPlane = 0.05f;
+        _camera.farClipPlane = 12f;
+        _camera.clearFlags = CameraClearFlags.SolidColor;
+        _camera.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
+        // Only renders while the dialog is up; nine thumbnails are enough work.
+        _camera.enabled = false;
+
+        // Same rig the thumbnails use, at the same offsets — both normalize the
+        // model to ~1.6 units centered on the rig origin, so a robot shades the
+        // same here as on its card, only bigger.
+        RobotSelectMenu.AddThreePointLights(rig.transform);
+    }
+
+    /// <summary>Builds the dialog hidden. Call last, so it draws over the rows.</summary>
+    public void BuildUI(Transform canvas)
+    {
+        _dialog = new GameObject("InspectDialog");
+        _dialog.transform.SetParent(canvas, false);
+        RobotSelectMenu.Stretch(_dialog.AddComponent<RectTransform>());
+
+        // Scrim and panel are siblings rather than parent and child: nested, a
+        // click anywhere on the panel would bubble up to the scrim's button and
+        // close the dialog out from under whatever was just pressed.
+        var scrim = RobotSelectMenu.MakeImage(_dialog.transform, "Scrim",
+            new Color(0.01f, 0.02f, 0.05f, 0.88f));
+        RobotSelectMenu.Stretch(scrim.rectTransform);
+        var scrimButton = scrim.gameObject.AddComponent<Button>();
+        scrimButton.transition = Selectable.Transition.None;
+        scrimButton.onClick.AddListener(Close);
+
+        var panel = RobotSelectMenu.MakeImage(_dialog.transform, "Panel",
+            new Color(0.05f, 0.11f, 0.18f, 0.98f));
+        panel.rectTransform.anchorMin = panel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        panel.rectTransform.anchoredPosition = new Vector2(0f, 20f);
+        panel.rectTransform.sizeDelta = new Vector2(760f, 800f);
+
+        _accent = RobotSelectMenu.MakeImage(panel.transform, "Accent", RobotSelectMenu.HoloCyan);
+        _accent.rectTransform.anchorMin = new Vector2(0f, 1f);
+        _accent.rectTransform.anchorMax = new Vector2(1f, 1f);
+        _accent.rectTransform.offsetMin = new Vector2(0f, -4f);
+        _accent.rectTransform.offsetMax = Vector2.zero;
+
+        _title = RobotSelectMenu.MakeText(panel.transform, "Title", "", 44,
+            RobotSelectMenu.HoloCyan, FontStyle.Bold,
+            new Vector2(0.5f, 1f), new Vector2(0f, -52f), new Vector2(700f, 60f));
+
+        var viewGo = new GameObject("View");
+        viewGo.transform.SetParent(panel.transform, false);
+        var view = viewGo.AddComponent<RawImage>();
+        view.texture = _texture;
+        // Panel-local y runs -400..+400. Title sits at +318..+378, so the view
+        // is centred just under it and the hint and buttons stack below.
+        view.rectTransform.anchorMin = view.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        view.rectTransform.anchoredPosition = new Vector2(0f, 35f);
+        view.rectTransform.sizeDelta = new Vector2(620f, 540f);
+        viewGo.AddComponent<RobotInspectorDrag>().inspector = this;
+
+        RobotSelectMenu.MakeText(panel.transform, "Hint", "DRAG  TO  ROTATE", 20,
+            new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
+            new Vector2(0.5f, 0f), new Vector2(0f, 130f), new Vector2(500f, 30f));
+
+        RobotSelectMenu.MakeButton(panel.transform, "SELECT", new Vector2(-130f, -340f),
+            new Vector2(230f, 70f), 30, SelectCurrent);
+        RobotSelectMenu.MakeButton(panel.transform, "CLOSE", new Vector2(130f, -340f),
+            new Vector2(230f, 70f), 30, Close);
+
+        _dialog.SetActive(false);
+    }
+
+    public void Open(int index, bool isCyan)
+    {
+        if (_roster == null || _roster.robots == null || index < 0 || index >= _roster.robots.Length)
+            return;
+
+        _index = index;
+        _isCyan = isCyan;
+
+        ClearModel();
+        // Square on to the camera every time, rather than wherever the last
+        // robot happened to have spun to.
+        _turntable.localRotation = Quaternion.identity;
+        _pendingDrag = 0f;
+
+        var entry = _roster.robots[index];
+        if (entry.modelPrefab != null)
+        {
+            _model = Instantiate(entry.modelPrefab, _turntable);
+            RobotSelectMenu.NormalizeToCenter(_model, _turntable);
+        }
+
+        var teamColor = isCyan ? RobotSelectMenu.HoloCyan : RobotSelectMenu.HoloMagenta;
+        _title.text = entry.displayName;
+        _title.color = teamColor;
+        _accent.color = teamColor;
+
+        _dialog.SetActive(true);
+        _camera.enabled = true;
+    }
+
+    public void Close()
+    {
+        _dialog.SetActive(false);
+        _camera.enabled = false;
+        ClearModel();
+    }
+
+    /// <summary>Horizontal pointer travel over the view, in pixels.</summary>
+    public void Drag(float pixels)
+    {
+        _pendingDrag += pixels;
+    }
+
+    void SelectCurrent()
+    {
+        if (_isCyan) _state.cyanIndex = _index; else _state.magentaIndex = _index;
+        _state.Refresh();
+        Close();
+    }
+
+    void ClearModel()
+    {
+        if (_model == null)
+            return;
+        // Deactivate as well as destroy: Destroy only takes effect at the end of
+        // the frame, and a swapped-to robot is instantiated before then.
+        _model.SetActive(false);
+        Destroy(_model);
+        _model = null;
+    }
+
+    void Update()
+    {
+        if (_dialog == null || !_dialog.activeSelf)
+            return;
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            Close();
+            return;
+        }
+
+        if (Mathf.Abs(_pendingDrag) > 0.001f)
+        {
+            _turntable.Rotate(0f, -_pendingDrag * DegreesPerDragPixel, 0f);
+            _pendingDrag = 0f;
+        }
+        else
+        {
+            _turntable.Rotate(0f, DegreesPerSecond * Time.deltaTime, 0f);
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (_camera != null)
+            _camera.targetTexture = null;
+        if (_texture != null)
+        {
+            _texture.Release();
+            Destroy(_texture);
+        }
+    }
+}
+
+/// <summary>Relays drags on the inspector's view to the turntable.</summary>
+public class RobotInspectorDrag : MonoBehaviour, UnityEngine.EventSystems.IDragHandler
+{
+    public RobotInspector inspector;
+
+    public void OnDrag(UnityEngine.EventSystems.PointerEventData eventData)
+    {
+        if (inspector != null)
+            inspector.Drag(eventData.delta.x);
     }
 }
 
