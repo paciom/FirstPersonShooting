@@ -565,6 +565,12 @@ public static class ArenaBuilder
         var blasterGo = BuildBlaster(head.transform, new Vector3(0.32f, -0.30f, 0.35f), 0.5f,
             blasterBodyMat, out Transform muzzleT);
 
+        // No bone list: the viewmodel stays on the camera so it aims with the
+        // view. This is only here to take it away in vehicle form, where the
+        // tank's own guns do the shooting.
+        var playerMount = blasterGo.AddComponent<HeldWeaponMount>();
+        playerMount.boneNames = new string[0];
+
         // All 54 weapon components ride on the one viewmodel, but only the two
         // basics are unlocked — see AttachArsenal / BasicWeaponIndices.
         var playerWeapons = AttachArsenal(blasterGo, muzzleT, player.transform, NeonCyan, botTuning: false);
@@ -844,6 +850,13 @@ public static class ArenaBuilder
             // away with the robot on de-rez.
             var cubeMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/BlasterBody.mat");
             var blasterGo = BuildBlaster(body, new Vector3(0.35f, 0.15f, 0.35f), 0.5f, cubeMat, out Transform muzzleT);
+
+            // Ride the shoulder instead of hanging at a fixed offset from Body,
+            // where it read as a gun floating beside the robot. Follows the bone
+            // rather than parenting to it so it survives a robot swap, which
+            // destroys the whole skeleton — see HeldWeaponMount.
+            var mount = blasterGo.AddComponent<HeldWeaponMount>();
+            mount.modelHolder = body;
 
             var shield = bot.AddComponent<EnergyShield>();
             shield.teamId = teamId;
