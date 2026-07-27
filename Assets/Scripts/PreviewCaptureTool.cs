@@ -25,7 +25,11 @@ using UnityEngine.Rendering.Universal;
 /// </summary>
 public static class PreviewCaptureTool
 {
-    const string OutDir = "Temp/PreviewCapture";
+    // NOT Temp/: that is Unity's own scratch directory and it is wiped on
+    // editor shutdown, so a batchmode run writes its PNGs and then deletes them
+    // on the way out. PREVIEW_CAPTURE_DIR overrides for one-off runs.
+    static string OutDir =>
+        System.Environment.GetEnvironmentVariable("PREVIEW_CAPTURE_DIR") ?? "PreviewCaptures";
     const int Size = 560;
     const string ScenePath = "Assets/Scenes/GreyboxArena.unity";
 
@@ -57,9 +61,36 @@ public static class PreviewCaptureTool
         EditorApplication.Exit(0);
     }
 
+
+    /// <summary>Dumps material info for arbitrary GLB assets, to compare how the
+    /// importer treats candidate source-level fixes. Paths via UVTEST_GLBS.</summary>
+    public static void DescribeGlbsBatch()
+    {
+        var report = new System.Text.StringBuilder();
+        var paths = (System.Environment.GetEnvironmentVariable("UVTEST_GLBS") ?? "")
+            .Split(';', System.StringSplitOptions.RemoveEmptyEntries);
+        foreach (var path in paths)
+        {
+            var go = AssetDatabase.LoadAssetAtPath<GameObject>(path.Trim());
+            if (go == null)
+            {
+                report.AppendLine($"===== {path}");
+                report.AppendLine("  FAILED TO LOAD");
+                continue;
+            }
+            var inst = Object.Instantiate(go);
+            Describe(inst, path.Trim(), report);
+            Object.DestroyImmediate(inst);
+        }
+        Directory.CreateDirectory(OutDir);
+        File.WriteAllText($"{OutDir}/uvtest.txt", report.ToString());
+        EditorApplication.Exit(0);
+    }
+
     static void Capture(RobotRoster roster)
     {
         Directory.CreateDirectory(OutDir);
+        var report = new System.Text.StringBuilder();
 
         for (int i = 0; i < roster.robots.Length; i++)
         {
@@ -96,11 +127,92 @@ public static class PreviewCaptureTool
             Shoot(cam, holder.transform, 0f, $"{OutDir}/{entry.displayName}_front.png");
             Shoot(cam, holder.transform, 180f, $"{OutDir}/{entry.displayName}_back.png");
 
+            Describe(model, entry.displayName, report);
+            DescribeVehicle(entry, report);
+
             Object.DestroyImmediate(rig);
         }
 
+        File.WriteAllText($"{OutDir}/report.txt", report.ToString());
         Debug.Log($"PreviewCapture: wrote {roster.robots.Length * 2} PNGs to {OutDir}");
         AssetDatabase.Refresh();
+    }
+
+    /// <summary>
+    /// Records what Unity believes it loaded, so the imported mesh and texture
+    /// can be compared numerically against the glTF file they came from. The
+    /// render disagrees with an offline rasterisation of the same buffers, and
+    /// only the imported data can say where the two diverge.
+    /// </summary>
+    static void Describe(GameObject model, string name, System.Text.StringBuilder report)
+    {
+        report.AppendLine($"===== {name}");
+
+        var skinned = model.GetComponentInChildren<SkinnedMeshRenderer>();
+        var plain = model.GetComponentInChildren<MeshRenderer>();
+        var mesh = skinned != null ? skinned.sharedMesh
+                 : plain != null ? plain.GetComponent<MeshFilter>()?.sharedMesh : null;
+        var material = skinned != null ? skinned.sharedMaterial : plain?.sharedMaterial;
+
+        if (mesh == null)
+        {
+            report.AppendLine("  no mesh found");
+            return;
+        }
+
+        var uv = mesh.uv;
+        var verts = mesh.vertices;
+        report.AppendLine($"  renderer      {(skinned != null ? "Skinned" : "MeshRenderer")}");
+        report.AppendLine($"  mesh          {mesh.name}");
+        report.AppendLine($"  vertexCount   {mesh.vertexCount}   subMeshes {mesh.subMeshCount}");
+        report.AppendLine($"  uv.Length     {uv.Length}   uv2 {mesh.uv2.Length}   normals {mesh.normals.Length}");
+        for (int k = 0; k < 4 && k < uv.Length; k++)
+            report.AppendLine($"  uv[{k}]        ({uv[k].x:F6}, {uv[k].y:F6})   " +
+                              $"pos[{k}] ({verts[k].x:F4}, {verts[k].y:F4}, {verts[k].z:F4})");
+
+        if (material == null)
+        {
+            report.AppendLine("  no material");
+            return;
+        }
+        report.AppendLine($"  shader        {material.shader.name}");
+        report.AppendLine($"  keywords      {string.Join(",", material.shaderKeywords)}");
+
+        // Enumerate rather than guess property names: this is glTFast's own
+        // Shader Graph, not URP Lit, so _BaseMap and friends do not exist. The
+        // texture ST (scale/offset) is the value in question — a scale.y of -1
+        // is a V flip on top of the one already baked into the mesh UVs.
+        var shader = material.shader;
+        int count = ShaderUtil.GetPropertyCount(shader);
+        for (int p = 0; p < count; p++)
+        {
+            string prop = ShaderUtil.GetPropertyName(shader, p);
+            var kind = ShaderUtil.GetPropertyType(shader, p);
+            if (kind == ShaderUtil.ShaderPropertyType.TexEnv)
+            {
+                var tex = material.GetTexture(prop) as Texture2D;
+                report.AppendLine($"  TEX {prop,-24} " +
+                    (tex == null ? "(none)"
+                     : $"{tex.width}x{tex.height} format={tex.format} mips={tex.mipmapCount} " +
+                       $"filter={tex.filterMode}") +
+                    $"  scale={material.GetTextureScale(prop)} offset={material.GetTextureOffset(prop)}");
+            }
+            else if (kind == ShaderUtil.ShaderPropertyType.Vector)
+            {
+                report.AppendLine($"  VEC {prop,-24} {material.GetVector(prop)}");
+            }
+        }
+    }
+
+    /// <summary>Describes a robot's vehicle form too — those render correctly,
+    /// so any material difference between the two is the interesting part.</summary>
+    static void DescribeVehicle(RobotRoster.Entry entry, System.Text.StringBuilder report)
+    {
+        if (entry.vehiclePrefab == null)
+            return;
+        var instance = Object.Instantiate(entry.vehiclePrefab);
+        Describe(instance, entry.displayName + " [VEHICLE]", report);
+        Object.DestroyImmediate(instance);
     }
 
     static void Shoot(Camera cam, Transform subject, float yaw, string path)

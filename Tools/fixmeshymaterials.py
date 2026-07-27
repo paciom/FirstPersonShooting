@@ -118,7 +118,58 @@ def fix_materials(gltf, metallic, roughness):
         if removed:
             edits.append(f"  material[{index}] ({material.get('name', '?')}): "
                          + ", ".join(removed))
+    edits.extend(prune_textures(gltf))
     return edits
+
+
+def prune_textures(gltf):
+    """Drops unreferenced/duplicate texture entries and repoints materials at them.
+
+    DEFECT 4, and the one that actually looked like broken UVs. These exports
+    carry two `textures` entries pointing at the SAME image -- originally one for
+    baseColor and one for the bogus emissive -- and the material references the
+    second. glTFast 6.19 responds to that by enabling _TEXTURE_TRANSFORM and
+    setting baseColorTexture_ST to (1, -1, 0, 1): a V flip ON TOP of the flip it
+    already baked into the mesh UVs when converting glTF's V-down convention to
+    Unity's V-up. The two flips cancel back to the raw glTF V, so every UV island
+    samples its vertical mirror and the model renders as confetti.
+
+    Collapsing the array to one entry per distinct (sampler, source) and
+    repointing the material makes glTFast emit an identity ST, verified by
+    importing the before and after and reading baseColorTexture_ST back out.
+
+    Nothing is lost: the entries were identical, and the dropped one was
+    referenced only by the emissive slot that no longer exists.
+    """
+    textures = gltf.get("textures")
+    if not textures:
+        return []
+
+    keep, remap = [], {}
+    for index, texture in enumerate(textures):
+        key = (texture.get("sampler"), texture.get("source"))
+        match = next((i for i, t in enumerate(keep)
+                      if (t.get("sampler"), t.get("source")) == key), None)
+        if match is None:
+            keep.append(texture)
+            match = len(keep) - 1
+        remap[index] = match
+
+    if len(keep) == len(textures):
+        return []
+
+    slots = ("baseColorTexture", "metallicRoughnessTexture", "normalTexture",
+             "occlusionTexture", "emissiveTexture")
+    for material in gltf.get("materials", []):
+        for holder in (material, material.get("pbrMetallicRoughness", {})):
+            for slot in slots:
+                ref = holder.get(slot)
+                if isinstance(ref, dict) and "index" in ref:
+                    ref["index"] = remap[ref["index"]]
+
+    gltf["textures"] = keep
+    return [f"  textures[{len(textures)}] -> [{len(keep)}] deduped "
+            f"(kills glTFast's spurious V-flip texture transform)"]
 
 
 def process(path, dry_run, metallic, roughness):
