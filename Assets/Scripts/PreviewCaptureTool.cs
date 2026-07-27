@@ -120,6 +120,91 @@ public static class PreviewCaptureTool
         EditorApplication.Exit(0);
     }
 
+    /// <summary>
+    /// Renders a robot built the way the ARENA builds it — through
+    /// RobotFactory.InstantiateNormalized, standing in the real scene under the
+    /// real lights — and dumps its material state.
+    ///
+    /// The select screen and the arena take different paths to the same model:
+    /// the cards instantiate the prefab directly under studio lights, the arena
+    /// runs it through RobotFactory, which copies and tints every material and
+    /// then lights it with the arena rig. Either step can change how it reads,
+    /// so this reproduces the arena path exactly rather than approximating it.
+    /// </summary>
+    public static void ArenaRobotReportBatch()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath);
+        var roster = Object.FindFirstObjectByType<RobotRoster>();
+        if (roster == null || !roster.HasRobots)
+        {
+            Debug.LogError("ArenaRobotReport: no roster");
+            EditorApplication.Exit(1);
+            return;
+        }
+        Directory.CreateDirectory(OutDir);
+        var report = new System.Text.StringBuilder();
+
+        var entry = roster.robots[0];
+        var body = new GameObject("ArenaProbe").transform;
+        // Where a bot actually stands, so the arena's own lights and ambient
+        // apply exactly as they do in a match.
+        body.position = new Vector3(0f, 0.9f, 0f);
+
+        var teamTint = new Color(0.2f, 0.9f, 1f);
+        var model = RobotFactory.InstantiateNormalized(entry.modelPrefab, body, teamTint);
+
+        report.AppendLine($"===== ARENA PATH: {entry.displayName}  tint={teamTint}");
+        report.AppendLine($"  ambient mode  {RenderSettings.ambientMode}");
+        report.AppendLine($"  ambient light {RenderSettings.ambientLight}");
+        foreach (var light in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            report.AppendLine($"  light {light.name,-16} {light.type,-11} " +
+                              $"intensity={light.intensity:F2} colour={light.color} " +
+                              $"range={light.range:F1}");
+        DescribeArenaMaterials(model, report);
+
+        var camGo = new GameObject("ArenaProbeCam");
+        camGo.transform.position = body.position + new Vector3(0f, 0.15f, 3.0f);
+        camGo.transform.rotation = Quaternion.Euler(4f, 180f, 0f);
+        var cam = camGo.AddComponent<Camera>();
+        cam.fieldOfView = 38f;
+        cam.nearClipPlane = 0.05f;
+        cam.farClipPlane = 60f;
+        camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = true;
+        Shoot(cam, body, 0f, $"{OutDir}/ARENA_{entry.displayName}.png");
+
+        File.WriteAllText($"{OutDir}/arena_report.txt", report.ToString());
+        Debug.Log(report.ToString());
+        Object.DestroyImmediate(body.gameObject);
+        Object.DestroyImmediate(camGo);
+        EditorApplication.Exit(0);
+    }
+
+    /// <summary>Dumps colour and texture state, including the tinted copies.</summary>
+    static void DescribeArenaMaterials(GameObject model, System.Text.StringBuilder report)
+    {
+        foreach (var renderer in model.GetComponentsInChildren<Renderer>())
+        {
+            var material = renderer.sharedMaterial;
+            if (material == null)
+                continue;
+            report.AppendLine($"  renderer {renderer.name} -> {material.shader.name}");
+            report.AppendLine($"    keywords {string.Join(",", material.shaderKeywords)}");
+            report.AppendLine($"    HasProperty _BaseColor={material.HasProperty("_BaseColor")} " +
+                              $"_Color={material.HasProperty("_Color")} " +
+                              $"baseColorFactor={material.HasProperty("baseColorFactor")}");
+            var shader = material.shader;
+            for (int p = 0; p < ShaderUtil.GetPropertyCount(shader); p++)
+            {
+                string prop = ShaderUtil.GetPropertyName(shader, p);
+                var kind = ShaderUtil.GetPropertyType(shader, p);
+                if (kind == ShaderUtil.ShaderPropertyType.Color)
+                    report.AppendLine($"    COLOR {prop,-24} {material.GetColor(prop)}");
+                else if (kind == ShaderUtil.ShaderPropertyType.Vector && prop.EndsWith("_ST"))
+                    report.AppendLine($"    ST    {prop,-24} {material.GetVector(prop)}");
+            }
+        }
+    }
+
     static void Capture(RobotRoster roster)
     {
         Directory.CreateDirectory(OutDir);
