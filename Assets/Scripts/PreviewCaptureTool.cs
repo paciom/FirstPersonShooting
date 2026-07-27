@@ -30,7 +30,17 @@ public static class PreviewCaptureTool
     // on the way out. PREVIEW_CAPTURE_DIR overrides for one-off runs.
     static string OutDir =>
         System.Environment.GetEnvironmentVariable("PREVIEW_CAPTURE_DIR") ?? "PreviewCaptures";
-    const int Size = 560;
+    // Overridable so a one-off run can render a large hero frame (e.g. as the
+    // starting image for an image-to-video transformation test) without
+    // changing what the routine diagnostic captures look like.
+    static int Size
+    {
+        get
+        {
+            var raw = System.Environment.GetEnvironmentVariable("PREVIEW_CAPTURE_SIZE");
+            return int.TryParse(raw, out int parsed) && parsed >= 64 ? parsed : 560;
+        }
+    }
     const string ScenePath = "Assets/Scenes/GreyboxArena.unity";
 
     [MenuItem("Photon Arena/Capture Robot Previews")]
@@ -126,6 +136,9 @@ public static class PreviewCaptureTool
             // and the offline render was of the front.
             Shoot(cam, holder.transform, 0f, $"{OutDir}/{entry.displayName}_front.png");
             Shoot(cam, holder.transform, 180f, $"{OutDir}/{entry.displayName}_back.png");
+            // Three-quarter hero angle: reads the silhouette better than a flat
+            // front-on shot, which matters when the frame is seeding a video.
+            Shoot(cam, holder.transform, 35f, $"{OutDir}/{entry.displayName}_hero.png");
 
             Describe(model, entry.displayName, report);
             DescribeVehicle(entry, report);

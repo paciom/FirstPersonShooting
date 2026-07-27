@@ -121,3 +121,7 @@ InitTestScene*.unity*
 
 # Diagnostic renders from PreviewCaptureTool — regenerable, never versioned.
 /PreviewCaptures/
+
+# Regenerable from the stage GLBs via Tools/stopmotion.py; 28 MB of LFS for
+# something one command rebuilds.
+/TransformerTest/RANGER_stopmotion.glb
