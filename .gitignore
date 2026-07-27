@@ -29,6 +29,8 @@
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
+# Burst drops lib_burst_generated.* here during a WebGL build.
+/Data/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
 *.log
