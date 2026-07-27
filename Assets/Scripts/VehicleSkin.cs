@@ -32,8 +32,12 @@ public class VehicleSkin : MonoBehaviour
     [Tooltip("Transform whose 'Model' child is the robot; defaults to this one.")]
     public Transform holder;
 
-    [Tooltip("Team tint, applied the same way RobotFactory tints robot models.")]
+    [Tooltip("Team color, applied the same way RobotFactory paints robot models.")]
     public Color tint = Color.white;
+
+    [Tooltip("Repaint resolution. 0 uses TeamPaint's default; the select " +
+             "screen's card previews drop it to TeamPaint.CardSize.")]
+    public int paintSize;
 
     [Tooltip("Vehicle height as a fraction of the standing robot's height.")]
     [Range(0.2f, 1.5f)] public float heightFraction = 0.62f;
@@ -154,7 +158,7 @@ public class VehicleSkin : MonoBehaviour
         // (Front vs back is still a coin flip — flip yRotation by 180 per robot
         // if one comes out reversed.)
         FitToRobot(_vehicle, vehicleRenderers, robotBounds, 0f);
-        Tint(vehicleRenderers);
+        Tint(vehicleRenderers, paintSize);
         _vehicle.SetActive(false);
     }
 
@@ -189,7 +193,14 @@ public class VehicleSkin : MonoBehaviour
             }
 
             FitToRobot(stage, renderers, robotBounds, stageYawOffset);
-            Tint(renderers);
+            // Only the last stage is a form the robot lives in; the ones before
+            // it are single frames of a one-second fold, so they get a cheaper
+            // repaint. With eight stages per robot and two teams painting them,
+            // full-size copies of the in-between frames would cost more texture
+            // memory than every robot on the field put together.
+            Tint(renderers, i == transformStages.Length - 1
+                ? paintSize
+                : Mathf.Min(TeamPaint.Resolve(paintSize), TeamPaint.StageSize));
             stage.SetActive(false);
             _stages[i] = stage;
         }
@@ -305,24 +316,14 @@ public class VehicleSkin : MonoBehaviour
         return bounds;
     }
 
-    /// <summary>Tints copies of the imported materials — never the shared assets.</summary>
-    void Tint(Renderer[] renderers)
+    /// <summary>
+    /// Repaints copies of the imported materials into the team's colors — never
+    /// the shared assets. A robot's vehicle form has to be painted the same way
+    /// the robot itself is, or a team's tank would come out of the fold in the
+    /// other team's colors.
+    /// </summary>
+    void Tint(Renderer[] renderers, int size)
     {
-        foreach (var renderer in renderers)
-        {
-            var materials = renderer.sharedMaterials;
-            for (int i = 0; i < materials.Length; i++)
-            {
-                if (materials[i] == null)
-                    continue;
-                var copy = new Material(materials[i]);
-                string property = copy.HasProperty("_BaseColor") ? "_BaseColor"
-                    : copy.HasProperty("_Color") ? "_Color" : null;
-                if (property != null)
-                    copy.SetColor(property, copy.GetColor(property) * Color.Lerp(Color.white, tint, 0.35f));
-                materials[i] = copy;
-            }
-            renderer.sharedMaterials = materials;
-        }
+        TeamPaint.Apply(renderers, tint, size);
     }
 }

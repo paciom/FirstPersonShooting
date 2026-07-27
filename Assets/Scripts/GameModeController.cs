@@ -22,10 +22,13 @@ public class GameModeController : MonoBehaviour
     GameMode _pendingMode;
     int _cyanRobot;
     int _magentaRobot;
-    // The scene is built with roster entry 0 (the default rigged walker) on
-    // every bot, so an initial 0/0 selection needs no reskin.
-    int _appliedCyan;
-    int _appliedMagenta;
+    // -1, not 0: the scene is built with roster entry 0 on every bot, but it is
+    // built in the editor, where TeamPaint deliberately does nothing (a repaint
+    // is a RenderTexture and cannot be serialized into a scene). So the default
+    // 0/0 selection — both teams on the ranger, the most likely case of all —
+    // still has to reskin once, or the two teams launch identically painted.
+    int _appliedCyan = -1;
+    int _appliedMagenta = -1;
     Text _overlayText;
     GameObject _overlayCanvas;
     string _hintDesktop = "";
@@ -261,7 +264,7 @@ public class GameModeController : MonoBehaviour
             var body = bot.transform.Find("Body");
             if (body == null)
                 continue;
-            Color tint = team == 0 ? new Color(0.2f, 0.9f, 1f) : new Color(1f, 0.25f, 0.9f);
+            Color tint = MatchAnnouncer.TeamColor(team);
             RobotFactory.Reskin(body, entry.modelPrefab, tint);
 
             // A different robot transforms into a different vehicle. Rebuilt

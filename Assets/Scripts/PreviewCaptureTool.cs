@@ -152,6 +152,11 @@ public static class PreviewCaptureTool
 
         var teamTint = new Color(0.2f, 0.9f, 1f);
         var model = RobotFactory.InstantiateNormalized(entry.modelPrefab, body, teamTint);
+        // RobotFactory's own repaint is a no-op outside play mode (a repaint is
+        // a RenderTexture and would not survive a scene save). This probe never
+        // saves anything, so it asks for the real thing — a report of the arena
+        // path in factory colours would be a report of something else.
+        TeamPaint.Apply(model, teamTint, editTime: true);
 
         report.AppendLine($"===== ARENA PATH: {entry.displayName}  tint={teamTint}");
         report.AppendLine($"  ambient mode  {RenderSettings.ambientMode}");

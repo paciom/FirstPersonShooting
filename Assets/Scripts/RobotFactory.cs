@@ -118,8 +118,8 @@ public static class RobotFactory
     /// <summary>
     /// Instantiates a model under <paramref name="body"/> as "Model",
     /// normalizes it to character height (multiplying — never replacing — the
-    /// glTF unit-conversion scale), recenters it, and tints copies of its
-    /// materials toward the team color.
+    /// glTF unit-conversion scale), recenters it, and repaints copies of its
+    /// materials into the team's colors.
     /// </summary>
     public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body, Color teamTint)
     {
@@ -159,23 +159,10 @@ public static class RobotFactory
                 instance.transform.localPosition = -localCenter * scale;
             }
 
-            // Tint copies of the imported materials — never the shared import assets.
-            foreach (var r in renderers)
-            {
-                var materials = r.sharedMaterials;
-                for (int i = 0; i < materials.Length; i++)
-                {
-                    if (materials[i] == null)
-                        continue;
-                    var copy = new Material(materials[i]);
-                    string prop = copy.HasProperty("_BaseColor") ? "_BaseColor"
-                        : copy.HasProperty("_Color") ? "_Color" : null;
-                    if (prop != null)
-                        copy.SetColor(prop, copy.GetColor(prop) * Color.Lerp(Color.white, teamTint, 0.35f));
-                    materials[i] = copy;
-                }
-                r.sharedMaterials = materials;
-            }
+            // Repaint copies of the imported materials into the team's colours —
+            // never the shared import assets. See TeamPaint for why this is a
+            // hue replacement rather than the colour multiply it grew out of.
+            TeamPaint.Apply(renderers, teamTint);
         }
         return instance;
     }

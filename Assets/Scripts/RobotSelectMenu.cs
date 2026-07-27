@@ -19,6 +19,11 @@ public static class RobotSelectMenu
     // (short far plane) see nothing but their own robot.
     internal const float PreviewDepth = -150f;
 
+    // How far the magenta rig set sits above the cyan one. Comfortably clear of
+    // the 6-unit preview lights in both directions, and of the inspector rig
+    // 60 below, so no team's lights reach another team's robots.
+    const float TeamRigLift = 40f;
+
     // Usable width for a team's card row on the 1920-wide reference canvas,
     // leaving margins for the BACK button and screen edges.
     const float RowWidth = 1800f;
@@ -68,8 +73,12 @@ public static class RobotSelectMenu
         root.transform.SetParent(controller.transform, false);
 
         int count = roster.robots.Length;
-        var previews = new RenderTexture[count];
-        BuildPreviewRigs(root, roster, previews);
+        // One rig set per team rather than one shared set: the two rows have to
+        // show the SAME robot in DIFFERENT paint, which a single render texture
+        // cannot do.
+        var cyanPreviews = new RenderTexture[count];
+        var magentaPreviews = new RenderTexture[count];
+        BuildPreviewRigs(root, roster, cyanPreviews, magentaPreviews);
 
         var canvasGo = new GameObject("Canvas");
         canvasGo.transform.SetParent(root.transform, false);
@@ -99,8 +108,8 @@ public static class RobotSelectMenu
         // is built last so the dialog draws over everything else on the canvas.
         var inspector = RobotInspector.Create(root, roster, state);
 
-        BuildTeamRow(canvasGo.transform, "CYAN TEAM", HoloCyan, 130f, roster, previews, state, true, inspector);
-        BuildTeamRow(canvasGo.transform, "MAGENTA TEAM", HoloMagenta, -160f, roster, previews, state, false, inspector);
+        BuildTeamRow(canvasGo.transform, "CYAN TEAM", HoloCyan, 130f, roster, cyanPreviews, state, true, inspector);
+        BuildTeamRow(canvasGo.transform, "MAGENTA TEAM", HoloMagenta, -160f, roster, magentaPreviews, state, false, inspector);
         state.Refresh();
 
         MakeButton(canvasGo.transform, "START  MATCH", new Vector2(0, -350), new Vector2(420, 78), 34,
@@ -193,14 +202,37 @@ public static class RobotSelectMenu
         selectionBar.rectTransform.offsetMax = new Vector2(-6, 12);
     }
 
-    static void BuildPreviewRigs(GameObject root, RobotRoster roster, RenderTexture[] previews)
+    /// <summary>
+    /// Builds both teams' rig sets. Each team gets its own copy of every robot,
+    /// painted in that team's colours, because a card has to show what the robot
+    /// will actually look like on the field — and on the field the same robot on
+    /// opposite teams is two different-coloured robots.
+    /// </summary>
+    static void BuildPreviewRigs(GameObject root, RobotRoster roster,
+        RenderTexture[] cyanPreviews, RenderTexture[] magentaPreviews)
     {
-        var rigRoot = new GameObject("PreviewRigs");
+        var cameras = new System.Collections.Generic.List<Camera>();
+        BuildTeamRigs(root, roster, cyanPreviews, "Cyan", HoloCyan, 0f, cameras);
+        BuildTeamRigs(root, roster, magentaPreviews, "Magenta", HoloMagenta, TeamRigLift, cameras);
+
+        var textures = new RenderTexture[cyanPreviews.Length + magentaPreviews.Length];
+        cyanPreviews.CopyTo(textures, 0);
+        magentaPreviews.CopyTo(textures, cyanPreviews.Length);
+
+        var cleanup = root.AddComponent<RobotPreviewCleanup>();
+        cleanup.textures = textures;
+        cleanup.cameras = cameras.ToArray();
+    }
+
+    static void BuildTeamRigs(GameObject root, RobotRoster roster, RenderTexture[] previews,
+        string teamName, Color teamColor, float lift,
+        System.Collections.Generic.List<Camera> cameras)
+    {
+        var rigRoot = new GameObject($"PreviewRigs_{teamName}");
         rigRoot.transform.SetParent(root.transform, false);
-        rigRoot.transform.position = new Vector3(0f, PreviewDepth, 0f);
+        rigRoot.transform.position = new Vector3(0f, PreviewDepth + lift, 0f);
 
         int n = roster.robots.Length;
-        var cams = new Camera[n];
         for (int i = 0; i < n; i++)
         {
             var rig = new GameObject($"Rig_{roster.robots[i].displayName}");
@@ -214,7 +246,7 @@ public static class RobotSelectMenu
 
             if (roster.robots[i].HasStages)
             {
-                BuildStopMotion(spin.transform, roster.robots[i], i, n);
+                BuildStopMotion(spin.transform, roster.robots[i], i, n, teamColor);
             }
             else
             {
@@ -222,15 +254,21 @@ public static class RobotSelectMenu
                 // Spread the fleet evenly around the cycle so the row always has
                 // something mid-transformation rather than all nine snapping at once.
                 spinner.phaseDegrees = n > 1 ? i * (360f / n) : 0f;
+                spinner.burstColor = teamColor;
                 if (roster.robots[i].modelPrefab != null)
-                    NormalizeToCenter(Object.Instantiate(roster.robots[i].modelPrefab, spin.transform),
-                        spin.transform);
+                {
+                    var model = Object.Instantiate(roster.robots[i].modelPrefab, spin.transform);
+                    NormalizeToCenter(model, spin.transform);
+                    TeamPaint.Apply(model, teamColor, TeamPaint.CardSize);
+                }
 
                 // Added after the model, so VehicleSkin's Start finds it to measure against.
                 var skin = spin.AddComponent<VehicleSkin>();
                 skin.holder = spin.transform;
                 skin.vehiclePrefab = roster.robots[i].vehiclePrefab;
                 skin.heightFraction = PreviewVehicleHeight;
+                skin.tint = teamColor;
+                skin.paintSize = TeamPaint.CardSize;
             }
 
             var camGo = new GameObject("PreviewCam");
@@ -246,16 +284,12 @@ public static class RobotSelectMenu
             cam.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
             var data = camGo.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = false;
-            cams[i] = cam;
+            cameras.Add(cam);
 
             // Rigs are 25 apart and the lights reach 6, so each one lights only
             // its own robot.
             AddThreePointLights(rig.transform);
         }
-
-        var cleanup = root.AddComponent<RobotPreviewCleanup>();
-        cleanup.textures = previews;
-        cleanup.cameras = cams;
     }
 
     /// <summary>
@@ -304,7 +338,8 @@ public static class RobotSelectMenu
     /// as stop motion. See <see cref="StageTargetDiagonal"/> for how they are
     /// sized against each other.
     /// </summary>
-    static void BuildStopMotion(Transform holder, RobotRoster.Entry entry, int index, int count)
+    static void BuildStopMotion(Transform holder, RobotRoster.Entry entry, int index, int count,
+        Color teamColor)
     {
         var stages = new GameObject[entry.transformStages.Length];
         for (int s = 0; s < stages.Length; s++)
@@ -326,6 +361,9 @@ public static class RobotSelectMenu
             NormalizeByDiagonal(stages[s], holder,
                 s == 0 ? robotDiagonal : StageVehicleDiagonal,
                 s == 0 ? 0f : StageYawOffset);
+            // Every stage, not just the robot: a fold that starts cyan and ends
+            // in the other team's tank would be worse than no paint at all.
+            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
@@ -518,7 +556,7 @@ public class RobotPreviewSpinner : MonoBehaviour
              "framing aid — the vehicle sits on the floor in the actual game.")]
     public float vehicleLift = 0.35f;
 
-    [Tooltip("Colour of the swap burst; the select screen uses a neutral cyan.")]
+    [Tooltip("Colour of the swap burst; the select screen sets it per team row.")]
     public Color burstColor = new Color(0.2f, 0.9f, 1f);
 
     Animator _animator;
@@ -779,14 +817,18 @@ public class RobotInspector : MonoBehaviour
         _turntable.localRotation = Quaternion.identity;
         _pendingDrag = 0f;
 
+        var teamColor = isCyan ? RobotSelectMenu.HoloCyan : RobotSelectMenu.HoloMagenta;
+
         var entry = _roster.robots[index];
         if (entry.modelPrefab != null)
         {
             _model = Instantiate(entry.modelPrefab, _turntable);
             RobotSelectMenu.NormalizeToCenter(_model, _turntable);
+            // Full size, not the card's: this is the pane you open to judge how
+            // a robot is painted, so it gets the same repaint the arena does.
+            TeamPaint.Apply(_model, teamColor);
         }
 
-        var teamColor = isCyan ? RobotSelectMenu.HoloCyan : RobotSelectMenu.HoloMagenta;
         _title.text = entry.displayName;
         _title.color = teamColor;
         _accent.color = teamColor;
@@ -934,5 +976,9 @@ public class RobotPreviewCleanup : MonoBehaviour
                     rt.Release();
                     Destroy(rt);
                 }
+
+        // Card-sized repaints exist only for this screen — eighteen robots'
+        // worth of them, against the two the arena actually needs.
+        TeamPaint.Release(TeamPaint.CardSize);
     }
 }
