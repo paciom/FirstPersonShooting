@@ -28,6 +28,9 @@ public class GameModeController : MonoBehaviour
     int _appliedMagenta;
     Text _overlayText;
     GameObject _overlayCanvas;
+    string _hintDesktop = "";
+    string _hintTouch = "";
+    bool _hintWasTouch;
     GameObject _player;
     PlayerBrain _playerBrain;
     CharacterMotor _playerMotor;
@@ -65,6 +68,9 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas = MainMenu.Build(this);
         BuildOverlay();
+        // Builds nothing until a touch actually happens (or the platform is
+        // mobile), so desktop play is unaffected.
+        TouchControls.Ensure();
         EnterMenu();
     }
 
@@ -83,16 +89,22 @@ public class GameModeController : MonoBehaviour
             return;
         }
 
-        if (Mode == GameMode.ArenaPreview && Input.GetKeyDown(KeyCode.R) && _blockManager != null)
-            _blockManager.Reshuffle();
+        if (Mode == GameMode.ArenaPreview && Input.GetKeyDown(KeyCode.R))
+            RequestReshuffle();
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
+        // Never while the on-screen controls are up — they need a free cursor.
         if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview)
+            && !TouchControls.Active
             && Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
+
+        // Picking up a tablet mid-match swaps the hint to its touch wording.
+        if (Mode != GameMode.Menu && _hintWasTouch != TouchControls.Active)
+            ApplyOverlay();
 
         // Re-assert menu stillness: a DeRezEffect re-materialize can re-enable
         // brains that were disabled when the menu opened mid-respawn.
@@ -126,6 +138,13 @@ public class GameModeController : MonoBehaviour
             if (vehicle != null)
                 vehicle.ForceRobotForm();
         }
+    }
+
+    /// <summary>New arena layout — the R key in Arena Builder, or its touch button.</summary>
+    public void RequestReshuffle()
+    {
+        if (Mode == GameMode.ArenaPreview && _blockManager != null)
+            _blockManager.Reshuffle();
     }
 
     /// <summary>Track a robot built mid-match so mode switches still control it.</summary>
@@ -168,8 +187,7 @@ public class GameModeController : MonoBehaviour
         CloseRobotSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        LockCursor(false);
     }
 
     /// <summary>
@@ -281,9 +299,8 @@ public class GameModeController : MonoBehaviour
         _treasureSpawner?.BeginMatch();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("ESC — Menu");
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        ShowOverlay("ESC — Menu", "");
+        LockCursor(true);
     }
 
     public void StartAIvAI()
@@ -302,9 +319,8 @@ public class GameModeController : MonoBehaviour
         _spectatorRig.AddComponent<SpectatorCamera>();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("AI v AI — ESC for Menu");
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        ShowOverlay("AI v AI — ESC for Menu", "AI v AI — tap MENU to go back");
+        LockCursor(false);
     }
 
     public void StartArenaPreview()
@@ -322,9 +338,21 @@ public class GameModeController : MonoBehaviour
         _spectatorRig.AddComponent<FlyCam>();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("R — New Layout   ·   WASD/QE — Fly   ·   ESC — Menu");
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        ShowOverlay("R — New Layout   ·   WASD/QE — Fly   ·   ESC — Menu",
+            "NEW — fresh layout   ·   stick to fly   ·   drag to look");
+        LockCursor(true);
+    }
+
+    /// <summary>
+    /// Capture the mouse for a first-person mode — unless the on-screen
+    /// controls are driving, where a captured cursor helps nobody and the
+    /// editor's mouse-as-finger testing needs it free.
+    /// </summary>
+    static void LockCursor(bool locked)
+    {
+        bool lockIt = locked && !TouchControls.Active;
+        Cursor.lockState = lockIt ? CursorLockMode.Locked : CursorLockMode.None;
+        Cursor.visible = !lockIt;
     }
 
     void SetBotsActive(bool active)
@@ -358,10 +386,23 @@ public class GameModeController : MonoBehaviour
         }
     }
 
-    void ShowOverlay(string message)
+    /// <summary>
+    /// Mode hint, in two flavours — the keyboard one and the touch one. Which
+    /// shows is re-evaluated whenever the input scheme flips mid-match.
+    /// </summary>
+    void ShowOverlay(string desktopMessage, string touchMessage)
     {
-        _overlayCanvas.SetActive(true);
+        _hintDesktop = desktopMessage;
+        _hintTouch = touchMessage;
+        ApplyOverlay();
+    }
+
+    void ApplyOverlay()
+    {
+        _hintWasTouch = TouchControls.Active;
+        string message = _hintWasTouch ? _hintTouch : _hintDesktop;
         _overlayText.text = message;
+        _overlayCanvas.SetActive(!string.IsNullOrEmpty(message));
     }
 
     void BuildOverlay()

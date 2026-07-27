@@ -5,6 +5,9 @@ using UnityEngine;
 /// engages the X-Ray scope. Uses the legacy Input API for now (active input
 /// handling is "Both"); Input System migration is planned for the polish phase.
 ///
+/// On a touch screen <see cref="TouchControls"/> takes over completely — see
+/// the note in Update for why the two schemes are exclusive rather than merged.
+///
 /// The usable weapon list comes from <see cref="WeaponLoadout"/>: two basics
 /// always, plus a third slot whenever an airdropped Weapon Pod has been picked
 /// up. Number keys select a slot directly; scroll and Q/E cycle.
@@ -84,36 +87,55 @@ public class PlayerBrain : MonoBehaviour
     {
         RefreshLoadout();
 
-        if (Cursor.lockState == CursorLockMode.Locked)
+        // On a touch screen the on-screen controls are the only input: the
+        // cursor is never locked there, and mouse buttons are suppressed so a
+        // look-drag can't double as a trigger pull.
+        TouchControls touch = TouchControls.Active ? TouchControls.Instance : null;
+        bool armed = touch != null || Cursor.lockState == CursorLockMode.Locked;
+
+        if (touch != null)
+        {
+            _motor.AddLook(touch.LookDelta);
+        }
+        else if (Cursor.lockState == CursorLockMode.Locked)
         {
             _motor.AddLook(new Vector2(
                 Input.GetAxis("Mouse X") * mouseSensitivity,
                 Input.GetAxis("Mouse Y") * mouseSensitivity));
         }
 
-        _motor.SetMoveInput(new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical")));
-        _motor.SetSprint(Input.GetKey(KeyCode.LeftShift));
+        var move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        bool sprint = Input.GetKey(KeyCode.LeftShift);
+        if (touch != null && move.sqrMagnitude < 0.01f)
+        {
+            move = touch.Move;
+            sprint = touch.Sprint;
+        }
+        _motor.SetMoveInput(move);
+        _motor.SetSprint(sprint);
 
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.Space) || (touch != null && touch.ConsumeJump()))
             _motor.Jump();
 
         // V folds into vehicle form and back. Ignored on robots with no forged
         // vehicle clips, so the key is simply inert rather than half-working.
-        if (Input.GetKeyDown(KeyCode.V) && _vehicle != null)
+        bool morph = Input.GetKeyDown(KeyCode.V) || (touch != null && touch.ConsumeMorph());
+        if (morph && _vehicle != null)
             _vehicle.Toggle();
 
-        HandleWeaponSwitch();
+        HandleWeaponSwitch(touch);
 
         Transform aim = _motor.head != null ? _motor.head : transform;
 
-        if (Cursor.lockState == CursorLockMode.Locked)
+        if (armed)
         {
+            bool firing = touch != null ? touch.Fire : Input.GetMouseButton(0);
             var weapon = ActiveWeapon();
-            if (weapon != null && Input.GetMouseButton(0))
+            if (weapon != null && firing)
                 weapon.TryFire(aim.forward);
 
             if (scope != null)
-                scope.SetScoped(Input.GetMouseButton(1));
+                scope.SetScoped(touch != null ? touch.Scope : Input.GetMouseButton(1));
         }
         else if (scope != null)
         {
@@ -131,7 +153,7 @@ public class PlayerBrain : MonoBehaviour
         SetActiveWeapon(slot);
     }
 
-    void HandleWeaponSwitch()
+    void HandleWeaponSwitch(TouchControls touch)
     {
         if (weapons == null) return;
         // While the weapon debug console is mid-entry (first digit typed),
@@ -154,6 +176,11 @@ public class PlayerBrain : MonoBehaviour
             cycle = scrollDelta > 0 ? 1 : -1;
         if (Input.GetKeyDown(KeyCode.E)) cycle = 1;
         if (Input.GetKeyDown(KeyCode.Q)) cycle = -1;
+        if (touch != null)
+        {
+            int touchCycle = touch.ConsumeWeaponCycle();
+            if (touchCycle != 0) cycle = touchCycle;
+        }
         if (cycle != 0)
             SetActiveWeapon((_activeWeapon + cycle + weapons.Length) % weapons.Length);
     }
