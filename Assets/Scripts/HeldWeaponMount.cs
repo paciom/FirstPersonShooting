@@ -44,12 +44,22 @@ public class HeldWeaponMount : MonoBehaviour
     Renderer[] _renderers;
     bool _hidden;
 
+    /// <summary>
+    /// The prop's own build-time rotation, which is what turns the imported
+    /// model's longest axis down +Z. It differs per model — the blaster comes in
+    /// lying on its side — so it has to be composed with the aim rather than
+    /// replaced by it. Overwriting rotation outright is what left the gun
+    /// pointing off into the air.
+    /// </summary>
+    Quaternion _modelAlignment = Quaternion.identity;
+
     void Awake()
     {
         if (modelHolder == null)
             modelHolder = transform.parent;
         _transformMode = GetComponentInParent<TransformMode>();
         _renderers = GetComponentsInChildren<Renderer>(true);
+        _modelAlignment = transform.localRotation;
     }
 
     // LateUpdate, so the Animator has already posed the skeleton this frame;
@@ -71,7 +81,10 @@ public class HeldWeaponMount : MonoBehaviour
 
         Transform character = _transformMode != null ? _transformMode.transform : transform.root;
         transform.position = _bone.position + character.rotation * mountOffset;
-        transform.rotation = character.rotation * Quaternion.Euler(mountEuler);
+        // Character facing, then the aim tweak, then the model's own alignment
+        // last — that alignment is what makes the barrel the forward axis at
+        // all, so anything applied after it would turn the gun off-axis again.
+        transform.rotation = character.rotation * Quaternion.Euler(mountEuler) * _modelAlignment;
     }
 
     void UpdateVisibility()
