@@ -245,9 +245,18 @@ public class GameModeController : MonoBehaviour
 
             // A different robot transforms into a different vehicle. Rebuilt
             // after the reskin so it measures against the new robot's height.
+            //
+            // Stages win where a robot has them: turning into the tank at the
+            // end of its own transformation beats turning into a separately
+            // generated vehicle that never appears in that transformation.
             var skin = body.GetComponent<VehicleSkin>();
             if (skin != null)
-                skin.SetVehiclePrefab(entry.vehiclePrefab, tint);
+            {
+                if (entry.HasStages)
+                    skin.SetStages(entry.transformStages, tint);
+                else
+                    skin.SetVehiclePrefab(entry.vehiclePrefab, tint);
+            }
         }
 
         // Old silhouette duplicates died with the old models; rebuild on next scope.

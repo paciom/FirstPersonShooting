@@ -24,6 +24,11 @@ public class VehicleSkin : MonoBehaviour
     [Tooltip("Ground-vehicle model for the robot currently worn. Null = fold only.")]
     public GameObject vehiclePrefab;
 
+    [Tooltip("Transformation stages, robot first and vehicle last. When present " +
+             "these replace vehiclePrefab entirely: the fold plays through them " +
+             "as stop motion and the last one IS the vehicle form.")]
+    public GameObject[] transformStages;
+
     [Tooltip("Transform whose 'Model' child is the robot; defaults to this one.")]
     public Transform holder;
 
@@ -33,17 +38,41 @@ public class VehicleSkin : MonoBehaviour
     [Tooltip("Vehicle height as a fraction of the standing robot's height.")]
     [Range(0.2f, 1.5f)] public float heightFraction = 0.62f;
 
-    public bool HasVehicle => vehiclePrefab != null;
+    public bool HasVehicle =>
+        vehiclePrefab != null || (transformStages != null && transformStages.Length > 1);
 
     /// <summary>Currently showing the vehicle rather than the robot?</summary>
     public bool IsShowingVehicle { get; private set; }
 
     GameObject _vehicle;
     Renderer[] _robotRenderers;
+
+    /// <summary>Instantiated stages; index 0 is null because stage one is the live robot.</summary>
+    GameObject[] _stages;
+
+    /// <summary>Number of stop-motion steps, or 0 when this robot has none.</summary>
+    public int StageCount => _stages != null ? _stages.Length : 0;
+
+    /// <summary>True when the fold should play as stop motion rather than one swap.</summary>
+    public bool HasStages { get { Build(); return StageCount > 1; } }
     bool _built;
 
     void Start()
     {
+        Build();
+    }
+
+    /// <summary>
+    /// Point at a robot's transformation stages. Takes precedence over
+    /// <see cref="vehiclePrefab"/>, because a robot that has real stages should
+    /// turn into the thing at the end of them rather than into a separately
+    /// generated vehicle that never appears in its own transformation.
+    /// </summary>
+    public void SetStages(GameObject[] stages, Color teamTint)
+    {
+        ClearBuilt();
+        transformStages = stages;
+        tint = teamTint;
         Build();
     }
 
@@ -54,14 +83,24 @@ public class VehicleSkin : MonoBehaviour
     /// </summary>
     public void SetVehiclePrefab(GameObject prefab, Color teamTint)
     {
+        ClearBuilt();
+        vehiclePrefab = prefab;
+        tint = teamTint;
+        Build();
+    }
+
+    void ClearBuilt()
+    {
         if (_vehicle != null)
             Destroy(_vehicle);
         _vehicle = null;
+        if (_stages != null)
+            foreach (var stage in _stages)
+                if (stage != null)
+                    Destroy(stage);
+        _stages = null;
         _built = false;
-        vehiclePrefab = prefab;
-        tint = teamTint;
         IsShowingVehicle = false;
-        Build();
     }
 
     void Build()
@@ -78,10 +117,19 @@ public class VehicleSkin : MonoBehaviour
             return;
         _robotRenderers = robot.GetComponentsInChildren<Renderer>(true);
 
-        if (vehiclePrefab == null || _robotRenderers.Length == 0)
+        if (_robotRenderers.Length == 0)
             return;
 
         Bounds robotBounds = Combine(_robotRenderers);
+
+        if (transformStages != null && transformStages.Length > 1)
+        {
+            BuildStages(robotBounds);
+            return;
+        }
+
+        if (vehiclePrefab == null)
+            return;
 
         _vehicle = Instantiate(vehiclePrefab, holder);
         _vehicle.name = "VehicleModel";
@@ -97,37 +145,116 @@ public class VehicleSkin : MonoBehaviour
             return;
         }
 
+        // (Front vs back is still a coin flip — flip yRotation by 180 per robot
+        // if one comes out reversed.)
+        FitToRobot(_vehicle, vehicleRenderers, robotBounds);
+        Tint(vehicleRenderers);
+        _vehicle.SetActive(false);
+    }
+
+    /// <summary>
+    /// Instantiates every stage after the first, fitted the same way a single
+    /// vehicle model is.
+    ///
+    /// Stage one is skipped on purpose: it is the live, animated robot already
+    /// standing there. Rebuilding it as a static mesh would drop the walk cycle
+    /// and swap a rigged robot for a frozen copy of itself on the first frame
+    /// of every transformation.
+    /// </summary>
+    void BuildStages(Bounds robotBounds)
+    {
+        _stages = new GameObject[transformStages.Length];
+        for (int i = 1; i < transformStages.Length; i++)
+        {
+            if (transformStages[i] == null)
+                continue;
+
+            var stage = Instantiate(transformStages[i], holder);
+            stage.name = $"Stage{i + 1}";
+            stage.transform.localPosition = Vector3.zero;
+            stage.transform.localRotation = Quaternion.identity;
+            stage.transform.localScale = Vector3.one;
+
+            var renderers = stage.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                Destroy(stage);
+                continue;
+            }
+
+            FitToRobot(stage, renderers, robotBounds);
+            Tint(renderers);
+            stage.SetActive(false);
+            _stages[i] = stage;
+        }
+
+        // The last stage is the vehicle, so everything that already asks about
+        // _vehicle keeps working without knowing stages exist.
+        _vehicle = _stages[_stages.Length - 1];
+    }
+
+    /// <summary>Orient, scale and ground a generated model against the robot wearing it.</summary>
+    void FitToRobot(GameObject instance, Renderer[] renderers, Bounds robotBounds)
+    {
         // Generated models don't agree on which way is forward. A ground
         // vehicle is longer than it is wide, so the long horizontal axis is the
-        // one that should run down +Z. (Front vs back is still a coin flip —
-        // flip yRotation by 180 per robot if one comes out reversed.)
-        Bounds raw = Combine(vehicleRenderers);
+        // one that should run down +Z.
+        Bounds raw = Combine(renderers);
         if (raw.size.x > raw.size.z)
         {
-            _vehicle.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-            raw = Combine(vehicleRenderers);
+            instance.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            raw = Combine(renderers);
         }
 
         // Multiply, never replace — glTF roots carry their own unit scale.
         float scale = (robotBounds.size.y * heightFraction) / Mathf.Max(0.01f, raw.size.y);
-        _vehicle.transform.localScale *= scale;
+        instance.transform.localScale *= scale;
 
         // Sit it on the same floor line the robot stands on, centred under it.
-        Bounds scaled = Combine(vehicleRenderers);
-        Vector3 offset = new Vector3(
+        Bounds scaled = Combine(renderers);
+        instance.transform.position += new Vector3(
             robotBounds.center.x - scaled.center.x,
             robotBounds.min.y - scaled.min.y,
             robotBounds.center.z - scaled.center.z);
-        _vehicle.transform.position += offset;
+    }
 
-        Tint(vehicleRenderers);
-        _vehicle.SetActive(false);
+    /// <summary>
+    /// Show one step of the transformation. Index 0 is the live robot; anything
+    /// higher is a generated stage. Out-of-range clamps, so callers can drive
+    /// this straight off a normalised fold time.
+    /// </summary>
+    public void ShowStage(int index)
+    {
+        Build();
+        if (_stages == null)
+            return;
+
+        index = Mathf.Clamp(index, 0, _stages.Length - 1);
+        IsShowingVehicle = index >= _stages.Length - 1;
+
+        if (_robotRenderers != null)
+            foreach (var renderer in _robotRenderers)
+                if (renderer != null)
+                    renderer.enabled = index == 0;
+
+        for (int i = 1; i < _stages.Length; i++)
+            if (_stages[i] != null)
+                _stages[i].SetActive(i == index);
     }
 
     /// <summary>Show the vehicle (or the robot). Safe with no vehicle model.</summary>
     public void SetVehicle(bool vehicle)
     {
         Build();
+
+        // Stop-motion robots jump straight to either end of the sequence; the
+        // steps in between belong to the fold, which drives ShowStage itself.
+        if (_stages != null)
+        {
+            ShowStage(vehicle ? _stages.Length - 1 : 0);
+            return;
+        }
+
         if (_vehicle == null)
             return;
 

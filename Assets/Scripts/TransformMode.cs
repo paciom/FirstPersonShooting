@@ -187,17 +187,39 @@ public class TransformMode : MonoBehaviour
 
         EnsureRig();
 
+        // A robot with generated stages plays the fold as stop motion instead
+        // of swapping once: the tracks really do come out, because a stage that
+        // has tracks is a different mesh. Robots without stages keep the single
+        // swap under the flash, which is all a lone vehicle model can do.
+        bool stopMotion = _skin != null && _skin.HasStages;
+        int shownStage = -1;
+
         // Halfway through is where the silhouette stops being readable either
         // way — the right moment to cover the change in light.
         bool burst = false;
         for (float t = 0f; t < 1f; t += Time.deltaTime / FoldSeconds)
         {
+            if (stopMotion)
+            {
+                // Unfolding runs the same stages backwards, so one sequence
+                // serves both directions and the robot retraces its own fold.
+                float progress = vehicle ? t : 1f - t;
+                int last = _skin.StageCount - 1;
+                int stage = Mathf.Clamp(Mathf.FloorToInt(progress * (last + 1)), 0, last);
+                if (stage != shownStage)
+                {
+                    shownStage = stage;
+                    _skin.ShowStage(stage);
+                }
+            }
+
             if (!burst && t >= SwapFraction)
             {
                 burst = true;
                 VfxUtil.Explosion(transform.position + Vector3.up * 0.8f, burstColor, 1.1f);
                 // Inside the flash: the robot mesh goes, the vehicle arrives.
-                if (_skin != null)
+                // Stop-motion robots are already partway through the sequence.
+                if (_skin != null && !stopMotion)
                     _skin.SetVehicle(vehicle);
             }
             // Props trail the fold: nothing appears until the legs are on their
@@ -207,6 +229,10 @@ public class TransformMode : MonoBehaviour
         }
 
         ScaleRig(vehicle ? 1f : 0f);
+        // Land exactly on an end state: the loop exits on whatever t the last
+        // frame happened to reach, which is rarely the final stage.
+        if (_skin != null)
+            _skin.SetVehicle(vehicle);
         ApplyTuning(vehicle);
         _fold = null;
 

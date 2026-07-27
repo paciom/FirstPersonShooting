@@ -880,7 +880,12 @@ public static class ArenaBuilder
             var skin = body.gameObject.AddComponent<VehicleSkin>();
             skin.holder = body;
             skin.tint = teamColor;
-            skin.vehiclePrefab = LoadVehicleModel(DefaultRobot);
+            // Stages win where the default robot has them — see VehicleSkin.
+            var defaultStages = LoadTransformStages(DefaultRobot);
+            if (defaultStages != null && defaultStages.Length > 1)
+                skin.transformStages = defaultStages;
+            else
+                skin.vehiclePrefab = LoadVehicleModel(DefaultRobot);
 
             var vehicle = bot.AddComponent<TransformMode>();
             bot.AddComponent<VehicleRam>();
