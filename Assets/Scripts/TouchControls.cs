@@ -84,6 +84,8 @@ public class TouchControls : MonoBehaviour
 
     GameObject _root;
     RectTransform _canvasRect;
+    Text _lookHint;
+    bool _hasLooked;
     RectTransform _stickBase;
     RectTransform _stickKnob;
     Vector2 _stickHome;
@@ -295,6 +297,9 @@ public class TouchControls : MonoBehaviour
             return;
 
         SetVisible(_stickBase, playing || flying);
+        // Driven by its own alpha so the fade-out actually plays out.
+        SetVisible(_lookHint != null ? _lookHint.rectTransform : null,
+            (playing || flying) && _lookHint != null && _lookHint.color.a > 0.01f);
         SetVisible(_fire, playing);
         SetVisible(_jump, playing);
         SetVisible(_scope, playing);
@@ -366,7 +371,11 @@ public class TouchControls : MonoBehaviour
                 {
                     id = -100,
                     position = mouse,
-                    delta = mouse - _lastMousePosition,
+                    // Zero on the press frame: the cursor travelled to the
+                    // button-down point with nothing held, and charging that
+                    // travel to the look drag snap-spins the camera. Real
+                    // touches already report a zero delta on Began.
+                    delta = phase == TouchPhase.Began ? Vector2.zero : (Vector2)(mouse - _lastMousePosition),
                     phase = phase,
                 });
             }
@@ -418,6 +427,11 @@ public class TouchControls : MonoBehaviour
         // Screen-relative so the same swipe turns the same amount on a phone
         // and on a tablet.
         LookDelta = look / Mathf.Max(1, Screen.height) * 180f * lookSensitivity;
+
+        // Turning is the one control with no widget to point at, so it gets a
+        // label until the player has actually turned with it.
+        if (Mathf.Abs(LookDelta.x) + Mathf.Abs(LookDelta.y) > 0.5f)
+            _hasLooked = true;
 
         UpdateStick();
     }
@@ -498,6 +512,13 @@ public class TouchControls : MonoBehaviour
 
     void UpdateVisuals()
     {
+        if (_lookHint != null)
+        {
+            Color color = _lookHint.color;
+            color.a = Mathf.MoveTowards(color.a, _hasLooked ? 0f : 0.45f, 1.2f * Time.unscaledDeltaTime);
+            _lookHint.color = color;
+        }
+
         foreach (var button in _buttons)
         {
             if (button.image == null)
@@ -524,6 +545,7 @@ public class TouchControls : MonoBehaviour
         _canvasRect = _root.GetComponent<RectTransform>();
 
         BuildStick();
+        BuildLookHint();
 
         // Right thumb: fire and jump where a Roblox player expects them, with
         // the situational buttons stacked above and inboard.
@@ -568,6 +590,28 @@ public class TouchControls : MonoBehaviour
         _stickKnob.anchorMin = _stickKnob.anchorMax = new Vector2(0.5f, 0.5f);
         _stickKnob.sizeDelta = Vector2.one * (stickRadius * 0.95f);
         _stickKnob.anchoredPosition = Vector2.zero;
+    }
+
+    /// <summary>
+    /// Sits over the free part of the look area (right of the stick, clear of
+    /// the action buttons) and fades out for good once the player turns.
+    /// </summary>
+    void BuildLookHint()
+    {
+        var go = new GameObject("LookHint");
+        go.transform.SetParent(_root.transform, false);
+        _lookHint = go.AddComponent<Text>();
+        _lookHint.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _lookHint.text = "DRAG HERE TO TURN";
+        _lookHint.fontSize = 34;
+        _lookHint.fontStyle = FontStyle.Bold;
+        _lookHint.alignment = TextAnchor.MiddleCenter;
+        _lookHint.color = new Color(1f, 1f, 1f, 0.45f);
+        _lookHint.raycastTarget = false;
+        var rect = _lookHint.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(RefWidth * 0.2f, RefHeight * 0.12f);
+        rect.sizeDelta = new Vector2(700, 60);
     }
 
     Button MakeRoundButton(string name, string label, Vector2 anchor, Vector2 position, float size)
