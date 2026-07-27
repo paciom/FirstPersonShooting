@@ -442,17 +442,48 @@ public static class ArenaBuilder
         var light = lightGo.AddComponent<Light>();
         light.type = LightType.Directional;
         light.color = new Color(0.75f, 0.8f, 1f);
-        light.intensity = 0.7f;
+        // Was 0.7, which left the robots reading as grey plastic. This key
+        // travels toward +Z, so it lights the FAR side of whatever a camera is
+        // pointed at; camera-facing armour was surviving on ambient alone.
+        light.intensity = 1.3f;
         lightGo.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
 
         RenderSettings.ambientMode = AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.18f, 0.20f, 0.30f);
+        // Raised with the key. Flat ambient is the only thing reaching surfaces
+        // the key misses, so it sets the floor the robots are read against.
+        RenderSettings.ambientLight = new Color(0.30f, 0.33f, 0.42f);
 
-        // Corner accent lights for the neon mood.
+        // Neon fills, as DIRECTIONAL lights rather than the corner points.
+        //
+        // The corner accents below are 22.6 units from mid-arena and fall off
+        // with the square of distance, so at the centre they deliver about
+        // 2.5/511 = 0.005 — nothing. Reaching that far would need roughly 150
+        // intensity, which would blow the corners out completely. Directional
+        // light does not attenuate, so a pair of dim coloured fills from
+        // opposing sides puts the neon rim on every robot wherever it stands.
+        //
+        // Yaws are roughly opposite so a surface missed by one catches the
+        // other, and both are angled down to sit under the key.
+        DirectionalFill("Neon Fill Cyan", NeonCyan, 0.35f, new Vector3(25f, 200f, 0f));
+        DirectionalFill("Neon Fill Magenta", NeonMagenta, 0.30f, new Vector3(25f, 20f, 0f));
+
+        // Corner accent lights, kept for the glow they throw on the corners
+        // themselves — that is all they were ever actually doing.
         PointLight(new Vector3(16, 3.5f, 16), NeonCyan);
         PointLight(new Vector3(-16, 3.5f, 16), NeonMagenta);
         PointLight(new Vector3(16, 3.5f, -16), NeonMagenta);
         PointLight(new Vector3(-16, 3.5f, -16), NeonCyan);
+    }
+
+    static void DirectionalFill(string name, Color color, float intensity, Vector3 euler)
+    {
+        var go = new GameObject(name);
+        var light = go.AddComponent<Light>();
+        light.type = LightType.Directional;
+        light.color = color;
+        light.intensity = intensity;
+        light.shadows = LightShadows.None;   // only the key casts shadows
+        go.transform.rotation = Quaternion.Euler(euler);
     }
 
     static void PointLight(Vector3 position, Color color)
