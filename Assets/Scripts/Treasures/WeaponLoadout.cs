@@ -25,6 +25,10 @@ public class WeaponLoadout : MonoBehaviour
     [Tooltip("Indices into `all` that this character always has (the two basics).")]
     public int[] basicIndices = { 0 };
 
+    [Tooltip("The heavy gun used in vehicle form, replacing the whole arsenal. " +
+             "Null falls back to the first basic.")]
+    public VehicleCannon vehicleCannon;
+
     [Tooltip("Seconds a treasure weapon stays equipped.")]
     public float grantDuration = 22f;
 
@@ -178,11 +182,16 @@ public class WeaponLoadout : MonoBehaviour
     {
         _built = true;
 
-        // Vehicle form collapses to the single first basic. Special is left
-        // untouched (and its timer keeps running) so unfolding restores it.
+        // Vehicle form: the mounted cannon alone. Special is left untouched
+        // (and its timer keeps running) so unfolding restores it.
+        //
+        // Falls back to the first basic for characters built without a cannon,
+        // which is how it behaved before the cannon existed.
         if (VehicleMode)
         {
-            _available = FirstBasic();
+            _available = vehicleCannon != null
+                ? new[] { vehicleCannon }
+                : FirstBasic();
             _version++;
             return;
         }

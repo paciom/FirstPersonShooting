@@ -580,6 +580,7 @@ public static class ArenaBuilder
         var loadout = player.AddComponent<WeaponLoadout>();
         loadout.all = playerWeapons;
         loadout.basicIndices = BasicWeaponIndices;
+        loadout.vehicleCannon = AttachVehicleCannon(blasterGo, muzzleT, player.transform, NeonCyan);
 
         var brain = player.AddComponent<PlayerBrain>();
         brain.weapons = new[] { playerWeapons[BasicWeaponIndices[0]], playerWeapons[BasicWeaponIndices[1]] };
@@ -684,6 +685,21 @@ public static class ArenaBuilder
     /// then the expanded catalogue. <paramref name="botTuning"/> applies the
     /// gentler per-shot numbers bots fight with.
     /// </summary>
+    /// <summary>
+    /// The heavy gun a character uses while transformed. Attached alongside the
+    /// arsenal but kept out of `all`, so it can never be rolled as a treasure
+    /// weapon or fired on foot — it exists only for vehicle form.
+    /// </summary>
+    static VehicleCannon AttachVehicleCannon(GameObject host, Transform muzzle,
+                                             Transform owner, Color color)
+    {
+        var cannon = host.AddComponent<VehicleCannon>();
+        cannon.muzzle = muzzle;
+        cannon.ownerRoot = owner;
+        cannon.color = color;
+        return cannon;
+    }
+
     static Weapon[] AttachArsenal(GameObject host, Transform muzzle, Transform owner, Color color, bool botTuning)
     {
         var core = botTuning
@@ -832,6 +848,7 @@ public static class ArenaBuilder
             var loadout = bot.AddComponent<WeaponLoadout>();
             loadout.all = botWeapons;
             loadout.basicIndices = BasicWeaponIndices;
+            loadout.vehicleCannon = AttachVehicleCannon(blasterGo, muzzleT, bot.transform, teamColor);
 
             var persona = personas[i % personas.Length];
             var brain = bot.AddComponent<AIBrain>();
