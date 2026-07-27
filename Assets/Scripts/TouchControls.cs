@@ -13,6 +13,9 @@ using UnityEngine.UI;
 /// + look have to work as three simultaneous fingers, which uGUI buttons alone
 /// won't give us.
 ///
+/// They appear by themselves on a touch device; pressing '=' forces them on
+/// (and off again) anywhere, with the mouse standing in for a finger.
+///
 /// Consumers (PlayerBrain, FlyCam) poll the held state directly and call the
 /// Consume* methods for one-shot presses. Runs at execution order -100 so that
 /// state is always fresh by the time those Updates read it.
@@ -23,7 +26,7 @@ public class TouchControls : MonoBehaviour
     /// <summary>When the on-screen controls take over from mouse + keyboard.</summary>
     public enum Availability
     {
-        /// <summary>Mobile always; desktop switches on the first real touch and back on the first WASD key.</summary>
+        /// <summary>Mobile always; desktop switches on the first real touch and back on the first WASD key. '=' overrides either way.</summary>
         Auto,
         Always,
         Never,
@@ -49,8 +52,11 @@ public class TouchControls : MonoBehaviour
     [Tooltip("Thumbstick travel in canvas units (reference height 1080).")]
     public float stickRadius = 135f;
 
-    [Tooltip("Drive the controls with the mouse in the editor, for testing without a touch screen (F9 toggles).")]
+    [Tooltip("Let the mouse stand in for a finger while the controls are forced on with '='.")]
     public bool simulateWithMouse = true;
+
+    /// <summary>Keyboard toggle that forces the on-screen controls on and off.</summary>
+    public const KeyCode ToggleKey = KeyCode.Equals;
 
     public static TouchControls Instance { get; private set; }
 
@@ -72,7 +78,7 @@ public class TouchControls : MonoBehaviour
     public bool Sink => Held(_sink);
 
     bool _active;
-    bool _forced;                 // F9 override in the editor / development builds
+    bool _forced;                 // '=' override — show the controls on any device
     bool _sawTouch;
     bool _mouseWasSimulated = true;
 
@@ -202,13 +208,13 @@ public class TouchControls : MonoBehaviour
 
     void UpdateAvailability()
     {
-        if (Application.isEditor || Debug.isDebugBuild)
+        // '=' shows the on-screen controls on any device — handy for checking
+        // the phone layout from a desktop, where the mouse then acts as a
+        // single finger.
+        if (Input.GetKeyDown(ToggleKey))
         {
-            if (Input.GetKeyDown(KeyCode.F9))
-            {
-                _forced = !_forced;
-                Debug.Log($"TouchControls: on-screen controls {(_forced ? "forced ON" : "back to Auto")} (F9).");
-            }
+            _forced = !_forced;
+            Debug.Log($"TouchControls: on-screen controls {(_forced ? "forced ON" : "back to Auto")} ('=').");
         }
 
         if (Input.touchCount > 0)
@@ -342,8 +348,9 @@ public class TouchControls : MonoBehaviour
             });
         }
 
-        // Editor stand-in so the layout can be driven without a touch screen.
-        if (_pointers.Count == 0 && simulateWithMouse && Application.isEditor)
+        // Stand-in finger so a forced-on layout is actually usable from a
+        // desktop — without it, '=' would show buttons nothing can press.
+        if (_pointers.Count == 0 && simulateWithMouse && (_forced || Application.isEditor))
         {
             Vector3 mouse = Input.mousePosition;
             bool down = Input.GetMouseButton(0);
