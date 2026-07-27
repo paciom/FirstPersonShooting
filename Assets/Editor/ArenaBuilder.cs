@@ -52,8 +52,13 @@ public static class ArenaBuilder
 
         System.IO.Directory.CreateDirectory("Assets/Materials");
         ConfigureUrp();
+        // The URP entries matter as much as the custom ones: no .mat asset uses
+        // URP/Unlit (VfxUtil builds those materials from code), so a player build
+        // strips it, Shader.Find returns null, and `new Material(null)` throws
+        // mid-setup — which reads as frozen bots and magenta VFX, not a shader bug.
         EnsureShadersIncluded("PhotonArena/Additive", "PhotonArena/ForceField", "PhotonArena/XRay",
-            "PhotonArena/SciFiPanel");
+            "PhotonArena/SciFiPanel",
+            "Universal Render Pipeline/Unlit", "Universal Render Pipeline/Lit");
         RepairModelImports();
         SpriteForge.GenerateAll();
         // Rigged walkers are assets, not scene objects: forge any that are

@@ -39,6 +39,9 @@ $ContentTypes = @{
     '.jpeg'    = 'image/jpeg'
     '.svg'     = 'image/svg+xml'
     '.ico'     = 'image/x-icon'
+    # StreamingAssets video, which WebGL streams by URL rather than embedding.
+    '.mp4'     = 'video/mp4'
+    '.webm'    = 'video/webm'
 }
 
 if (-not (Test-Path $BuildDir)) {

@@ -797,17 +797,35 @@ public class RobotInspector : MonoBehaviour
         _clipView.enabled = hasClip;
         _clipMissing.enabled = !hasClip;
         if (hasClip)
-        {
-            _video.clip = entry.transformVideo;
-            _video.Play();
-        }
+            PlayTransformClip(entry.transformVideo);
         else
-        {
             _video.Stop();
-        }
 
         _dialog.SetActive(true);
         _camera.enabled = true;
+    }
+
+    /// <summary>
+    /// Starts the clip in whichever way the current player supports.
+    ///
+    /// WebGL cannot play VideoClip assets at all — the build strips the file to a
+    /// stub and the player renders black, with the asset reference still non-null
+    /// so nothing here looks wrong. The browser has to stream the same mp4 by URL
+    /// instead, which is why a copy lives in StreamingAssets. Everywhere else the
+    /// embedded clip is the simpler thing and stays.
+    /// </summary>
+    void PlayTransformClip(UnityEngine.Video.VideoClip clip)
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // Matched by name rather than a second serialized field so the roster does
+        // not have to be rebuilt into the scene just to deploy the web build.
+        _video.source = UnityEngine.Video.VideoSource.Url;
+        _video.url = $"{Application.streamingAssetsPath}/{clip.name}.mp4";
+#else
+        _video.source = UnityEngine.Video.VideoSource.VideoClip;
+        _video.clip = clip;
+#endif
+        _video.Play();
     }
 
     public void Close()
