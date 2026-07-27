@@ -30,10 +30,21 @@ public static class RobotSelectMenu
     // where the vehicle has the whole arena to sit in.
     const float PreviewVehicleHeight = 0.31f;
 
-    // Largest dimension every transformation stage is fitted to. Slightly under
-    // the 1.6 a lone robot gets, because the widest stage is a tank hull and it
-    // needs the margin the robot does not.
-    const float StageTargetSize = 1.5f;
+    // Bounding-box DIAGONAL every transformation stage is fitted to — the one
+    // knob for how big the stop-motion reads on a card.
+    //
+    // Diagonal, not largest dimension. Meshy normalises every generated stage
+    // into a ~1.9 box, so fitting on the largest dimension makes a nearly-cubic
+    // mid-fold stage (1.90 x 1.43 x 1.78) and a thin robot (1.40 x 1.80 x 0.83)
+    // agree on exactly one number while differing enormously in bulk — and bulk
+    // is what the eye actually compares. Diagonal measures the whole volume, so
+    // consecutive stages hold a steady apparent size instead of ballooning the
+    // moment the silhouette stops being humanoid.
+    //
+    // It has to be one rule for every stage: any per-stage adjustment would
+    // make the model visibly change SIZE mid-transformation, which reads far
+    // worse than the geometry pop it was meant to fix.
+    const float StageTargetDiagonal = 1.25f;
 
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
@@ -275,11 +286,8 @@ public static class RobotSelectMenu
 
     /// <summary>
     /// Instantiates every transformation stage under one holder and drives them
-    /// as stop motion.
-    ///
-    /// Stages are fitted on their LARGEST dimension rather than on height. A
-    /// robot is tall and a tank is long, so height-fitting would inflate the
-    /// tank until it dwarfed the robot it just folded out of.
+    /// as stop motion. See <see cref="StageTargetDiagonal"/> for how they are
+    /// sized against each other.
     /// </summary>
     static void BuildStopMotion(Transform holder, RobotRoster.Entry entry, int index, int count)
     {
@@ -289,7 +297,7 @@ public static class RobotSelectMenu
             if (entry.transformStages[s] == null)
                 continue;
             stages[s] = Object.Instantiate(entry.transformStages[s], holder);
-            NormalizeLargestDimension(stages[s], holder, StageTargetSize);
+            NormalizeByDiagonal(stages[s], holder, StageTargetDiagonal);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
@@ -299,8 +307,8 @@ public static class RobotSelectMenu
         player.phaseSeconds = count > 1 ? index * (cycle / count) : 0f;
     }
 
-    /// <summary>Fits a model's largest dimension to <paramref name="target"/> and centers it.</summary>
-    internal static void NormalizeLargestDimension(GameObject instance, Transform holder, float target)
+    /// <summary>Fits a model's bounding-box diagonal to <paramref name="target"/> and centers it.</summary>
+    internal static void NormalizeByDiagonal(GameObject instance, Transform holder, float target)
     {
         instance.name = "Stage";
         instance.transform.localPosition = Vector3.zero;
@@ -314,8 +322,7 @@ public static class RobotSelectMenu
         foreach (var r in renderers)
             bounds.Encapsulate(r.bounds);
 
-        float largest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
-        float scale = target / Mathf.Max(0.01f, largest);
+        float scale = target / Mathf.Max(0.01f, bounds.size.magnitude);
         instance.transform.localScale *= scale;
         Vector3 localCenter = holder.InverseTransformPoint(bounds.center);
         instance.transform.localPosition = -localCenter * scale;
