@@ -30,15 +30,21 @@ public static class RobotSelectMenu
     // where the vehicle has the whole arena to sit in.
     const float PreviewVehicleHeight = 0.31f;
 
-    // How the stop-motion is sized, as a taper between two anchors.
+    // How the stop-motion is sized: the standing robot at one size, everything
+    // it turns into at another.
     //
     // Stage one is fitted to PreviewRobotHeight, exactly as every non-staged
     // card is, so a robot with stages stands the same height as its neighbours
-    // in the row. The last stage is fitted to StageVehicleDiagonal, which is
-    // deliberately much smaller: a humanoid packs down into a dense vehicle, so
-    // a tank as long as the robot is tall looks bloated. Stages in between
-    // interpolate, which both avoids a size pop and reads as the machine
-    // compacting — which is what a transformation is.
+    // in the row. EVERY later stage shares StageVehicleDiagonal.
+    //
+    // Sharing one size across the transforming stages rather than tapering into
+    // it, because the mid-fold stages are the bulkiest boxes of the whole set —
+    // a lunging pose with limbs spread measures larger than the standing robot
+    // (bounding volume 1.59 against 1.47) while plainly not looking bigger. Any
+    // taper anchored on the robot therefore leaves the middle looking inflated.
+    // Holding them all at the vehicle size lands the entire transformation in a
+    // tight band and the only size change is the first swap, where the robot
+    // drops into a crouch and a drop in height is what the pose implies anyway.
     //
     // Measured on the DIAGONAL rather than the largest dimension, because Meshy
     // normalises every generated stage into a ~1.9 box: a nearly-cubic mid-fold
@@ -298,22 +304,20 @@ public static class RobotSelectMenu
             if (entry.transformStages[s] != null)
                 stages[s] = Object.Instantiate(entry.transformStages[s], holder);
 
-        // Anchor the taper on stage one's own proportions rather than a fixed
-        // number, so the first stage lands on PreviewRobotHeight for any robot
-        // regardless of how tall or wide that particular rig happens to be.
+        // Derive stage one's target from its own proportions rather than a fixed
+        // number, so it lands on PreviewRobotHeight for any robot regardless of
+        // how tall or wide that particular rig happens to be.
         float robotDiagonal = StageVehicleDiagonal;
         var first = MeasureBounds(stages.Length > 0 ? stages[0] : null);
         if (first.size.y > 0.01f)
             robotDiagonal = first.size.magnitude * (PreviewRobotHeight / first.size.y);
 
-        int last = stages.Length - 1;
         for (int s = 0; s < stages.Length; s++)
         {
             if (stages[s] == null)
                 continue;
-            float t = last > 0 ? s / (float)last : 0f;
             NormalizeByDiagonal(stages[s], holder,
-                Mathf.Lerp(robotDiagonal, StageVehicleDiagonal, t));
+                s == 0 ? robotDiagonal : StageVehicleDiagonal);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
