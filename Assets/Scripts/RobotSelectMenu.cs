@@ -30,21 +30,23 @@ public static class RobotSelectMenu
     // where the vehicle has the whole arena to sit in.
     const float PreviewVehicleHeight = 0.31f;
 
-    // Bounding-box DIAGONAL every transformation stage is fitted to — the one
-    // knob for how big the stop-motion reads on a card.
+    // How the stop-motion is sized, as a taper between two anchors.
     //
-    // Diagonal, not largest dimension. Meshy normalises every generated stage
-    // into a ~1.9 box, so fitting on the largest dimension makes a nearly-cubic
-    // mid-fold stage (1.90 x 1.43 x 1.78) and a thin robot (1.40 x 1.80 x 0.83)
-    // agree on exactly one number while differing enormously in bulk — and bulk
-    // is what the eye actually compares. Diagonal measures the whole volume, so
-    // consecutive stages hold a steady apparent size instead of ballooning the
-    // moment the silhouette stops being humanoid.
+    // Stage one is fitted to PreviewRobotHeight, exactly as every non-staged
+    // card is, so a robot with stages stands the same height as its neighbours
+    // in the row. The last stage is fitted to StageVehicleDiagonal, which is
+    // deliberately much smaller: a humanoid packs down into a dense vehicle, so
+    // a tank as long as the robot is tall looks bloated. Stages in between
+    // interpolate, which both avoids a size pop and reads as the machine
+    // compacting — which is what a transformation is.
     //
-    // It has to be one rule for every stage: any per-stage adjustment would
-    // make the model visibly change SIZE mid-transformation, which reads far
-    // worse than the geometry pop it was meant to fix.
-    const float StageTargetDiagonal = 1.25f;
+    // Measured on the DIAGONAL rather than the largest dimension, because Meshy
+    // normalises every generated stage into a ~1.9 box: a nearly-cubic mid-fold
+    // stage (1.90 x 1.43 x 1.78) and a thin robot (1.40 x 1.80 x 0.83) then
+    // agree on one number while differing enormously in bulk, and bulk is what
+    // the eye compares.
+    const float PreviewRobotHeight = 1.6f;
+    const float StageVehicleDiagonal = 1.45f;
 
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
@@ -293,11 +295,25 @@ public static class RobotSelectMenu
     {
         var stages = new GameObject[entry.transformStages.Length];
         for (int s = 0; s < stages.Length; s++)
+            if (entry.transformStages[s] != null)
+                stages[s] = Object.Instantiate(entry.transformStages[s], holder);
+
+        // Anchor the taper on stage one's own proportions rather than a fixed
+        // number, so the first stage lands on PreviewRobotHeight for any robot
+        // regardless of how tall or wide that particular rig happens to be.
+        float robotDiagonal = StageVehicleDiagonal;
+        var first = MeasureBounds(stages.Length > 0 ? stages[0] : null);
+        if (first.size.y > 0.01f)
+            robotDiagonal = first.size.magnitude * (PreviewRobotHeight / first.size.y);
+
+        int last = stages.Length - 1;
+        for (int s = 0; s < stages.Length; s++)
         {
-            if (entry.transformStages[s] == null)
+            if (stages[s] == null)
                 continue;
-            stages[s] = Object.Instantiate(entry.transformStages[s], holder);
-            NormalizeByDiagonal(stages[s], holder, StageTargetDiagonal);
+            float t = last > 0 ? s / (float)last : 0f;
+            NormalizeByDiagonal(stages[s], holder,
+                Mathf.Lerp(robotDiagonal, StageVehicleDiagonal, t));
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
@@ -305,6 +321,20 @@ public static class RobotSelectMenu
         // Spread the fleet across the cycle so the row is never in step.
         float cycle = 2f * (player.holdSeconds + player.transformSeconds);
         player.phaseSeconds = count > 1 ? index * (cycle / count) : 0f;
+    }
+
+    /// <summary>Combined renderer bounds of an instance, or an empty box.</summary>
+    static Bounds MeasureBounds(GameObject instance)
+    {
+        if (instance == null)
+            return new Bounds(Vector3.zero, Vector3.zero);
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return new Bounds(Vector3.zero, Vector3.zero);
+        var bounds = renderers[0].bounds;
+        foreach (var r in renderers)
+            bounds.Encapsulate(r.bounds);
+        return bounds;
     }
 
     /// <summary>Fits a model's bounding-box diagonal to <paramref name="target"/> and centers it.</summary>
@@ -315,12 +345,9 @@ public static class RobotSelectMenu
         instance.transform.localRotation = Quaternion.identity;
         instance.transform.localScale = Vector3.one;
 
-        var renderers = instance.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0)
+        var bounds = MeasureBounds(instance);
+        if (bounds.size.sqrMagnitude < 1e-6f)
             return;
-        var bounds = renderers[0].bounds;
-        foreach (var r in renderers)
-            bounds.Encapsulate(r.bounds);
 
         float scale = target / Mathf.Max(0.01f, bounds.size.magnitude);
         instance.transform.localScale *= scale;
