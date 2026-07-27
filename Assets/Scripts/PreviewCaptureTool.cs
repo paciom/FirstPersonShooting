@@ -97,6 +97,29 @@ public static class PreviewCaptureTool
         EditorApplication.Exit(0);
     }
 
+    /// <summary>Logs what the roster actually carries per robot, so a missing
+    /// stage folder or clip shows up as data rather than as a blank panel.</summary>
+    public static void RosterReportBatch()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(ScenePath);
+        var roster = Object.FindFirstObjectByType<RobotRoster>();
+        if (roster == null)
+        {
+            Debug.LogError("PreviewCapture: no RobotRoster");
+            EditorApplication.Exit(1);
+            return;
+        }
+        foreach (var entry in roster.robots)
+        {
+            Debug.Log($"ROSTER {entry.displayName,-9} model={(entry.modelPrefab != null)} " +
+                      $"vehicle={(entry.vehiclePrefab != null)} " +
+                      $"stages={(entry.transformStages == null ? 0 : entry.transformStages.Length)} " +
+                      $"hasStages={entry.HasStages} " +
+                      $"clip={(entry.transformVideo != null ? entry.transformVideo.name : "-")}");
+        }
+        EditorApplication.Exit(0);
+    }
+
     static void Capture(RobotRoster roster)
     {
         Directory.CreateDirectory(OutDir);

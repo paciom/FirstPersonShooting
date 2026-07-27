@@ -30,6 +30,11 @@ public static class RobotSelectMenu
     // where the vehicle has the whole arena to sit in.
     const float PreviewVehicleHeight = 0.31f;
 
+    // Largest dimension every transformation stage is fitted to. Slightly under
+    // the 1.6 a lone robot gets, because the widest stage is a tank hull and it
+    // needs the margin the robot does not.
+    const float StageTargetSize = 1.5f;
+
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
     {
@@ -180,19 +185,27 @@ public static class RobotSelectMenu
 
             var spin = new GameObject("Spin");
             spin.transform.SetParent(rig.transform, false);
-            var spinner = spin.AddComponent<RobotPreviewSpinner>();
-            // Spread the fleet evenly around the cycle so the row always has
-            // something mid-transformation rather than all nine snapping at once.
-            spinner.phaseDegrees = n > 1 ? i * (360f / n) : 0f;
-            if (roster.robots[i].modelPrefab != null)
-                NormalizeToCenter(Object.Instantiate(roster.robots[i].modelPrefab, spin.transform),
-                    spin.transform);
 
-            // Added after the model, so VehicleSkin's Start finds it to measure against.
-            var skin = spin.AddComponent<VehicleSkin>();
-            skin.holder = spin.transform;
-            skin.vehiclePrefab = roster.robots[i].vehiclePrefab;
-            skin.heightFraction = PreviewVehicleHeight;
+            if (roster.robots[i].HasStages)
+            {
+                BuildStopMotion(spin.transform, roster.robots[i], i, n);
+            }
+            else
+            {
+                var spinner = spin.AddComponent<RobotPreviewSpinner>();
+                // Spread the fleet evenly around the cycle so the row always has
+                // something mid-transformation rather than all nine snapping at once.
+                spinner.phaseDegrees = n > 1 ? i * (360f / n) : 0f;
+                if (roster.robots[i].modelPrefab != null)
+                    NormalizeToCenter(Object.Instantiate(roster.robots[i].modelPrefab, spin.transform),
+                        spin.transform);
+
+                // Added after the model, so VehicleSkin's Start finds it to measure against.
+                var skin = spin.AddComponent<VehicleSkin>();
+                skin.holder = spin.transform;
+                skin.vehiclePrefab = roster.robots[i].vehiclePrefab;
+                skin.heightFraction = PreviewVehicleHeight;
+            }
 
             var camGo = new GameObject("PreviewCam");
             camGo.transform.SetParent(rig.transform, false);
@@ -258,6 +271,54 @@ public static class RobotSelectMenu
         light.intensity = intensity;
         light.range = 6f;
         light.shadows = LightShadows.None;
+    }
+
+    /// <summary>
+    /// Instantiates every transformation stage under one holder and drives them
+    /// as stop motion.
+    ///
+    /// Stages are fitted on their LARGEST dimension rather than on height. A
+    /// robot is tall and a tank is long, so height-fitting would inflate the
+    /// tank until it dwarfed the robot it just folded out of.
+    /// </summary>
+    static void BuildStopMotion(Transform holder, RobotRoster.Entry entry, int index, int count)
+    {
+        var stages = new GameObject[entry.transformStages.Length];
+        for (int s = 0; s < stages.Length; s++)
+        {
+            if (entry.transformStages[s] == null)
+                continue;
+            stages[s] = Object.Instantiate(entry.transformStages[s], holder);
+            NormalizeLargestDimension(stages[s], holder, StageTargetSize);
+        }
+
+        var player = holder.gameObject.AddComponent<StopMotionTransformer>();
+        player.stages = stages;
+        // Spread the fleet across the cycle so the row is never in step.
+        float cycle = 2f * (player.holdSeconds + player.transformSeconds);
+        player.phaseSeconds = count > 1 ? index * (cycle / count) : 0f;
+    }
+
+    /// <summary>Fits a model's largest dimension to <paramref name="target"/> and centers it.</summary>
+    internal static void NormalizeLargestDimension(GameObject instance, Transform holder, float target)
+    {
+        instance.name = "Stage";
+        instance.transform.localPosition = Vector3.zero;
+        instance.transform.localRotation = Quaternion.identity;
+        instance.transform.localScale = Vector3.one;
+
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return;
+        var bounds = renderers[0].bounds;
+        foreach (var r in renderers)
+            bounds.Encapsulate(r.bounds);
+
+        float largest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+        float scale = target / Mathf.Max(0.01f, largest);
+        instance.transform.localScale *= scale;
+        Vector3 localCenter = holder.InverseTransformPoint(bounds.center);
+        instance.transform.localPosition = -localCenter * scale;
     }
 
     /// <summary>Scales a preview model to ~1.6 units tall and centers it on its holder.</summary>
@@ -516,6 +577,10 @@ public class RobotInspector : MonoBehaviour
     Text _title;
     Image _accent;
     GameObject _model;
+    RawImage _clipView;
+    Text _clipMissing;
+    RenderTexture _videoTexture;
+    UnityEngine.Video.VideoPlayer _video;
     int _index;
     bool _isCyan;
     float _pendingDrag;
@@ -540,6 +605,19 @@ public class RobotInspector : MonoBehaviour
         _turntable = turntable.transform;
 
         _texture = new RenderTexture(TextureSize, TextureSize, 24) { antiAliasing = 4 };
+
+        // Square, matching the generated clips. Muted and looping: this is a
+        // silent illustration sitting next to a turntable, not a cutscene.
+        _videoTexture = new RenderTexture(768, 768, 0);
+        var videoGo = new GameObject("TransformVideo");
+        videoGo.transform.SetParent(root, false);
+        _video = videoGo.AddComponent<UnityEngine.Video.VideoPlayer>();
+        _video.playOnAwake = false;
+        _video.isLooping = true;
+        _video.renderMode = UnityEngine.Video.VideoRenderMode.RenderTexture;
+        _video.targetTexture = _videoTexture;
+        _video.audioOutputMode = UnityEngine.Video.VideoAudioOutputMode.None;
+        _video.waitForFirstFrame = true;
 
         var camGo = new GameObject("InspectCam");
         camGo.transform.SetParent(rig.transform, false);
@@ -583,7 +661,9 @@ public class RobotInspector : MonoBehaviour
             new Color(0.05f, 0.11f, 0.18f, 0.98f));
         panel.rectTransform.anchorMin = panel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
         panel.rectTransform.anchoredPosition = new Vector2(0f, 20f);
-        panel.rectTransform.sizeDelta = new Vector2(760f, 800f);
+        // Wide enough for two panes: the live 3D on the left, the generated
+        // transformation clip on the right. Panel-local y runs -410..+410.
+        panel.rectTransform.sizeDelta = new Vector2(1280f, 820f);
 
         _accent = RobotSelectMenu.MakeImage(panel.transform, "Accent", RobotSelectMenu.HoloCyan);
         _accent.rectTransform.anchorMin = new Vector2(0f, 1f);
@@ -595,25 +675,42 @@ public class RobotInspector : MonoBehaviour
             RobotSelectMenu.HoloCyan, FontStyle.Bold,
             new Vector2(0.5f, 1f), new Vector2(0f, -52f), new Vector2(700f, 60f));
 
+        // Left pane: the live turntable you can drag.
         var viewGo = new GameObject("View");
         viewGo.transform.SetParent(panel.transform, false);
         var view = viewGo.AddComponent<RawImage>();
         view.texture = _texture;
-        // Panel-local y runs -400..+400. Title sits at +318..+378, so the view
-        // is centred just under it and the hint and buttons stack below.
         view.rectTransform.anchorMin = view.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        view.rectTransform.anchoredPosition = new Vector2(0f, 35f);
-        view.rectTransform.sizeDelta = new Vector2(620f, 540f);
+        view.rectTransform.anchoredPosition = new Vector2(-305f, 55f);
+        view.rectTransform.sizeDelta = new Vector2(580f, 500f);
         viewGo.AddComponent<RobotInspectorDrag>().inspector = this;
 
-        RobotSelectMenu.MakeText(panel.transform, "Hint", "DRAG  TO  ROTATE", 20,
-            new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
-            new Vector2(0.5f, 0f), new Vector2(0f, 130f), new Vector2(500f, 30f));
+        // Right pane: the transformation clip the stages were sampled from. The
+        // cards show the stop-motion rebuild; here there is room for the real
+        // thing, which is smooth and sells the idea far better.
+        var clipGo = new GameObject("Clip");
+        clipGo.transform.SetParent(panel.transform, false);
+        _clipView = clipGo.AddComponent<RawImage>();
+        _clipView.texture = _videoTexture;
+        _clipView.rectTransform.anchorMin = _clipView.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        _clipView.rectTransform.anchoredPosition = new Vector2(305f, 55f);
+        _clipView.rectTransform.sizeDelta = new Vector2(580f, 500f);
 
-        RobotSelectMenu.MakeButton(panel.transform, "SELECT", new Vector2(-130f, -340f),
-            new Vector2(230f, 70f), 30, SelectCurrent);
-        RobotSelectMenu.MakeButton(panel.transform, "CLOSE", new Vector2(130f, -340f),
-            new Vector2(230f, 70f), 30, Close);
+        _clipMissing = RobotSelectMenu.MakeText(panel.transform, "ClipMissing",
+            "NO  TRANSFORMATION  CLIP", 22, new Color(1f, 1f, 1f, 0.30f), FontStyle.Normal,
+            new Vector2(0.5f, 0.5f), new Vector2(305f, 55f), new Vector2(520f, 40f));
+
+        RobotSelectMenu.MakeText(panel.transform, "LeftCaption", "DRAG  TO  ROTATE", 22,
+            new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
+            new Vector2(0.5f, 0.5f), new Vector2(-305f, -225f), new Vector2(560f, 30f));
+        RobotSelectMenu.MakeText(panel.transform, "RightCaption", "TRANSFORMATION", 22,
+            new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
+            new Vector2(0.5f, 0.5f), new Vector2(305f, -225f), new Vector2(560f, 30f));
+
+        RobotSelectMenu.MakeButton(panel.transform, "SELECT", new Vector2(-150f, -330f),
+            new Vector2(250f, 70f), 30, SelectCurrent);
+        RobotSelectMenu.MakeButton(panel.transform, "CLOSE", new Vector2(150f, -330f),
+            new Vector2(250f, 70f), 30, Close);
 
         _dialog.SetActive(false);
     }
@@ -644,6 +741,21 @@ public class RobotInspector : MonoBehaviour
         _title.color = teamColor;
         _accent.color = teamColor;
 
+        // Robots that have not been through the transformation pipeline yet get
+        // the placeholder rather than a frozen frame of the previous robot's clip.
+        bool hasClip = entry.transformVideo != null;
+        _clipView.enabled = hasClip;
+        _clipMissing.enabled = !hasClip;
+        if (hasClip)
+        {
+            _video.clip = entry.transformVideo;
+            _video.Play();
+        }
+        else
+        {
+            _video.Stop();
+        }
+
         _dialog.SetActive(true);
         _camera.enabled = true;
     }
@@ -652,6 +764,9 @@ public class RobotInspector : MonoBehaviour
     {
         _dialog.SetActive(false);
         _camera.enabled = false;
+        // Decoding a clip nobody can see is pure cost.
+        if (_video != null)
+            _video.Stop();
         ClearModel();
     }
 
@@ -709,6 +824,13 @@ public class RobotInspector : MonoBehaviour
         {
             _texture.Release();
             Destroy(_texture);
+        }
+        if (_video != null)
+            _video.targetTexture = null;
+        if (_videoTexture != null)
+        {
+            _videoTexture.Release();
+            Destroy(_videoTexture);
         }
     }
 }

@@ -884,6 +884,9 @@ public static class ArenaBuilder
                 // Optional: robots without a generated vehicle just fold.
                 vehiclePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                     $"Assets/Models/Meshy/{robot}-vehicle.glb"),
+                transformStages = LoadTransformStages(robot),
+                transformVideo = AssetDatabase.LoadAssetAtPath<UnityEngine.Video.VideoClip>(
+                    $"Assets/Video/{robot}-transform.mp4"),
             };
             if (file == $"{DefaultRobot}-robot")
                 entries.Insert(0, entry);
@@ -892,5 +895,34 @@ public static class ArenaBuilder
         }
         roster.robots = entries.ToArray();
         Debug.Log($"[ArenaBuilder] Robot roster: {entries.Count} robots.");
+    }
+
+    /// <summary>
+    /// Transformation stages for a robot, in order, or an empty array.
+    ///
+    /// Sorted numerically rather than lexically: stage10 has to follow stage9,
+    /// and a plain string sort puts it between stage1 and stage2.
+    /// </summary>
+    static GameObject[] LoadTransformStages(string robot)
+    {
+        string dir = $"Assets/Models/Stages/{robot}";
+        if (!System.IO.Directory.Exists(dir))
+            return new GameObject[0];
+
+        var found = new System.Collections.Generic.List<(int order, GameObject model)>();
+        foreach (var raw in System.IO.Directory.GetFiles(dir, "stage*.glb"))
+        {
+            string path = raw.Replace('\\', '/');
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (model == null)
+            {
+                Debug.LogWarning($"[ArenaBuilder] Stage failed to load, skipping: {path}");
+                continue;
+            }
+            string digits = System.IO.Path.GetFileNameWithoutExtension(path).Substring("stage".Length);
+            found.Add((int.TryParse(digits, out int order) ? order : int.MaxValue, model));
+        }
+        found.Sort((a, b) => a.order.CompareTo(b.order));
+        return found.ConvertAll(f => f.model).ToArray();
     }
 }
