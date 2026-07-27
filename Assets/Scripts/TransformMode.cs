@@ -152,6 +152,35 @@ public class TransformMode : MonoBehaviour
     }
 
     /// <summary>
+    /// Unity kills a coroutine when its GameObject is deactivated, and does it
+    /// WITHOUT running any of the code after the yield — so a character hidden
+    /// mid-fold (a mode switch, a de-rez that bypasses the brain) leaves _fold
+    /// dangling and never lands its end state.
+    ///
+    /// Everything downstream then reads a robot that is permanently mid-fold:
+    /// IsBusy stays true, so it never transforms again AND takes the doubled
+    /// fold damage forever; ApplyTuning never runs, so speed, collider and
+    /// loadout stay half-applied; and the skin stays frozen on whatever stage
+    /// was showing, which is a half-built tank standing inside a robot.
+    ///
+    /// Landing the end state here makes deactivation equivalent to the fold
+    /// having finished, which is the only outcome that leaves the character
+    /// coherent.
+    /// </summary>
+    void OnDisable()
+    {
+        if (_fold == null)
+            return;
+
+        _fold = null;
+        _hasPending = false;
+        ScaleRig(IsVehicle ? 1f : 0f);
+        if (_skin != null)
+            _skin.SetVehicle(IsVehicle);
+        ApplyTuning(IsVehicle);
+    }
+
+    /// <summary>
     /// Snap back to robot form with no animation and no coroutine left running.
     ///
     /// Deactivating a GameObject kills its coroutines permanently, so anything
