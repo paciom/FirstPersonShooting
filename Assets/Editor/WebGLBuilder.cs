@@ -94,7 +94,13 @@ public static class WebGLBuilder
 
     static void ApplyWebGLSettings()
     {
-        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
+        // Gzip, not Brotli, while the player is still ~350 MB: brotli.exe is
+        // single-threaded and spent ~50 min on the data file alone, which is most
+        // of the build. Gzip costs roughly 15% more bytes and turns an iteration
+        // from an hour into minutes. Worth flipping back to Brotli for a release
+        // build, or once the textures are cut down — deploy_webgl.ps1 already
+        // sends the right Content-Encoding for either.
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = false;
         PlayerSettings.WebGL.linkerTarget = WebGLLinkerTarget.Wasm;
         PlayerSettings.WebGL.dataCaching = true;
@@ -103,6 +109,7 @@ public static class WebGLBuilder
         // the browser console without paying for full null-check instrumentation.
         PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly;
 
-        Debug.Log("[WebGLBuilder] WebGL settings: Brotli, fallback off, wasm, data caching on.");
+        Debug.Log($"[WebGLBuilder] WebGL settings: {PlayerSettings.WebGL.compressionFormat}, " +
+                  "fallback off, wasm, data caching on.");
     }
 }
