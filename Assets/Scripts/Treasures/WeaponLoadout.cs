@@ -25,9 +25,9 @@ public class WeaponLoadout : MonoBehaviour
     [Tooltip("Indices into `all` that this character always has (the two basics).")]
     public int[] basicIndices = { 0 };
 
-    [Tooltip("The heavy gun used in vehicle form, replacing the whole arsenal. " +
-             "Null falls back to the first basic.")]
-    public VehicleCannon vehicleCannon;
+    [Tooltip("The guns used in vehicle form, replacing the whole arsenal. " +
+             "Empty falls back to the first basic.")]
+    public Weapon[] vehicleWeapons;
 
     [Tooltip("Seconds a treasure weapon stays equipped.")]
     public float grantDuration = 22f;
@@ -58,12 +58,27 @@ public class WeaponLoadout : MonoBehaviour
     public int TotalWeapons => all != null ? all.Length : 0;
 
     /// <summary>
-    /// Vehicle form: one forward gun only. Set by <see cref="TransformMode"/>.
-    /// This is the cost side of transforming — speed and a small hitbox in
-    /// exchange for the rest of the loadout, including any treasure weapon,
-    /// which stays equipped and comes back the moment the robot stands up.
+    /// Vehicle form: the mounted siege kit instead of the arsenal. Set by
+    /// <see cref="TransformMode"/>. Two slow, heavy guns in exchange for the
+    /// whole loadout — including any treasure weapon, which stays equipped and
+    /// comes back the moment the robot stands up. Driving is a different way to
+    /// fight rather than a worse one.
     /// </summary>
     public bool VehicleMode { get; private set; }
+
+    /// <summary>True when this character has a dedicated vehicle kit.</summary>
+    public bool HasVehicleWeapons
+    {
+        get
+        {
+            if (vehicleWeapons == null)
+                return false;
+            foreach (var weapon in vehicleWeapons)
+                if (weapon != null)
+                    return true;
+            return false;
+        }
+    }
 
     public void SetVehicleMode(bool vehicle)
     {
@@ -182,16 +197,14 @@ public class WeaponLoadout : MonoBehaviour
     {
         _built = true;
 
-        // Vehicle form: the mounted cannon alone. Special is left untouched
-        // (and its timer keeps running) so unfolding restores it.
+        // Vehicle form: the mounted siege kit. Special is left untouched (and
+        // its timer keeps running) so unfolding restores it.
         //
-        // Falls back to the first basic for characters built without a cannon,
-        // which is how it behaved before the cannon existed.
+        // Falls back to the first basic for characters built without a vehicle
+        // kit, which is how it behaved before the kit existed.
         if (VehicleMode)
         {
-            _available = vehicleCannon != null
-                ? new[] { vehicleCannon }
-                : FirstBasic();
+            _available = HasVehicleWeapons ? vehicleWeapons : FirstBasic();
             _version++;
             return;
         }

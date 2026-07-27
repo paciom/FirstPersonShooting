@@ -54,23 +54,29 @@ public class AIBrain : MonoBehaviour
     [Tooltip("Transform to cross at least this far for a crate; stay a robot for anything nearer.")]
     public float vehicleDashRange = 18f;
 
-    [Tooltip("Stand back up once an enemy is this close — vehicle form only carries one gun.")]
+    [Tooltip("Stand back up once an enemy is this close, rather than detour for loot.")]
     public float vehicleSafeRange = 22f;
 
     [Tooltip("Minimum seconds between transformations, so bots don't flicker between forms.")]
-    public float vehicleDwell = 2.5f;
+    public float vehicleDwell = 1.1f;
 
-    [Tooltip("Fold up and drive at an enemy further away than this.")]
-    public float vehicleChargeRange = 34f;
+    [Tooltip("Fold up when the enemy is further away than this. Tuned against " +
+             "the arena, which is only ~32 units across — set much higher and " +
+             "bots converge inside it and never transform at all.")]
+    public float vehicleChargeRange = 24f;
 
     [Tooltip("Stand back up once the enemy is closer than this. Must stay well " +
              "under vehicleChargeRange or the bot oscillates at the boundary — " +
              "the gap between the two IS the charge.")]
-    public float vehicleChargeStopRange = 20f;
+    public float vehicleChargeStopRange = 14f;
 
-    [Tooltip("Whether this bot charges in vehicle form. Off makes a bot that " +
-             "only ever drives for loot, which is how cautious personas read.")]
+    [Tooltip("Whether this bot fights in vehicle form at range. Off makes a bot " +
+             "that only ever drives for loot, which is how cautious personas read.")]
     public bool chargeInVehicle = true;
+
+    [Tooltip("With no enemy to fight, fold up to travel further than this. " +
+             "Most transformations in a quiet moment come from here.")]
+    public float travelFoldDistance = 13f;
 
     /// <summary>Stay at least this far from an armed mine, and back off if closer.</summary>
     const float MineDangerRadius = 4.2f;
@@ -364,14 +370,17 @@ public class AIBrain : MonoBehaviour
             want = _vehicle.IsVehicle ? run > vehicleDashRange * 0.5f : run > vehicleDashRange;
         }
 
-        // Charge: fold up to cross open ground toward a distant enemy, then
-        // stand up to fight once inside its own weapons' range.
+        // Fight at range as a tank, close as a robot.
         //
-        // This is meant to be READABLE. A bot that drives at you and unfolds at
-        // a predictable distance gives a tell you can learn and punish — and
-        // punishing it is exactly the fold penalty in EnergyShield, so the two
-        // mechanics are the same idea seen from either side. An unreadable
-        // charge would just be a speed buff.
+        // The siege kit is slow and heavy and the arsenal is fast and light, so
+        // each form has a distance it is actually better at. Driving that
+        // directly off range means bots transform constantly through a match —
+        // fold to shell from afar, unfold as the gap closes — which is both the
+        // readable tell and the reason to watch a fight.
+        //
+        // The thresholds are tuned against an arena only ~32 units across.
+        // Anything much wider than the map means bots converge inside it and
+        // never transform, which is exactly how this behaved at 34/20.
         //
         // Deliberately not while wounded: a wounded bot standing up inside your
         // range is a gift, and one that folds to escape reads as cowardice
@@ -381,6 +390,19 @@ public class AIBrain : MonoBehaviour
             want = _vehicle.IsVehicle
                 ? distanceToTarget > vehicleChargeStopRange
                 : distanceToTarget > vehicleChargeRange;
+        }
+
+        // Nothing to shoot: drive. With no valid target the branches above are
+        // all dead, which used to leave a bot walking the whole arena on foot —
+        // the single biggest reason transformations were never seen.
+        if (!want && !wounded && !IsValidTarget(target) && _agent != null
+            && _agent.isOnNavMesh && _agent.hasPath)
+        {
+            float remaining = _agent.remainingDistance;
+            if (!float.IsInfinity(remaining))
+                want = _vehicle.IsVehicle
+                    ? remaining > travelFoldDistance * 0.4f
+                    : remaining > travelFoldDistance;
         }
 
         if (want == _vehicle.IsVehicle)

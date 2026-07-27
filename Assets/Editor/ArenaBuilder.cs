@@ -580,7 +580,7 @@ public static class ArenaBuilder
         var loadout = player.AddComponent<WeaponLoadout>();
         loadout.all = playerWeapons;
         loadout.basicIndices = BasicWeaponIndices;
-        loadout.vehicleCannon = AttachVehicleCannon(blasterGo, muzzleT, player.transform, NeonCyan);
+        loadout.vehicleWeapons = AttachVehicleWeapons(blasterGo, muzzleT, player.transform, NeonCyan);
 
         var brain = player.AddComponent<PlayerBrain>();
         brain.weapons = new[] { playerWeapons[BasicWeaponIndices[0]], playerWeapons[BasicWeaponIndices[1]] };
@@ -691,14 +691,20 @@ public static class ArenaBuilder
     /// arsenal but kept out of `all`, so it can never be rolled as a treasure
     /// weapon or fired on foot — it exists only for vehicle form.
     /// </summary>
-    static VehicleCannon AttachVehicleCannon(GameObject host, Transform muzzle,
-                                             Transform owner, Color color)
+    static Weapon[] AttachVehicleWeapons(GameObject host, Transform muzzle,
+                                         Transform owner, Color color)
     {
         var cannon = host.AddComponent<VehicleCannon>();
         cannon.muzzle = muzzle;
         cannon.ownerRoot = owner;
         cannon.color = color;
-        return cannon;
+
+        var mortar = host.AddComponent<VehicleMortar>();
+        mortar.muzzle = muzzle;
+        mortar.ownerRoot = owner;
+        mortar.color = color;
+
+        return new Weapon[] { cannon, mortar };
     }
 
     static Weapon[] AttachArsenal(GameObject host, Transform muzzle, Transform owner, Color color, bool botTuning)
@@ -849,7 +855,7 @@ public static class ArenaBuilder
             var loadout = bot.AddComponent<WeaponLoadout>();
             loadout.all = botWeapons;
             loadout.basicIndices = BasicWeaponIndices;
-            loadout.vehicleCannon = AttachVehicleCannon(blasterGo, muzzleT, bot.transform, teamColor);
+            loadout.vehicleWeapons = AttachVehicleWeapons(blasterGo, muzzleT, bot.transform, teamColor);
 
             var persona = personas[i % personas.Length];
             var brain = bot.AddComponent<AIBrain>();
