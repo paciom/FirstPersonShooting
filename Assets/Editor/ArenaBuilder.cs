@@ -591,6 +591,7 @@ public static class ArenaBuilder
         deRez.burstColor = NeonCyan;
 
         var vehicle = player.AddComponent<TransformMode>();
+        player.AddComponent<VehicleRam>();   // driving through cover opens lanes
         vehicle.body = body.transform;
         vehicle.burstColor = NeonCyan;
 
@@ -876,6 +877,7 @@ public static class ArenaBuilder
             skin.vehiclePrefab = LoadVehicleModel(DefaultRobot);
 
             var vehicle = bot.AddComponent<TransformMode>();
+            bot.AddComponent<VehicleRam>();
             vehicle.body = body;
             vehicle.burstColor = teamColor;
 

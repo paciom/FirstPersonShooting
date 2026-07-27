@@ -60,6 +60,18 @@ public class AIBrain : MonoBehaviour
     [Tooltip("Minimum seconds between transformations, so bots don't flicker between forms.")]
     public float vehicleDwell = 2.5f;
 
+    [Tooltip("Fold up and drive at an enemy further away than this.")]
+    public float vehicleChargeRange = 34f;
+
+    [Tooltip("Stand back up once the enemy is closer than this. Must stay well " +
+             "under vehicleChargeRange or the bot oscillates at the boundary — " +
+             "the gap between the two IS the charge.")]
+    public float vehicleChargeStopRange = 20f;
+
+    [Tooltip("Whether this bot charges in vehicle form. Off makes a bot that " +
+             "only ever drives for loot, which is how cautious personas read.")]
+    public bool chargeInVehicle = true;
+
     /// <summary>Stay at least this far from an armed mine, and back off if closer.</summary>
     const float MineDangerRadius = 4.2f;
 
@@ -350,6 +362,25 @@ public class AIBrain : MonoBehaviour
             float run = Vector3.Distance(transform.position, _treasureTarget.GroundPoint);
             // Already driving? Hold form until nearly on top of the crate.
             want = _vehicle.IsVehicle ? run > vehicleDashRange * 0.5f : run > vehicleDashRange;
+        }
+
+        // Charge: fold up to cross open ground toward a distant enemy, then
+        // stand up to fight once inside its own weapons' range.
+        //
+        // This is meant to be READABLE. A bot that drives at you and unfolds at
+        // a predictable distance gives a tell you can learn and punish — and
+        // punishing it is exactly the fold penalty in EnergyShield, so the two
+        // mechanics are the same idea seen from either side. An unreadable
+        // charge would just be a speed buff.
+        //
+        // Deliberately not while wounded: a wounded bot standing up inside your
+        // range is a gift, and one that folds to escape reads as cowardice
+        // rather than aggression.
+        if (!want && !wounded && chargeInVehicle && IsValidTarget(target))
+        {
+            want = _vehicle.IsVehicle
+                ? distanceToTarget > vehicleChargeStopRange
+                : distanceToTarget > vehicleChargeRange;
         }
 
         if (want == _vehicle.IsVehicle)
