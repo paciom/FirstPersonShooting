@@ -54,6 +54,13 @@ public static class RobotSelectMenu
     const float PreviewRobotHeight = 1.6f;
     const float StageVehicleDiagonal = 1.45f;
 
+    // Generated stages come out of the image-to-3D pipeline nose-down -Z, so
+    // they face away from the camera the robot faces. Stage one is the real rig
+    // and is already correct, so only the generated stages are turned — the
+    // same offset VehicleSkin.stageYawOffset applies in the arena, and the two
+    // must agree or a robot faces one way on its card and the other in a match.
+    const float StageYawOffset = 180f;
+
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
     {
@@ -317,7 +324,8 @@ public static class RobotSelectMenu
             if (stages[s] == null)
                 continue;
             NormalizeByDiagonal(stages[s], holder,
-                s == 0 ? robotDiagonal : StageVehicleDiagonal);
+                s == 0 ? robotDiagonal : StageVehicleDiagonal,
+                s == 0 ? 0f : StageYawOffset);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
@@ -342,11 +350,15 @@ public static class RobotSelectMenu
     }
 
     /// <summary>Fits a model's bounding-box diagonal to <paramref name="target"/> and centers it.</summary>
-    internal static void NormalizeByDiagonal(GameObject instance, Transform holder, float target)
+    internal static void NormalizeByDiagonal(GameObject instance, Transform holder,
+                                             float target, float yaw = 0f)
     {
         instance.name = "Stage";
         instance.transform.localPosition = Vector3.zero;
-        instance.transform.localRotation = Quaternion.identity;
+        // Yaw first: measuring after rotating is what keeps the centring honest,
+        // since turning a model afterwards moves it off the offset solved for
+        // its old orientation.
+        instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
         instance.transform.localScale = Vector3.one;
 
         var bounds = MeasureBounds(instance);

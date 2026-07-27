@@ -38,6 +38,12 @@ public class VehicleSkin : MonoBehaviour
     [Tooltip("Vehicle height as a fraction of the standing robot's height.")]
     [Range(0.2f, 1.5f)] public float heightFraction = 0.62f;
 
+    [Tooltip("Extra yaw applied to generated STAGES only. They come out of the " +
+             "image-to-3D pipeline nose-down -Z, which drives them backwards; " +
+             "the separately generated vehiclePrefab models do not and are left " +
+             "alone. Flip by 180 if a robot's tank still reverses.")]
+    public float stageYawOffset = 180f;
+
     public bool HasVehicle =>
         vehiclePrefab != null || (transformStages != null && transformStages.Length > 1);
 
@@ -147,7 +153,7 @@ public class VehicleSkin : MonoBehaviour
 
         // (Front vs back is still a coin flip — flip yRotation by 180 per robot
         // if one comes out reversed.)
-        FitToRobot(_vehicle, vehicleRenderers, robotBounds);
+        FitToRobot(_vehicle, vehicleRenderers, robotBounds, 0f);
         Tint(vehicleRenderers);
         _vehicle.SetActive(false);
     }
@@ -182,7 +188,7 @@ public class VehicleSkin : MonoBehaviour
                 continue;
             }
 
-            FitToRobot(stage, renderers, robotBounds);
+            FitToRobot(stage, renderers, robotBounds, stageYawOffset);
             Tint(renderers);
             stage.SetActive(false);
             _stages[i] = stage;
@@ -194,15 +200,22 @@ public class VehicleSkin : MonoBehaviour
     }
 
     /// <summary>Orient, scale and ground a generated model against the robot wearing it.</summary>
-    void FitToRobot(GameObject instance, Renderer[] renderers, Bounds robotBounds)
+    void FitToRobot(GameObject instance, Renderer[] renderers, Bounds robotBounds,
+                    float extraYaw)
     {
         // Generated models don't agree on which way is forward. A ground
         // vehicle is longer than it is wide, so the long horizontal axis is the
-        // one that should run down +Z.
+        // one that should run down +Z; extraYaw then turns it to face the way
+        // the robot does.
+        //
+        // Both applied in ONE rotation before anything is measured: rotating
+        // after the fit would move the mesh off the centring and grounding
+        // solved for its old orientation.
         Bounds raw = Combine(renderers);
-        if (raw.size.x > raw.size.z)
+        float yaw = (raw.size.x > raw.size.z ? 90f : 0f) + extraYaw;
+        if (!Mathf.Approximately(yaw, 0f))
         {
-            instance.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             raw = Combine(renderers);
         }
 
