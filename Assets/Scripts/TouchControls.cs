@@ -38,6 +38,7 @@ public class TouchControls : MonoBehaviour
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color ButtonIdle = new Color(0.06f, 0.14f, 0.22f, 0.55f);
     static readonly Color ButtonHeld = new Color(0.2f, 0.9f, 1f, 0.8f);
+    static readonly Color ButtonDim = new Color(0.06f, 0.10f, 0.14f, 0.35f);
     static readonly Color RingIdle = new Color(0.2f, 0.9f, 1f, 0.35f);
 
     // Role codes stored per finger. Buttons use their index in _buttons.
@@ -124,7 +125,10 @@ public class TouchControls : MonoBehaviour
     {
         public RectTransform rect;
         public Image image;
+        public Image rim;
+        public Text label;
         public bool held;
+        public bool dimmed;
         // activeInHierarchy, not activeSelf: a hidden canvas leaves its children
         // "active" locally, and a rect nobody can see must not eat taps.
         public bool Visible => rect != null && rect.gameObject.activeInHierarchy;
@@ -317,15 +321,26 @@ public class TouchControls : MonoBehaviour
             _weaponCycle = 0;
         }
 
-        // Morph only exists on robots that were forged with vehicle clips.
+        // MORPH stays on screen for the whole match so it can be found, but
+        // dims on robots with no forged vehicle clips, where pressing it does
+        // nothing. Hiding it instead made the control look like it came and
+        // went with the robot.
         var vehicle = PlayerBrain.Local != null ? PlayerBrain.Local.GetComponent<TransformMode>() : null;
-        SetVisible(_morph, playing && vehicle != null && vehicle.CanTransform);
+        SetVisible(_morph, playing && vehicle != null);
+        SetDimmed(_morph, vehicle == null || !vehicle.CanTransform);
     }
 
     static void SetVisible(Button button, bool visible)
     {
         if (button != null)
             SetVisible(button.rect, visible);
+    }
+
+    /// <summary>Grey out a button whose action isn't available right now.</summary>
+    static void SetDimmed(Button button, bool dimmed)
+    {
+        if (button != null)
+            button.dimmed = dimmed;
     }
 
     static void SetVisible(RectTransform rect, bool visible)
@@ -519,12 +534,19 @@ public class TouchControls : MonoBehaviour
             _lookHint.color = color;
         }
 
+        float blend = 18f * Time.unscaledDeltaTime;
         foreach (var button in _buttons)
         {
             if (button.image == null)
                 continue;
-            Color target = button.held ? ButtonHeld : ButtonIdle;
-            button.image.color = Color.Lerp(button.image.color, target, 18f * Time.unscaledDeltaTime);
+            Color target = button.dimmed ? ButtonDim : (button.held ? ButtonHeld : ButtonIdle);
+            button.image.color = Color.Lerp(button.image.color, target, blend);
+
+            float ink = button.dimmed ? 0.3f : 1f;
+            if (button.rim != null)
+                button.rim.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.7f * ink);
+            if (button.label != null)
+                button.label.color = new Color(1f, 1f, 1f, ink);
         }
     }
 
@@ -562,7 +584,9 @@ public class TouchControls : MonoBehaviour
         _shuffle = MakeRoundButton("Shuffle", "NEW", new Vector2(1, 0), new Vector2(-170, 520), 150);
 
         // No Escape key on a tablet — this is the only way back to the menu.
-        _menu = MakeRoundButton("Menu", "MENU", new Vector2(1, 1), new Vector2(-130, -110), 150);
+        // Top-LEFT, where Roblox puts it, which also leaves the opposite corner
+        // free for the transformation replay (TransformCast).
+        _menu = MakeRoundButton("Menu", "MENU", new Vector2(0, 1), new Vector2(130, -110), 150);
     }
 
     void BuildStick()
@@ -659,7 +683,7 @@ public class TouchControls : MonoBehaviour
         textRect.offsetMin = Vector2.zero;
         textRect.offsetMax = Vector2.zero;
 
-        var button = new Button { rect = rect, image = image };
+        var button = new Button { rect = rect, image = image, rim = rimImage, label = text };
         _buttons.Add(button);
         return button;
     }

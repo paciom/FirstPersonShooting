@@ -71,6 +71,9 @@ public class GameModeController : MonoBehaviour
         // Builds nothing until a touch actually happens (or the platform is
         // mobile), so desktop play is unaffected.
         TouchControls.Ensure();
+        // Corner replay of the player's own transformation — first person never
+        // sees it otherwise.
+        TransformCast.Ensure();
         EnterMenu();
     }
 

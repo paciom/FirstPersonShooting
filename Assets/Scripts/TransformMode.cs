@@ -62,6 +62,14 @@ public class TransformMode : MonoBehaviour
     /// <summary>False for models with no forged vehicle clips.</summary>
     public bool CanTransform => ResolveAnimator() != null;
 
+    /// <summary>
+    /// Raised as a fold begins, true when folding into a vehicle. Fires for a
+    /// request that was actually accepted, so a listener never has to re-check
+    /// CanTransform or the busy state. <see cref="TransformCast"/> uses it to
+    /// roll the matching transformation clip.
+    /// </summary>
+    public event System.Action<bool> OnFoldStarted;
+
     Animator _animator;
     VehicleSkin _skin;               // swaps in the vehicle mesh, if this robot has one
     Transform _rig;                  // wheels + thrusters, scaled in during the fold
@@ -149,6 +157,7 @@ public class TransformMode : MonoBehaviour
 
         IsVehicle = vehicle;
         _fold = StartCoroutine(FoldRoutine(vehicle));
+        OnFoldStarted?.Invoke(vehicle);
     }
 
     /// <summary>
