@@ -468,7 +468,7 @@ public class GameModeController : MonoBehaviour
         _treasureSpawner?.BeginMatch();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("T — Transform   ·   ESC — Menu", "");
+        ShowOverlay("T — Transform   ·   Z — Sniper Scope   ·   ESC — Menu", "");
         LockCursor(true);
     }
 

@@ -24,6 +24,7 @@ public class PlayerBrain : MonoBehaviour
     CharacterMotor _motor;
     WeaponLoadout _loadout;
     TransformMode _vehicle;
+    SniperScope _sniper;
     int _loadoutVersion = -1;
     int _activeWeapon;
     bool _warnedNoVehicle;
@@ -56,6 +57,10 @@ public class PlayerBrain : MonoBehaviour
             weapons = GetComponentsInChildren<Weapon>();
         if (scope == null)
             scope = GetComponent<XRayScope>();
+        // Built here rather than in the scene so it needs no rebuild.
+        _sniper = GetComponent<SniperScope>();
+        if (_sniper == null)
+            _sniper = gameObject.AddComponent<SniperScope>();
         RefreshLoadout();
         SetActiveWeapon(0);
     }
@@ -82,6 +87,16 @@ public class PlayerBrain : MonoBehaviour
         if (Local == this) Local = null;
     }
 
+    /// <summary>
+    /// The brain switches off with the match — never leave a zoomed camera or a
+    /// live x-ray behind for the menu to render through.
+    /// </summary>
+    void OnDisable()
+    {
+        if (_sniper != null) _sniper.SetScoped(false);
+        if (scope != null) scope.SetScoped(false);
+    }
+
     // Cursor locking and the Escape key are owned by GameModeController.
 
     void Update()
@@ -94,15 +109,19 @@ public class PlayerBrain : MonoBehaviour
         TouchControls touch = TouchControls.Active ? TouchControls.Instance : null;
         bool armed = touch != null || Cursor.lockState == CursorLockMode.Locked;
 
+        // Zoomed in, the same swipe has to cover far less ground — a scope you
+        // can't hold steady is worse than no scope.
+        float lookScale = _sniper != null ? _sniper.LookScale : 1f;
+
         if (touch != null)
         {
-            _motor.AddLook(touch.LookDelta);
+            _motor.AddLook(touch.LookDelta * lookScale);
         }
         else if (Cursor.lockState == CursorLockMode.Locked)
         {
             _motor.AddLook(new Vector2(
                 Input.GetAxis("Mouse X") * mouseSensitivity,
-                Input.GetAxis("Mouse Y") * mouseSensitivity));
+                Input.GetAxis("Mouse Y") * mouseSensitivity) * lookScale);
         }
 
         var move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
@@ -136,6 +155,12 @@ public class PlayerBrain : MonoBehaviour
             }
             _vehicle.Toggle();
         }
+
+        // Z zooms the sniper scope in and back out; it stacks with the X-Ray
+        // scope, which reveals but does not magnify.
+        if (_sniper != null
+            && (Input.GetKeyDown(KeyCode.Z) || (touch != null && touch.ConsumeSnipe())))
+            _sniper.Toggle();
 
         HandleWeaponSwitch(touch);
 

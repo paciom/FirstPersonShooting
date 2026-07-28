@@ -92,7 +92,7 @@ public class TouchControls : MonoBehaviour
     Vector2 _stickHome;
 
     readonly List<Button> _buttons = new List<Button>();
-    Button _fire, _jump, _scope, _morph, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
+    Button _fire, _jump, _scope, _snipe, _morph, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
 
     readonly Dictionary<int, int> _roles = new Dictionary<int, int>();
     readonly Dictionary<int, Vector2> _positions = new Dictionary<int, Vector2>();
@@ -105,6 +105,7 @@ public class TouchControls : MonoBehaviour
     bool _jumpPressed;
     int _weaponCycle;
     bool _morphPressed;
+    bool _snipePressed;
 
     Vector3 _lastMousePosition;
     bool _mouseHeld;
@@ -178,6 +179,14 @@ public class TouchControls : MonoBehaviour
     {
         bool pressed = _morphPressed;
         _morphPressed = false;
+        return pressed;
+    }
+
+    /// <summary>Sniper scope toggle edge — see SniperScope for why it isn't a hold.</summary>
+    public bool ConsumeSnipe()
+    {
+        bool pressed = _snipePressed;
+        _snipePressed = false;
         return pressed;
     }
 
@@ -276,6 +285,7 @@ public class TouchControls : MonoBehaviour
         // the menu opened fires the moment the next match starts.
         _jumpPressed = false;
         _morphPressed = false;
+        _snipePressed = false;
         _weaponCycle = 0;
         if (!_mouseWasSimulated)
         {
@@ -307,6 +317,7 @@ public class TouchControls : MonoBehaviour
         SetVisible(_fire, playing);
         SetVisible(_jump, playing);
         SetVisible(_scope, playing);
+        SetVisible(_snipe, playing);
         SetVisible(_prevWeapon, playing);
         SetVisible(_nextWeapon, playing);
         SetVisible(_rise, flying);
@@ -318,6 +329,7 @@ public class TouchControls : MonoBehaviour
         {
             _jumpPressed = false;
             _morphPressed = false;
+            _snipePressed = false;
             _weaponCycle = 0;
         }
 
@@ -489,6 +501,7 @@ public class TouchControls : MonoBehaviour
     {
         if (button == _jump) _jumpPressed = true;
         else if (button == _morph) _morphPressed = true;
+        else if (button == _snipe) _snipePressed = true;
         else if (button == _prevWeapon) _weaponCycle = -1;
         else if (button == _nextWeapon) _weaponCycle = 1;
         else if (button == _menu && GameModeController.Instance != null)
@@ -574,6 +587,7 @@ public class TouchControls : MonoBehaviour
         _fire = MakeRoundButton("Fire", "FIRE", new Vector2(1, 0), new Vector2(-370, 280), 210);
         _jump = MakeRoundButton("Jump", "JUMP", new Vector2(1, 0), new Vector2(-150, 150), 170);
         _scope = MakeRoundButton("Scope", "X-RAY", new Vector2(1, 0), new Vector2(-175, 470), 140);
+        _snipe = MakeRoundButton("Snipe", "SNIPE", new Vector2(1, 0), new Vector2(-175, 630), 140);
         _morph = MakeRoundButton("Morph", "MORPH", new Vector2(1, 0), new Vector2(-420, 545), 140);
         _prevWeapon = MakeRoundButton("PrevWeapon", "<", new Vector2(1, 0), new Vector2(-700, 150), 110);
         _nextWeapon = MakeRoundButton("NextWeapon", ">", new Vector2(1, 0), new Vector2(-570, 150), 110);
