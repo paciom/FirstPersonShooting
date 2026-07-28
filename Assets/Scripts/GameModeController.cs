@@ -484,7 +484,9 @@ public class GameModeController : MonoBehaviour
         SetBotsActive(true);
         _treasureSpawner?.BeginMatch();
 
-        _spectatorRig = BuildCameraRig("SpectatorCamera", new Vector3(0, 8, -14));
+        // Start the broadcast from the active arena's own perch, not a fixed
+        // point that may sit inside a ziggurat tier or under a catwalk.
+        _spectatorRig = BuildCameraRig("SpectatorCamera", ArenaContext.Current.SpectatorPerch);
         _spectatorRig.AddComponent<SpectatorCamera>();
 
         _menuCanvas.SetActive(false);
