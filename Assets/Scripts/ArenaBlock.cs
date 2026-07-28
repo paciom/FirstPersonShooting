@@ -42,6 +42,15 @@ public class ArenaBlock : MonoBehaviour
 
     static readonly int EmissionId = Shader.PropertyToID("_SeamGlow");
 
+    // Cover is not all sci-fi plating any more. _SeamGlow only exists on
+    // PhotonArena/SciFiPanel, so a stone or brick block set it into the void and
+    // never visibly reacted to being shot; PhotonArena/Surface answers to
+    // _HitFlash instead. Setting a property the shader does not declare is
+    // harmless, so both go out and whichever one is listening responds.
+    static readonly int HitFlashId = Shader.PropertyToID("_HitFlash");
+
+    static readonly int ObjectSpaceId = Shader.PropertyToID("_ObjectSpace");
+
     void Awake()
     {
         _renderers = GetComponentsInChildren<Renderer>();
@@ -50,6 +59,30 @@ public class ArenaBlock : MonoBehaviour
         _mpb = new MaterialPropertyBlock();
         _health = maxHealth;
         Home = transform.position;
+        LockPatternToMesh();
+    }
+
+    /// <summary>
+    /// A cover block is the one thing in an arena that MOVES — it slides,
+    /// rotates, sinks and regrows elsewhere. Both arena shaders tile their
+    /// surface pattern in world space by default, which is what keeps two walls
+    /// sharing a course of brick where they meet, but it means a moving block
+    /// swims through a pattern that stays nailed to the arena.
+    ///
+    /// Set per-renderer rather than on the material so it also corrects blocks
+    /// whose materials were authored before the toggle existed — no scene
+    /// rebuild required.
+    /// </summary>
+    void LockPatternToMesh()
+    {
+        foreach (var r in _renderers)
+        {
+            if (r == null)
+                continue;
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetFloat(ObjectSpaceId, 1f);
+            r.SetPropertyBlock(_mpb);
+        }
     }
 
     float HalfHeight => transform.localScale.y * 0.5f;
@@ -288,8 +321,10 @@ public class ArenaBlock : MonoBehaviour
         {
             if (r == null) continue;
             r.GetPropertyBlock(_mpb);
-            // Push the sci-fi seam glow up briefly when hit.
+            // Push the sci-fi seam glow up briefly when hit...
             _mpb.SetFloat(EmissionId, 1.5f + _flash * 6f);
+            // ...and flash the non-emissive materials, which have no seam to push.
+            _mpb.SetFloat(HitFlashId, _flash * 2.5f);
             r.SetPropertyBlock(_mpb);
         }
     }

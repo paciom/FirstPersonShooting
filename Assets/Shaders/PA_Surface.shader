@@ -28,6 +28,8 @@ Shader "PhotonArena/Surface"
         _EmitStrength ("Emission Strength", Float) = 0
         _BumpStrength ("Bump Strength", Range(0,3)) = 1
         _Cavity ("Cavity Shading", Range(0,1)) = 0.55
+        _HitFlash ("Hit Flash", Float) = 0
+        [Toggle] _ObjectSpace ("Lock Pattern To Object (moving parts)", Float) = 0
     }
 
     SubShader
@@ -58,6 +60,8 @@ Shader "PhotonArena/Surface"
                 float _EmitStrength;
                 float _BumpStrength;
                 float _Cavity;
+                float _HitFlash;
+                float _ObjectSpace;
             CBUFFER_END
 
             struct Attributes
@@ -71,6 +75,8 @@ Shader "PhotonArena/Surface"
                 float4 positionHCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS : TEXCOORD1;
+                float3 texPos : TEXCOORD2;
+                float3 patternNormal : TEXCOORD3;
             };
 
             Varyings vert(Attributes IN)
@@ -79,7 +85,31 @@ Shader "PhotonArena/Surface"
                 VertexPositionInputs p = GetVertexPositionInputs(IN.positionOS.xyz);
                 OUT.positionHCS = p.positionCS;
                 OUT.positionWS = p.positionWS;
-                OUT.normalWS = GetVertexNormalInputs(IN.normalOS).normalWS;
+                float3 normalWS = GetVertexNormalInputs(IN.normalOS).normalWS;
+                OUT.normalWS = normalWS;
+
+                // Where the pattern lives, and why it is a choice:
+                //
+                //  WORLD space (default) tiles continuously across separate
+                //  objects, so two walls meeting at a corner share one course of
+                //  brick. Right for anything bolted down.
+                //
+                //  OBJECT space locks the pattern to the mesh. Required for
+                //  anything that MOVES — a cover block sliding or regrowing in
+                //  world space swims through its own surface, which is the bug
+                //  this toggle exists to fix. Multiplying by the object's scale
+                //  keeps a brick the same size in metres whatever the block's
+                //  dimensions, which is the property world space gave for free.
+                float3 scale = float3(
+                    length(float3(unity_ObjectToWorld._m00, unity_ObjectToWorld._m10, unity_ObjectToWorld._m20)),
+                    length(float3(unity_ObjectToWorld._m01, unity_ObjectToWorld._m11, unity_ObjectToWorld._m21)),
+                    length(float3(unity_ObjectToWorld._m02, unity_ObjectToWorld._m12, unity_ObjectToWorld._m22)));
+
+                float objectSpace = saturate(_ObjectSpace);
+                OUT.texPos = lerp(p.positionWS, IN.positionOS.xyz * scale, objectSpace);
+                // The face-selection normal has to follow the same space, or a
+                // rotating block would flip projections mid-slide.
+                OUT.patternNormal = lerp(normalWS, IN.normalOS, objectSpace);
                 return OUT;
             }
 
@@ -236,18 +266,20 @@ Shader "PhotonArena/Surface"
 
             half4 frag(Varyings IN) : SV_Target
             {
-                float3 wpos = IN.positionWS / max(_Tiling, 0.01);
+                float3 tpos = IN.texPos / max(_Tiling, 0.01);
                 float3 nWS = normalize(IN.normalWS);
-                float3 n = abs(nWS);
-                n /= (n.x + n.y + n.z + 1e-4);
+
+                // Face selection uses whichever space the pattern is in — see
+                // the vertex shader.
+                float3 n = abs(normalize(IN.patternNormal));
 
                 // Dominant-axis projection rather than a blend of all three.
                 // Arena geometry is axis-aligned boxes, so on every face one
                 // projection has weight ~1 anyway — and this evaluates the
                 // pattern ONCE instead of three times, which matters a lot for
                 // the noise-based styles on WebGL.
-                float2 uv = (n.x > n.y && n.x > n.z) ? wpos.zy
-                          : ((n.y > n.z) ? wpos.xz : wpos.xy);
+                float2 uv = (n.x > n.y && n.x > n.z) ? tpos.zy
+                          : ((n.y > n.z) ? tpos.xz : tpos.xy);
                 float3 s = StylePattern(uv, _Style);
 
                 float mask   = s.x;
@@ -309,7 +341,12 @@ Shader "PhotonArena/Surface"
 
                 lighting *= cavity;
 
-                float3 emission = _EmitColor.rgb * emit * _EmitStrength;
+                // Hit flash. Independent of the style's own emission so a stone
+                // or brick block — which emits nothing at all — still lights up
+                // when it is shot.
+                float flash = max(_HitFlash, 0.0);
+                float3 emission = _EmitColor.rgb * emit * _EmitStrength
+                                + float3(flash, flash, flash);
                 return half4(lighting + emission, 1.0);
             }
             ENDHLSL

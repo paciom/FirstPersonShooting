@@ -13,6 +13,7 @@ Shader "PhotonArena/SciFiPanel"
         _SeamGlow ("Seam Glow Strength", Float) = 1.5
         _PatternMode ("Pattern Mode (0 plates,1 hazard,2 fine,3 bolts)", Float) = 0
         [HDR] _AccentColor ("Accent Color", Color) = (1, 0.6, 0.1, 1)
+        [Toggle] _ObjectSpace ("Lock Pattern To Object (moving parts)", Float) = 0
     }
 
     SubShader
@@ -41,6 +42,7 @@ Shader "PhotonArena/SciFiPanel"
                 float _SeamGlow;
                 float _PatternMode;
                 float4 _AccentColor;
+                float _ObjectSpace;
             CBUFFER_END
 
             struct Attributes
@@ -54,6 +56,8 @@ Shader "PhotonArena/SciFiPanel"
                 float4 positionHCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS : TEXCOORD1;
+                float3 texPos : TEXCOORD2;
+                float3 patternNormal : TEXCOORD3;
             };
 
             Varyings vert(Attributes IN)
@@ -62,7 +66,23 @@ Shader "PhotonArena/SciFiPanel"
                 VertexPositionInputs p = GetVertexPositionInputs(IN.positionOS.xyz);
                 OUT.positionHCS = p.positionCS;
                 OUT.positionWS = p.positionWS;
-                OUT.normalWS = GetVertexNormalInputs(IN.normalOS).normalWS;
+                float3 normalWS = GetVertexNormalInputs(IN.normalOS).normalWS;
+                OUT.normalWS = normalWS;
+
+                // World space (default) tiles the panel grid continuously across
+                // separate objects — right for walls and floors. Object space
+                // locks it to the mesh, which is required for anything that
+                // MOVES: a cover block sliding in world space swims through its
+                // own plating. The scale multiply keeps a panel the same size in
+                // metres whatever the block's dimensions.
+                float3 scale = float3(
+                    length(float3(unity_ObjectToWorld._m00, unity_ObjectToWorld._m10, unity_ObjectToWorld._m20)),
+                    length(float3(unity_ObjectToWorld._m01, unity_ObjectToWorld._m11, unity_ObjectToWorld._m21)),
+                    length(float3(unity_ObjectToWorld._m02, unity_ObjectToWorld._m12, unity_ObjectToWorld._m22)));
+
+                float objectSpace = saturate(_ObjectSpace);
+                OUT.texPos = lerp(p.positionWS, IN.positionOS.xyz * scale, objectSpace);
+                OUT.patternNormal = lerp(normalWS, IN.normalOS, objectSpace);
                 return OUT;
             }
 
@@ -81,8 +101,9 @@ Shader "PhotonArena/SciFiPanel"
 
             half4 frag(Varyings IN) : SV_Target
             {
-                float3 wpos = IN.positionWS / max(_Tiling, 0.01);
-                float3 n = abs(normalize(IN.normalWS));
+                float3 wpos = IN.texPos / max(_Tiling, 0.01);
+                // Blend weights follow whichever space the pattern is in.
+                float3 n = abs(normalize(IN.patternNormal));
                 n /= (n.x + n.y + n.z + 1e-4);
 
                 float2 pX = PanelPattern(wpos.zy);
@@ -97,8 +118,9 @@ Shader "PhotonArena/SciFiPanel"
                 float3 accentEmit = float3(0, 0, 0);
                 if (_PatternMode > 0.5 && _PatternMode < 1.5)
                 {
-                    // Hazard stripes across the plates.
-                    float s = frac((IN.positionWS.x + IN.positionWS.z) * 0.5);
+                    // Hazard stripes across the plates. Object space, like the
+                    // panels themselves, or the stripes crawl as the block moves.
+                    float s = frac((IN.texPos.x + IN.texPos.z) * 0.5);
                     float stripe = step(0.6, s) * (1.0 - groove);
                     albedo = lerp(albedo, _AccentColor.rgb * 0.5, stripe * 0.5);
                     accentEmit += _AccentColor.rgb * stripe * 0.12;
@@ -130,7 +152,9 @@ Shader "PhotonArena/SciFiPanel"
                 }
             #endif
 
-                float pulse = 0.85 + 0.15 * sin(_Time.y * 2.0 + IN.positionWS.x * 0.3);
+                // Phase from object space too, so the seam pulse does not change
+                // rhythm as the block slides.
+                float pulse = 0.85 + 0.15 * sin(_Time.y * 2.0 + IN.texPos.x * 0.3);
                 float3 emission = _SeamColor.rgb * seam * _SeamGlow * pulse + accentEmit;
 
                 return half4(lighting + emission, 1.0);

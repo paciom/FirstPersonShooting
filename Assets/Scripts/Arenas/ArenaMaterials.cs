@@ -49,11 +49,17 @@ public static class ArenaMaterials
     /// <summary>
     /// A real material surface. <paramref name="featureSize"/> is the world size
     /// of one feature (one plate, one brick, one board) in metres.
+    ///
+    /// Set <paramref name="objectSpace"/> on anything that MOVES. The pattern
+    /// otherwise tiles in world space, which looks right for static walls —
+    /// courses line up where two of them meet — but makes a sliding cover block
+    /// swim through its own surface.
     /// </summary>
     public static Material Style(string key, SurfaceStyle style, Color baseColor, Color second,
                                  float featureSize, float roughness = 0.85f,
                                  Color? emit = null, float emitStrength = 0f,
-                                 float bump = 1f, float cavity = 0.55f)
+                                 float bump = 1f, float cavity = 0.55f,
+                                 bool objectSpace = false)
     {
         if (Cache.TryGetValue(key, out var cached) && cached != null)
             return cached;
@@ -72,6 +78,7 @@ public static class ArenaMaterials
         mat.SetFloat("_EmitStrength", emitStrength);
         mat.SetFloat("_BumpStrength", bump);
         mat.SetFloat("_Cavity", cavity);
+        mat.SetFloat("_ObjectSpace", objectSpace ? 1f : 0f);
         Cache[key] = mat;
         return mat;
     }

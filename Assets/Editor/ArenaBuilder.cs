@@ -192,9 +192,13 @@ public static class ArenaBuilder
     /// arena surfaces. panelSize is the world-space panel spacing in metres.
     /// </summary>
     static Material MakeSciFiMaterial(string name, Color baseColor, Color seamColor,
-        float panelSize, float seamGlow = 1.5f, int patternMode = 0, Color? accent = null)
+        float panelSize, float seamGlow = 1.5f, int patternMode = 0, Color? accent = null,
+        bool objectSpace = false)
     {
         var mat = new Material(Shader.Find("PhotonArena/SciFiPanel")) { name = name };
+        // Anything that moves must lock its pattern to the mesh, or it swims
+        // through a grid that stays fixed to the arena.
+        mat.SetFloat("_ObjectSpace", objectSpace ? 1f : 0f);
         mat.SetColor("_BaseColor", baseColor);
         mat.SetColor("_PanelColor", baseColor * 0.35f);
         mat.SetColor("_SeamColor", seamColor);
@@ -340,11 +344,17 @@ public static class ArenaBuilder
         // high-tech rather than a row of identical neon boxes.
         var coverMats = new[]
         {
-            MakeSciFiMaterial("Cover_Gunmetal", new Color(0.19f, 0.20f, 0.23f), NeonCyan, 1.6f, 0.8f, 0),
-            MakeSciFiMaterial("Cover_Hull", new Color(0.16f, 0.19f, 0.27f), NeonCyan, 2.2f, 0.9f, 3),
-            MakeSciFiMaterial("Cover_Hazard", new Color(0.22f, 0.20f, 0.15f), WarnAmber, 1.4f, 1.1f, 1, WarnAmber),
-            MakeSciFiMaterial("Cover_Vent", new Color(0.14f, 0.15f, 0.18f), NeonCyan, 1.2f, 0.7f, 2),
-            MakeSciFiMaterial("Cover_Reactor", new Color(0.20f, 0.15f, 0.26f), NeonMagenta, 1.5f, 1.5f, 0),
+            // objectSpace on all of them: these are the blocks that slide.
+            MakeSciFiMaterial("Cover_Gunmetal", new Color(0.19f, 0.20f, 0.23f), NeonCyan, 1.6f, 0.8f, 0,
+                objectSpace: true),
+            MakeSciFiMaterial("Cover_Hull", new Color(0.16f, 0.19f, 0.27f), NeonCyan, 2.2f, 0.9f, 3,
+                objectSpace: true),
+            MakeSciFiMaterial("Cover_Hazard", new Color(0.22f, 0.20f, 0.15f), WarnAmber, 1.4f, 1.1f, 1, WarnAmber,
+                objectSpace: true),
+            MakeSciFiMaterial("Cover_Vent", new Color(0.14f, 0.15f, 0.18f), NeonCyan, 1.2f, 0.7f, 2,
+                objectSpace: true),
+            MakeSciFiMaterial("Cover_Reactor", new Color(0.20f, 0.15f, 0.26f), NeonMagenta, 1.5f, 1.5f, 0,
+                objectSpace: true),
         };
         var coverSpecs = new (Vector3 pos, Vector3 size, float yRot)[]
         {

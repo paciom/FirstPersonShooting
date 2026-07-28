@@ -37,14 +37,16 @@ public abstract class ArenaDefinition
     public virtual Material[] CoverMaterials()
     {
         var p = Palette;
+        // objectSpace: cover slides, regrows and rotates. In world space the
+        // pattern stays nailed to the arena and the block swims through it.
         return new[]
         {
             ArenaMaterials.Style("Cover_A", CoverStyle, p.wall, p.floor * 0.6f,
-                                 CoverFeatureSize, CoverRoughness),
+                                 CoverFeatureSize, CoverRoughness, objectSpace: true),
             ArenaMaterials.Style("Cover_B", CoverStyle, p.wall * 0.82f, p.floor * 0.5f,
-                                 CoverFeatureSize * 1.4f, CoverRoughness),
+                                 CoverFeatureSize * 1.4f, CoverRoughness, objectSpace: true),
             ArenaMaterials.Style("Cover_C", CoverStyle, p.floor * 1.5f, p.wall * 0.55f,
-                                 CoverFeatureSize * 0.8f, CoverRoughness),
+                                 CoverFeatureSize * 0.8f, CoverRoughness, objectSpace: true),
         };
     }
 
