@@ -25,6 +25,7 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _ObjectSpace: 1
     - _PatternMode: 3
     - _SeamGlow: 0.9
     - _Tiling: 2.2
