@@ -173,6 +173,17 @@ failure, not a design choice.
 
 ## 5. The eleven arenas
 
+**Hard constraint (2026-07-28): exactly ONE arena is neon.** That is HANGAR.
+Every other arena must be built from a different material family — stone, brick,
+iron, wood, moss, crystal — and none of them may use `PA_SciFiPanel` or a
+glowing-seam trim. Where an arena emits light it must be a lit *object* (lava,
+a seed pod, a crystal) rather than strip lighting, or the set slides back into
+looking like one arena in different colours.
+
+GRIDSPACE (black void, neon wireframe, floating platforms) was **cut** for this
+reason — its entire identity was neon, so it could not be restyled, only
+replaced. BIODOME and CRYSTAL HOLLOW took its slot.
+
 Palettes respect the project's bloom rule: emissive intensity stays ≲ 2.5 or
 the colour washes to white. Each arena overrides bloom intensity to suit.
 
@@ -183,7 +194,7 @@ the colour washes to white. Each arena overrides bloom intensity to suit.
 | 2 | **SKYLINE** | sunset orange + teal glass | **3 levels** — 5 buildings with interior floors, ramps, rooftop plank bridges over a street canyon | Real verticality; the street below is playable, so a fall costs position, not the round. |
 | 3 | **CRYOVAULT** | pale cyan + white + navy | glacier floor split by a chasm ring, mid ledges via ice ramps | Translucent ice you can see enemies through but not shoot through. Thick ground fog. |
 | 4 | **FOUNDRY** | black basalt + orange/red | **2 catwalk levels** over a lava lake, ground islands between pours | Stepping off is a lava `EffectZone` — shield drain + knockback, never an instant loss. |
-| 5 | **GRIDSPACE** | pure black void + electric cyan/magenta wireframe | floating platforms and light bridges, **no walls** | Falling off de-rezzes you and you re-materialize — reuses the existing de-rez loop, zero new systems. The most visually different arena in the set. |
+| ~~5~~ | ~~**GRIDSPACE**~~ | — | — | **Cut.** Neon was its whole identity, and only one arena may be neon. Replaced by BIODOME + CRYSTAL HOLLOW. |
 | 6 | **REEF** | aqua + coral pink, caustics | half-flooded station, glass tunnels, coral cover | Bubble columns flip `CharacterMotor` to the existing low-gravity drift — a free vertical mechanic. |
 | 7 | **ZIGGURAT** | sand tan + turquoise glyphs, hard sun | **3 tiers** with real interior chambers and exterior stairs | Interiors: enclosed rooms make the sightline game completely unlike the open arenas. |
 | 8 | **CRYSTAL HOLLOW** | magenta/violet crystal on dark rock | low-ceilinged cavern, huge spires | Crystals light up when shot and shatter into shards; the cave gets brighter as the round wears on. |

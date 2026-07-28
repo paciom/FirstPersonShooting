@@ -72,6 +72,40 @@ public class ArenaKit
         return go;
     }
 
+    /// <summary>
+    /// An oriented box spanning two arbitrary points — fronds, roots, leaning
+    /// spires, pipes. Ramp() refuses steep angles because bots have to walk on
+    /// it; this is the same shape with no such opinion, for things nobody walks
+    /// on.
+    /// </summary>
+    public GameObject Beam(string name, Vector3 from, Vector3 to, float thickness,
+                           Material mat, bool collide = true)
+    {
+        Vector3 delta = to - from;
+        float length = delta.magnitude;
+        if (length < 0.01f)
+        {
+            Debug.LogWarning($"[{_arenaName}] Beam '{name}' has zero length — skipped.");
+            return null;
+        }
+
+        Vector3 dir = delta / length;
+        // LookRotation degenerates when the direction is vertical, which is
+        // exactly what a standing stalk is.
+        Vector3 up = Mathf.Abs(Vector3.Dot(dir, Vector3.up)) > 0.99f ? Vector3.forward : Vector3.up;
+
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.SetParent(_root, false);
+        go.transform.position = (from + to) * 0.5f;
+        go.transform.rotation = Quaternion.LookRotation(dir, up);
+        go.transform.localScale = new Vector3(thickness, thickness, length);
+        go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+        if (!collide)
+            Object.Destroy(go.GetComponent<Collider>());
+        return go;
+    }
+
     public GameObject Sphere(string name, Vector3 center, float radius, Material mat, bool collide = true)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);

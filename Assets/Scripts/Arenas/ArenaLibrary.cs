@@ -19,11 +19,14 @@ public static class ArenaLibrary
             {
                 _all = new ArenaDefinition[]
                 {
-                    new HangarArena(),
-                    new GridspaceArena(),
-                    new FoundryArena(),
-                    new ZigguratArena(),
-                    new ToyboxArena(),
+                    // HANGAR is the ONE neon arena. Everything after it is built
+                    // from a different material family — see ArenaMaterials.
+                    new HangarArena(),      // neon sci-fi, panelled and lit
+                    new FoundryArena(),     // basalt, riveted iron, tread plate
+                    new ZigguratArena(),    // sandstone brick, strata bedrock
+                    new BiodomeArena(),     // moss, fleshy stalks, bioluminescence
+                    new CrystalHollowArena(), // rough cave rock, faceted crystal
+                    new ToyboxArena(),      // grained wood, glossy plastic
                 };
             }
             return _all;

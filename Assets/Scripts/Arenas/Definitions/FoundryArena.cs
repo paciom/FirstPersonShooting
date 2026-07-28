@@ -52,16 +52,18 @@ public class FoundryArena : ArenaDefinition
         var basalt = ArenaMaterials.Style("Foundry_Basalt", ArenaMaterials.SurfaceStyle.Stone,
                                           new Color(0.12f, 0.10f, 0.10f), new Color(0.03f, 0.025f, 0.02f),
                                           3.5f, roughness: 0.97f, bump: 1.5f, cavity: 0.7f);
-        // Firebrick: the furnace lining, and the clearest "not sci-fi" read in
-        // the arena.
-        var firebrick = ArenaMaterials.Style("Foundry_Firebrick", ArenaMaterials.SurfaceStyle.Brick,
-                                             new Color(0.34f, 0.17f, 0.11f), new Color(0.13f, 0.11f, 0.10f),
-                                             1.1f, roughness: 0.92f, bump: 1.3f, cavity: 0.6f);
+        // Riveted iron plate. Hull with NO emission: the panel-and-rivet pattern
+        // without the glow is heavy industrial plating, and it keeps masonry as
+        // ZIGGURAT's signature rather than something two arenas share.
+        var ironPlate = ArenaMaterials.Style("Foundry_Iron", ArenaMaterials.SurfaceStyle.Hull,
+                                             new Color(0.17f, 0.14f, 0.12f), new Color(0.06f, 0.05f, 0.04f),
+                                             2.2f, roughness: 0.62f, emitStrength: 0f,
+                                             bump: 1.2f, cavity: 0.6f);
         // Tread plate — glossy enough to catch the lava light and read as metal.
         var steel = ArenaMaterials.Style("Foundry_Tread", ArenaMaterials.SurfaceStyle.Tread,
                                          new Color(0.20f, 0.18f, 0.17f), new Color(0.07f, 0.06f, 0.06f),
                                          0.9f, roughness: 0.40f, bump: 1.1f, cavity: 0.5f);
-        var wallMat = firebrick;
+        var wallMat = ironPlate;
         var lavaMat = ArenaMaterials.Emissive("Foundry_Lava", Lava, 2.3f);
 
         kit.Box("Floor", new Vector3(0f, -0.25f, 0f), new Vector3(40f, 0.5f, 40f), basalt);
