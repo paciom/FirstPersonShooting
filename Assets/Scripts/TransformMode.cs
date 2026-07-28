@@ -207,6 +207,7 @@ public class TransformMode : MonoBehaviour
         _hasPending = false;
         IsVehicle = false;
 
+        ResolveSkin();
         var animator = ResolveAnimator();
         if (animator != null)
             animator.SetBool(VehicleParameter, false);
@@ -219,6 +220,7 @@ public class TransformMode : MonoBehaviour
 
     IEnumerator FoldRoutine(bool vehicle)
     {
+        ResolveSkin();
         var animator = ResolveAnimator();
         if (animator != null)
             animator.SetBool(VehicleParameter, vehicle);
@@ -408,6 +410,18 @@ public class TransformMode : MonoBehaviour
             return;
         _rig.gameObject.SetActive(amount > 0.001f);
         _rig.localScale = Vector3.one * Mathf.Clamp01(amount);
+    }
+
+    /// <summary>
+    /// The skin can arrive after Awake: the player's robot model — and the
+    /// VehicleSkin that goes with it — is built at match start rather than
+    /// baked into the scene (see GameModeController.EnsurePlayerRobot).
+    /// </summary>
+    VehicleSkin ResolveSkin()
+    {
+        if (_skin == null)
+            _skin = GetComponentInChildren<VehicleSkin>();
+        return _skin;
     }
 
     /// <summary>

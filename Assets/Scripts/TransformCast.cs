@@ -44,6 +44,7 @@ public class TransformCast : MonoBehaviour
     float _deadline = MaxSeconds;
     bool _triedFallback;
     string _forwardUrl;
+    VideoClip _forwardClip;
 
     /// <summary>Create the panel if it isn't there yet. Safe to call repeatedly.</summary>
     public static TransformCast Ensure()
@@ -150,16 +151,42 @@ public class TransformCast : MonoBehaviour
         _view.enabled = true;
         string root = $"{Application.streamingAssetsPath}/{clip}";
         _forwardUrl = $"{root}.mp4";
+        _forwardClip = GameModeController.Instance != null
+            ? GameModeController.Instance.PlayerRobot.transformVideo : null;
         _triedFallback = toVehicle;   // folding out is already the forward clip
-        Play(toVehicle ? _forwardUrl : $"{root}-back.mp4");
+
+        if (toVehicle)
+            Play(_forwardClip, _forwardUrl);
+        else
+            Play(null, $"{root}-back.mp4");   // no asset exists for the reversed file
     }
 
-    void Play(string url)
+    /// <summary>
+    /// Prefers the imported clip asset and falls back to streaming the file.
+    ///
+    /// WebGL is the exception in the other direction: it strips VideoClip
+    /// assets to stubs that render black with the reference still non-null, so
+    /// there the URL is the only thing that works. Same rule the robot
+    /// inspector follows.
+    /// </summary>
+    void Play(VideoClip clip, string url)
     {
-        Debug.Log($"[TransformCast] {url}");
+#if UNITY_WEBGL && !UNITY_EDITOR
+        clip = null;
+#endif
         _video.Stop();
-        _video.source = VideoSource.Url;
-        _video.url = url;
+        if (clip != null)
+        {
+            Debug.Log($"[TransformCast] clip {clip.name}");
+            _video.source = VideoSource.VideoClip;
+            _video.clip = clip;
+        }
+        else
+        {
+            Debug.Log($"[TransformCast] url {url}");
+            _video.source = VideoSource.Url;
+            _video.url = url;
+        }
         _video.Play();
     }
 
@@ -172,20 +199,24 @@ public class TransformCast : MonoBehaviour
     /// to match the file today, and a roster serialized before the video field
     /// existed would send us looking for a file that was never named that.
     ///
-    /// Entry 0 because the player wears the scene's default robot —
-    /// ApplyRobotSelection reskins bots only, and the model instance is renamed
-    /// "Model" on the way in, so it can't be asked what it is.
+    /// The robot comes from the mode controller rather than being read off the
+    /// player, whose model instance is renamed "Model" on the way in and so
+    /// can't be asked what it is.
     /// </summary>
     static string ResolveClipName()
     {
-        var roster = FindFirstObjectByType<RobotRoster>();
-        if (roster == null || !roster.HasRobots)
+        if (GameModeController.Instance == null)
+            return null;
+
+        // The robot the player actually wears, which is their own pick for the
+        // cyan team — not necessarily roster entry 0.
+        var entry = GameModeController.Instance.PlayerRobot;
+        if (entry.modelPrefab == null)
         {
             Debug.LogWarning("[TransformCast] No robot roster in the scene — rerun Build Greybox Arena.");
             return null;
         }
 
-        var entry = roster.Get(0);
         if (entry.transformVideo != null)
             return entry.transformVideo.name;
 
@@ -210,11 +241,11 @@ public class TransformCast : MonoBehaviour
     /// </summary>
     void HandleError(VideoPlayer source, string message)
     {
-        if (!_triedFallback && !string.IsNullOrEmpty(_forwardUrl))
+        if (!_triedFallback && (_forwardClip != null || !string.IsNullOrEmpty(_forwardUrl)))
         {
             _triedFallback = true;
             Debug.LogWarning($"[TransformCast] {message} — falling back to the forward clip.");
-            Play(_forwardUrl);
+            Play(_forwardClip, _forwardUrl);
             return;
         }
         Debug.LogWarning($"[TransformCast] {message}");

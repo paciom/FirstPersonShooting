@@ -29,6 +29,8 @@ public class GameModeController : MonoBehaviour
     // still has to reskin once, or the two teams launch identically painted.
     int _appliedCyan = -1;
     int _appliedMagenta = -1;
+    // -1, not 0: the player starts with no model at all, so even entry 0 is a change.
+    int _appliedPlayerRobot = -1;
     Text _overlayText;
     GameObject _overlayCanvas;
     string _hintDesktop = "";
@@ -240,11 +242,78 @@ public class GameModeController : MonoBehaviour
     }
 
     /// <summary>
+    /// Roster entry the player's own robot wears. Their pick for the cyan team
+    /// is their own robot too — see <see cref="EnsurePlayerRobot"/>.
+    /// </summary>
+    public RobotRoster.Entry PlayerRobot =>
+        (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
+
+    /// <summary>
+    /// Gives the player the same robot rig the bots wear.
+    ///
+    /// The scene builds the player as a bare capsule — first person never sees
+    /// itself, so a placeholder was enough. But a capsule carries no Animator,
+    /// so TransformMode.CanTransform reported false and T did nothing at all:
+    /// no fold, no vehicle guns, and no transformation replay, since all three
+    /// hang off a fold that never started.
+    ///
+    /// Done at runtime rather than in ArenaBuilder so it needs no scene
+    /// rebuild; a rebuilt scene that already has a model just falls through.
+    /// </summary>
+    void EnsurePlayerRobot()
+    {
+        if (_roster == null || !_roster.HasRobots || _player == null)
+            return;
+        var body = _player.transform.Find("Body");
+        if (body == null)
+            return;
+        var entry = _roster.Get(_cyanRobot);
+        if (entry.modelPrefab == null)
+            return;
+
+        var tint = new Color(0.2f, 0.9f, 1f);
+        bool hasModel = body.Find("Model") != null;
+        if (hasModel && _appliedPlayerRobot == _cyanRobot)
+            return;
+        _appliedPlayerRobot = _cyanRobot;
+
+        if (hasModel)
+        {
+            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+        }
+        else
+        {
+            // The capsule was only ever standing in for the model.
+            var placeholder = body.GetComponent<MeshRenderer>();
+            if (placeholder != null)
+                placeholder.enabled = false;
+            RobotFactory.InstantiateNormalized(entry.modelPrefab, body, tint);
+        }
+
+        var skin = body.GetComponent<VehicleSkin>();
+        if (skin == null)
+        {
+            skin = body.gameObject.AddComponent<VehicleSkin>();
+            skin.holder = body;
+        }
+        if (entry.HasStages)
+            skin.SetStages(entry.transformStages, tint);
+        else
+            skin.SetVehiclePrefab(entry.vehiclePrefab, tint);
+
+        var scope = FindFirstObjectByType<XRayScope>(FindObjectsInactive.Include);
+        if (scope != null)
+            scope.InvalidateSilhouettes();
+    }
+
+    /// <summary>
     /// Swaps every bot's model to its team's selected robot. Runs from the
     /// menu, where RestoreAllDeRez has already reset every Body to full scale.
     /// </summary>
     void ApplyRobotSelection()
     {
+        EnsurePlayerRobot();
+
         if (_roster == null || !_roster.HasRobots)
             return;
         if (_appliedCyan == _cyanRobot && _appliedMagenta == _magentaRobot)
@@ -295,6 +364,9 @@ public class GameModeController : MonoBehaviour
         ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
+        // Also reached when the roster screen is skipped entirely, which is
+        // where the player would otherwise still be a capsule.
+        EnsurePlayerRobot();
 
         if (_player != null)
         {
