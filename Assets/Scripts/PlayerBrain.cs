@@ -26,6 +26,7 @@ public class PlayerBrain : MonoBehaviour
     TransformMode _vehicle;
     int _loadoutVersion = -1;
     int _activeWeapon;
+    bool _warnedNoVehicle;
 
     public string CurrentWeaponName =>
         (weapons != null && weapons.Length > 0 && weapons[_activeWeapon] != null)
@@ -123,7 +124,18 @@ public class PlayerBrain : MonoBehaviour
         bool morph = Input.GetKeyDown(KeyCode.T) || Input.GetKeyDown(KeyCode.V)
             || (touch != null && touch.ConsumeMorph());
         if (morph && _vehicle != null)
+        {
+            // Say it once: an inert key and a broken key look identical from
+            // the outside, and this is the first thing to check when the fold
+            // (and with it the corner replay) never happens.
+            if (!_vehicle.CanTransform && !_warnedNoVehicle)
+            {
+                _warnedNoVehicle = true;
+                Debug.LogWarning("[PlayerBrain] This robot has no forged vehicle clips — "
+                    + "transform does nothing. Run Photon Arena → Forge Robot Transform Clips.");
+            }
             _vehicle.Toggle();
+        }
 
         HandleWeaponSwitch(touch);
 

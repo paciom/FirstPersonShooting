@@ -38,8 +38,10 @@ public class TransformCast : MonoBehaviour
     VideoPlayer _video;
     TransformMode _player;
 
+    Text _missing;
     bool _showing;
     float _elapsed;
+    float _deadline = MaxSeconds;
     bool _triedFallback;
     string _forwardUrl;
 
@@ -109,7 +111,7 @@ public class TransformCast : MonoBehaviour
             // that never loaded must not leave the panel up forever.
             bool inMatch = GameModeController.Instance == null
                 || GameModeController.Instance.Mode == GameMode.PlayerVsAI;
-            if (!inMatch || _elapsed > MaxSeconds)
+            if (!inMatch || _elapsed > _deadline)
                 BeginHide();
         }
 
@@ -126,26 +128,35 @@ public class TransformCast : MonoBehaviour
             && GameModeController.Instance.Mode != GameMode.PlayerVsAI)
             return;
 
-        string robot = ResolveRobotName();
-        if (string.IsNullOrEmpty(robot))
-            return;
-
-        string root = $"{Application.streamingAssetsPath}/{robot}-transform";
-        _forwardUrl = $"{root}.mp4";
-        _triedFallback = toVehicle;   // folding out is already the forward clip
-
-        _caption.text = toVehicle ? "TRANSFORMING" : "BACK TO ROBOT";
-        Play(toVehicle ? _forwardUrl : $"{root}-back.mp4");
-
         // Transforming again mid-clip restarts this one rather than stacking a
         // second panel; whatever alpha it had carries over.
         _showing = true;
         _elapsed = 0f;
+        _deadline = MaxSeconds;
+        _caption.text = toVehicle ? "TRANSFORMING" : "BACK TO ROBOT";
         _group.gameObject.SetActive(true);
+
+        // The panel goes up either way. A fold that plays no clip used to leave
+        // the corner empty with nothing said anywhere, which is impossible to
+        // tell apart from the whole feature being broken.
+        string clip = ResolveClipName();
+        if (string.IsNullOrEmpty(clip))
+        {
+            ShowMissing("NO  ROBOT  CLIP");
+            return;
+        }
+
+        _missing.enabled = false;
+        _view.enabled = true;
+        string root = $"{Application.streamingAssetsPath}/{clip}";
+        _forwardUrl = $"{root}.mp4";
+        _triedFallback = toVehicle;   // folding out is already the forward clip
+        Play(toVehicle ? _forwardUrl : $"{root}-back.mp4");
     }
 
     void Play(string url)
     {
+        Debug.Log($"[TransformCast] {url}");
         _video.Stop();
         _video.source = VideoSource.Url;
         _video.url = url;
@@ -153,18 +164,38 @@ public class TransformCast : MonoBehaviour
     }
 
     /// <summary>
-    /// Which robot the player is wearing. The scene is built with roster entry
-    /// 0 and ApplyRobotSelection reskins bots only, so the player always has the
-    /// default robot — the model instance itself is renamed "Model" on the way
-    /// in, so its name can't be asked.
+    /// Base name of the player's transformation clip, without extension —
+    /// "ranger-transform", which the reversed file suffixes with "-back".
+    ///
+    /// The clip ASSET's own name is the authority, exactly as the robot
+    /// inspector's WebGL path uses it: the roster's display name only happens
+    /// to match the file today, and a roster serialized before the video field
+    /// existed would send us looking for a file that was never named that.
+    ///
+    /// Entry 0 because the player wears the scene's default robot —
+    /// ApplyRobotSelection reskins bots only, and the model instance is renamed
+    /// "Model" on the way in, so it can't be asked what it is.
     /// </summary>
-    static string ResolveRobotName()
+    static string ResolveClipName()
     {
         var roster = FindFirstObjectByType<RobotRoster>();
         if (roster == null || !roster.HasRobots)
+        {
+            Debug.LogWarning("[TransformCast] No robot roster in the scene — rerun Build Greybox Arena.");
             return null;
-        string name = roster.Get(0).displayName;
-        return string.IsNullOrEmpty(name) ? null : name.ToLowerInvariant();
+        }
+
+        var entry = roster.Get(0);
+        if (entry.transformVideo != null)
+            return entry.transformVideo.name;
+
+        // Roster from before the video field: fall back to the naming
+        // convention the clips have always followed.
+        if (!string.IsNullOrEmpty(entry.displayName))
+            return $"{entry.displayName.ToLowerInvariant()}-transform";
+
+        Debug.LogWarning("[TransformCast] Roster entry 0 has neither a clip nor a name.");
+        return null;
     }
 
     void HandleFinished(VideoPlayer source)
@@ -187,7 +218,19 @@ public class TransformCast : MonoBehaviour
             return;
         }
         Debug.LogWarning($"[TransformCast] {message}");
-        BeginHide();
+        ShowMissing("CLIP  WOULD  NOT  PLAY");
+    }
+
+    /// <summary>
+    /// Keep the panel up, briefly, saying why it is empty. Silence here reads
+    /// as a broken feature; a caption reads as a missing file.
+    /// </summary>
+    void ShowMissing(string reason)
+    {
+        _missing.text = reason;
+        _missing.enabled = true;
+        _view.enabled = false;
+        _deadline = Mathf.Min(_deadline, _elapsed + 2.5f);
     }
 
     /// <summary>Start the fade out, holding the last frame while it runs.</summary>
@@ -265,6 +308,22 @@ public class TransformCast : MonoBehaviour
         viewRect.pivot = new Vector2(0.5f, 1f);
         viewRect.anchoredPosition = new Vector2(0f, -4f);
         viewRect.sizeDelta = new Vector2(PanelSize, PanelSize);
+
+        var missingGo = new GameObject("Missing");
+        missingGo.transform.SetParent(panel.transform, false);
+        _missing = missingGo.AddComponent<Text>();
+        _missing.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _missing.text = "";
+        _missing.fontSize = 20;
+        _missing.alignment = TextAnchor.MiddleCenter;
+        _missing.color = new Color(0.02f, 0.06f, 0.10f, 0.75f);
+        _missing.raycastTarget = false;
+        _missing.enabled = false;
+        var missingRect = _missing.rectTransform;
+        missingRect.anchorMin = missingRect.anchorMax = new Vector2(0.5f, 1f);
+        missingRect.pivot = new Vector2(0.5f, 1f);
+        missingRect.anchoredPosition = new Vector2(0f, -PanelSize * 0.5f + 20f);
+        missingRect.sizeDelta = new Vector2(PanelSize - 20f, 40f);
 
         var captionGo = new GameObject("Caption");
         captionGo.transform.SetParent(panel.transform, false);
