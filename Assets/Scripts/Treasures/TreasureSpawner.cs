@@ -27,8 +27,9 @@ public class TreasureSpawner : MonoBehaviour
     [Tooltip("Metres above the floor a crate is released from.")]
     public float dropHeight = 16f;
 
-    [Tooltip("Half-extent of the area drops can land in (the arena is 40x40).")]
-    public Vector2 arenaExtent = new Vector2(16f, 16f);
+    // The drop area's half-extent used to live here as a fixed 16x16. It now
+    // comes from the active arena (ArenaContext.HalfExtent), so a swap moves
+    // the drop zone with the geometry.
 
     [Tooltip("Minimum spacing between two drops so they don't stack.")]
     public float dropSpacing = 6f;
@@ -129,11 +130,19 @@ public class TreasureSpawner : MonoBehaviour
         if (_blocks == null || _blocks.Length == 0)
             _blocks = FindObjectsByType<ArenaBlock>(FindObjectsSortMode.None);
 
+        // The active arena's bounds, not this component's: an arena swap has to
+        // move the drop zone with it.
+        Vector2 extent = ArenaContext.HalfExtent;
+        float[] planes = ArenaContext.DropPlanes;
+
         for (int attempt = 0; attempt < 32; attempt++)
         {
+            // Multi-level arenas list every floor. Sampling only from y=0 would
+            // leave the upper storeys without loot, and the vertical space dead.
+            float plane = planes[Random.Range(0, planes.Length)];
             var candidate = new Vector3(
-                Random.Range(-arenaExtent.x, arenaExtent.x), 0f,
-                Random.Range(-arenaExtent.y, arenaExtent.y));
+                Random.Range(-extent.x, extent.x), plane,
+                Random.Range(-extent.y, extent.y));
 
             // Tight radius: a wide snap would drag the point back onto a block.
             if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 1.5f, NavMesh.AllAreas))

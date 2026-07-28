@@ -20,7 +20,8 @@ public class ArenaBlockManager : MonoBehaviour
     public float maxInterval = 5f;
 
     [Header("Movement bounds (arena interior)")]
-    public float halfExtent = 14f;
+    [Tooltip("Clearance blocks keep from spawn points and fixed props. " +
+             "The bounds themselves come from the active arena — see ArenaContext.")]
     public float minSpawnClearance = 4.5f;
 
     [Header("Renewal")]
@@ -35,14 +36,6 @@ public class ArenaBlockManager : MonoBehaviour
 
     [Tooltip("Never let block-pops flood the field past this many live treasures.")]
     public int treasureHardCap = 12;
-
-    // Keep blocks off the team spawn points.
-    static readonly Vector3[] SpawnZones =
-    {
-        new Vector3(0, 0, -15), new Vector3(-8, 0, -15), new Vector3(-4, 0, -16), new Vector3(8, 0, -15),
-        new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15),
-        new Vector3(0, 0, -18.2f), new Vector3(0, 0, 18.2f),
-    };
 
     struct PendingRegrow
     {
@@ -59,6 +52,19 @@ public class ArenaBlockManager : MonoBehaviour
     void Start()
     {
         _spawner = GetComponent<TreasureSpawner>();
+        Rescan();
+    }
+
+    /// <summary>
+    /// Re-discover the arena's cover blocks. Called at Start, and again by
+    /// ArenaRuntime after an arena swap: the cached list is otherwise full of
+    /// destroyed or deactivated blocks from the outgoing arena, and the incoming
+    /// ones would never move, regrow, or drop treasure.
+    /// </summary>
+    public void Rescan()
+    {
+        Unsubscribe();
+        _pending.Clear();
         _blocks = FindObjectsByType<ArenaBlock>(FindObjectsSortMode.None);
         foreach (var block in _blocks)
             if (block != null)
@@ -67,6 +73,11 @@ public class ArenaBlockManager : MonoBehaviour
     }
 
     void OnDestroy()
+    {
+        Unsubscribe();
+    }
+
+    void Unsubscribe()
     {
         if (_blocks == null)
             return;
@@ -154,8 +165,11 @@ public class ArenaBlockManager : MonoBehaviour
     void RelocateAndRegrow(ArenaBlock block, Vector3 avoid)
     {
         Vector3 spot = RandomSpot(avoid);
-        // Home is the resting CENTRE, so it sits half the block's height up.
-        block.Home = new Vector3(spot.x, block.transform.localScale.y * 0.5f, spot.z);
+        // Home is the resting CENTRE, so it sits half the block's height above
+        // whatever the active arena calls ground.
+        block.Home = new Vector3(spot.x,
+                                 ArenaContext.GroundY + block.transform.localScale.y * 0.5f,
+                                 spot.z);
         block.Regrow();
     }
 
@@ -214,12 +228,15 @@ public class ArenaBlockManager : MonoBehaviour
     /// </summary>
     Vector3 RandomSpot(Vector3 avoid)
     {
+        float extent = ArenaContext.CoverHalfExtent;
+        var keepOut = ArenaContext.KeepOut;
+
         for (int attempt = 0; attempt < 24; attempt++)
         {
-            var p = new Vector3(Random.Range(-halfExtent, halfExtent), 0f, Random.Range(-halfExtent, halfExtent));
+            var p = new Vector3(Random.Range(-extent, extent), 0f, Random.Range(-extent, extent));
 
             bool clear = true;
-            foreach (var zone in SpawnZones)
+            foreach (var zone in keepOut)
                 if (Vector3.Distance(p, zone) < minSpawnClearance) { clear = false; break; }
             if (!clear)
                 continue;

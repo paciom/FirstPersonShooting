@@ -18,6 +18,8 @@ public class GameModeController : MonoBehaviour
 
     GameObject _menuCanvas;
     GameObject _robotSelect;
+    GameObject _arenaSelect;
+    int _arenaIndex;
     RobotRoster _roster;
     GameMode _pendingMode;
     int _cyanRobot;
@@ -90,7 +92,14 @@ public class GameModeController : MonoBehaviour
             return;
         }
 
-        // Escape backs out of the robot select screen (still Menu mode).
+        // Escape steps BACK one screen rather than all the way out: arena
+        // select → robot select → main menu.
+        if (Mode == GameMode.Menu && _arenaSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelArenaSelect();
+            return;
+        }
+
         if (Mode == GameMode.Menu && _robotSelect != null && Input.GetKeyDown(KeyCode.Escape))
         {
             CancelRobotSelect();
@@ -99,6 +108,16 @@ public class GameModeController : MonoBehaviour
 
         if (Mode == GameMode.ArenaPreview && Input.GetKeyDown(KeyCode.R))
             RequestReshuffle();
+
+        // Arena Builder doubles as the arena iteration loop: cycle without
+        // going back through the menus.
+        if (Mode == GameMode.ArenaPreview && ArenaLibrary.Count > 1)
+        {
+            if (Input.GetKeyDown(KeyCode.RightBracket))
+                CycleArena(1);
+            else if (Input.GetKeyDown(KeyCode.LeftBracket))
+                CycleArena(-1);
+        }
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
         // Never while the on-screen controls are up — they need a free cursor.
@@ -193,6 +212,9 @@ public class GameModeController : MonoBehaviour
         SetBotsActive(false);
 
         CloseRobotSelect();
+        // Also closed here, or backing out of a match mid-arena-select leaves an
+        // orphaned canvas floating over the main menu.
+        CloseArenaSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
         LockCursor(false);
@@ -223,13 +245,17 @@ public class GameModeController : MonoBehaviour
         _menuCanvas.SetActive(true);
     }
 
+    /// <summary>
+    /// Robots are chosen; now pick the arena. Both AI modes funnel through here,
+    /// so the arena step lands in both at once.
+    /// </summary>
     public void LaunchSelectedMatch(int cyanIndex, int magentaIndex)
     {
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
         CloseRobotSelect();
         ApplyRobotSelection();
-        if (_pendingMode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+        OpenArenaSelect();
     }
 
     void CloseRobotSelect()
@@ -239,6 +265,71 @@ public class GameModeController : MonoBehaviour
             Destroy(_robotSelect);
             _robotSelect = null;
         }
+    }
+
+    // ---------- arena select ----------
+
+    /// <summary>
+    /// Show the arena picker. With fewer than two arenas registered there is no
+    /// choice to offer, so it falls straight through to the match — the same way
+    /// OpenRobotSelect does when no roster exists.
+    /// </summary>
+    public void OpenArenaSelect()
+    {
+        if (ArenaLibrary.Count < 2)
+        {
+            LaunchArena(0);
+            return;
+        }
+
+        _menuCanvas.SetActive(false);
+        CloseArenaSelect();
+        _arenaSelect = ArenaSelectMenu.Build(this, _arenaIndex);
+    }
+
+    /// <summary>
+    /// Build the chosen arena, then start the match.
+    ///
+    /// Order matters: the arena loads BEFORE Start*, never after. Start*
+    /// positions and enables characters, and re-baking the NavMesh underneath
+    /// live agents strands them off-mesh.
+    /// </summary>
+    public void LaunchArena(int arenaIndex)
+    {
+        _arenaIndex = arenaIndex;
+        CloseArenaSelect();
+        ArenaRuntime.Load(arenaIndex);
+        if (_pendingMode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+    }
+
+    /// <summary>Escape from the arena screen goes back a step, to robot select.</summary>
+    public void CancelArenaSelect()
+    {
+        CloseArenaSelect();
+        if (_roster != null && _roster.HasRobots)
+            _robotSelect = RobotSelectMenu.Build(this, _roster, _pendingMode, _cyanRobot, _magentaRobot);
+        else
+            _menuCanvas.SetActive(true);
+    }
+
+    void CloseArenaSelect()
+    {
+        if (_arenaSelect != null)
+        {
+            Destroy(_arenaSelect);
+            _arenaSelect = null;
+        }
+    }
+
+    /// <summary>Arena Builder's `[` / `]` — swap arena without leaving the mode.</summary>
+    void CycleArena(int step)
+    {
+        int count = ArenaLibrary.Count;
+        _arenaIndex = ((_arenaIndex + step) % count + count) % count;
+        ArenaRuntime.Load(_arenaIndex);
+        var arena = ArenaLibrary.Get(_arenaIndex);
+        ShowOverlay($"{arena.DisplayName} — [ ] arena   ·   R reshuffle   ·   ESC menu",
+                    $"{arena.DisplayName}");
     }
 
     /// <summary>
@@ -416,7 +507,8 @@ public class GameModeController : MonoBehaviour
         _spectatorRig.AddComponent<FlyCam>();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("R — New Layout   ·   WASD/QE — Fly   ·   ESC — Menu",
+        ShowOverlay($"{ArenaLibrary.Get(_arenaIndex).DisplayName}   ·   [ ] — Arena   ·   " +
+                    "R — New Layout   ·   WASD/QE — Fly   ·   ESC — Menu",
             "NEW — fresh layout   ·   stick to fly   ·   drag to look");
         LockCursor(true);
     }

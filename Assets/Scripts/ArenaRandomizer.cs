@@ -15,16 +15,6 @@ public class ArenaRandomizer : MonoBehaviour
     public int minBlocks = 8;
     public int maxBlocks = 13;
 
-    // Keep-out spots: player/bot spawns, crates, portals.
-    static readonly Vector3[] KeepOut =
-    {
-        new Vector3(0, 0, -15), new Vector3(-8, 0, -15), new Vector3(-4, 0, -16), new Vector3(8, 0, -15),
-        new Vector3(-8, 0, 15), new Vector3(0, 0, 16), new Vector3(8, 0, 15),
-        new Vector3(-6, 0, 8), new Vector3(6, 0, 9), new Vector3(-12, 0, -4), new Vector3(13, 0, 2),
-        new Vector3(10, 0, -12), new Vector3(-7, 0, -13), new Vector3(16.5f, 0, 8), new Vector3(-16.5f, 0, -8),
-        new Vector3(0, 0, -18.2f), new Vector3(0, 0, 18.2f),
-    };
-
     NavMeshSurface _surface;
 
     void Awake()
@@ -60,7 +50,8 @@ public class ArenaRandomizer : MonoBehaviour
         int safety = 200;
         while (placed.Count < count && safety-- > 0)
         {
-            var pos = new Vector3(Random.Range(-14f, 14f), 0f, Random.Range(-12f, 13f));
+            float extent = ArenaContext.CoverHalfExtent;
+            var pos = new Vector3(Random.Range(-extent, extent), 0f, Random.Range(-extent, extent));
             if (!IsClear(pos, placed) || !IsClear(pos, occupied))
                 continue;
             placed.Add(pos);
@@ -82,7 +73,8 @@ public class ArenaRandomizer : MonoBehaviour
 
     bool IsClear(Vector3 pos, List<Vector3> placed)
     {
-        foreach (var keep in KeepOut)
+        // Spawns and fixed props of whichever arena is currently loaded.
+        foreach (var keep in ArenaContext.KeepOut)
             if (Vector3.Distance(pos, keep) < 4f)
                 return false;
         foreach (var other in placed)

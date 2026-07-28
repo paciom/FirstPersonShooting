@@ -94,7 +94,7 @@ public static class RobotReinforcements
     /// <summary>Team home strip, nudged onto the navmesh and away from the exact spawn line.</summary>
     static Vector3 PickSpawnPoint(int teamId)
     {
-        Vector3 wanted = new Vector3(Random.Range(-9f, 9f), 0f, teamId == 0 ? -16f : 16f);
+        Vector3 wanted = ArenaContext.ReinforcementSpawn(teamId);
         if (NavMesh.SamplePosition(wanted, out NavMeshHit hit, 8f, NavMesh.AllAreas))
             return hit.position;
         return wanted;
