@@ -11,7 +11,8 @@ public static class MainMenu
     static readonly Color ButtonColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
     static readonly Color ButtonHover = new Color(0.10f, 0.30f, 0.42f, 1f);
 
-    const string DesktopHint = "WASD move   ·   Mouse aim   ·   LMB fire   ·   Shift sprint   ·   Space jump";
+    const string DesktopHint =
+        "WASD move   ·   Mouse aim   ·   LMB fire   ·   Shift sprint   ·   Space jump   ·   T transform";
 
     static Text _hint;
 

@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Human input → CharacterMotor + Weapon. LMB fires the held weapon, RMB
-/// engages the X-Ray scope. Uses the legacy Input API for now (active input
+/// engages the X-Ray scope, T folds into tank form and back. Uses the legacy Input API for now (active input
 /// handling is "Both"); Input System migration is planned for the polish phase.
 ///
 /// On a touch screen <see cref="TouchControls"/> takes over completely — see
@@ -117,9 +117,11 @@ public class PlayerBrain : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space) || (touch != null && touch.ConsumeJump()))
             _motor.Jump();
 
-        // V folds into vehicle form and back. Ignored on robots with no forged
+        // T folds into vehicle form and back — V still does it too, which is
+        // where the control used to live. Ignored on robots with no forged
         // vehicle clips, so the key is simply inert rather than half-working.
-        bool morph = Input.GetKeyDown(KeyCode.V) || (touch != null && touch.ConsumeMorph());
+        bool morph = Input.GetKeyDown(KeyCode.T) || Input.GetKeyDown(KeyCode.V)
+            || (touch != null && touch.ConsumeMorph());
         if (morph && _vehicle != null)
             _vehicle.Toggle();
 
