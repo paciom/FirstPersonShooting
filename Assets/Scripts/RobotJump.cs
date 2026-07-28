@@ -10,6 +10,12 @@ using UnityEngine.AI;
 /// throws the robot along a parabola instead — which is all "jumping" needs to
 /// be, because the arena links already mark exactly where a jump is necessary.
 ///
+/// Only robot form jumps. A transformed robot is a ground vehicle, so it is
+/// routed around every link by the pathfinder (see <see cref="UpdateAreaMask"/>)
+/// rather than being allowed to leap and then stopped — a tank never commits to
+/// a gap it cannot cross. The player side of the same rule lives in
+/// CharacterMotor.Jump.
+///
 /// Deliberately an Update-driven state machine rather than a coroutine: bots get
 /// deactivated on de-rez and on every mode switch, and a deactivated GameObject
 /// loses its coroutines permanently — which would strand the robot mid-air, on a
@@ -34,6 +40,13 @@ public class RobotJump : MonoBehaviour
     /// </summary>
     const float HijackDistance = 1.5f;
 
+    /// <summary>
+    /// Unity's built-in "Jump" NavMesh area. ArenaKit puts every link on it so
+    /// that a form which cannot jump can simply be routed around them.
+    /// </summary>
+    public const int JumpArea = 2;
+    const int JumpAreaMask = 1 << JumpArea;
+
     NavMeshAgent _agent;
     TransformMode _vehicle;
 
@@ -41,12 +54,35 @@ public class RobotJump : MonoBehaviour
     Vector3 _from, _to, _lastSet;
     float _t, _duration, _peak;
 
+    int _baseAreaMask;
+    bool _maskedForVehicle;
+
     void Awake()
     {
         _agent = GetComponent<NavMeshAgent>();
         _vehicle = GetComponent<TransformMode>();
         // Take the link away from the agent; without this it keeps sliding.
         _agent.autoTraverseOffMeshLink = false;
+        _baseAreaMask = _agent.areaMask;
+    }
+
+    /// <summary>
+    /// Tanks do not jump, so they are not offered routes that require one — the
+    /// pathfinder simply sends them round by the ramps instead. Doing it with
+    /// the area mask rather than by refusing a link mid-crossing means a vehicle
+    /// never commits to a gap it cannot cross.
+    ///
+    /// A vehicle that somehow ends up on a link anyway (transformed while
+    /// standing on one) still completes it — see Begin() — because a form that
+    /// refuses to finish a crossing is a form that gets stuck on it forever.
+    /// </summary>
+    void UpdateAreaMask()
+    {
+        bool asVehicle = _vehicle != null && _vehicle.IsVehicle;
+        if (asVehicle == _maskedForVehicle)
+            return;
+        _maskedForVehicle = asVehicle;
+        _agent.areaMask = asVehicle ? (_baseAreaMask & ~JumpAreaMask) : _baseAreaMask;
     }
 
     void OnDisable()
@@ -61,6 +97,8 @@ public class RobotJump : MonoBehaviour
     {
         if (_agent == null || !_agent.enabled)
             return;
+
+        UpdateAreaMask();
 
         if (_jumping)
         {
@@ -89,12 +127,13 @@ public class RobotJump : MonoBehaviour
         float span = Vector3.Distance(flatFrom, flatTo);
         float rise = _to.y - _from.y;
 
-        // A transformed robot is a ground vehicle — it does not leap. It still
-        // has to cross, though, or a link becomes a place where a vehicle stops
-        // forever: it drops off the edge quickly and flatly instead.
+        // A tank does not leap — not even a little. It only reaches here if it
+        // transformed while already standing on a link, and the only thing left
+        // to do then is get off it: no arc at all, just a quick roll to the far
+        // end. Refusing outright would park it on the link permanently.
         bool asVehicle = _vehicle != null && _vehicle.IsVehicle;
 
-        _peak = asVehicle ? 0.12f : Mathf.Max(clearance, rise + clearance);
+        _peak = asVehicle ? 0f : Mathf.Max(clearance, rise + clearance);
         _duration = asVehicle
             ? Mathf.Clamp(span / 9f, 0.15f, 0.45f)
             : Mathf.Clamp(span / 6f, minAirTime, maxAirTime);

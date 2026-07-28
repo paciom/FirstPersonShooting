@@ -32,6 +32,7 @@ public class CharacterMotor : MonoBehaviour
     [HideInInspector] public bool floatMode;
 
     CharacterController _controller;
+    TransformMode _vehicle;
     Vector2 _moveInput;
     bool _sprinting;
     float _verticalVelocity;
@@ -42,6 +43,7 @@ public class CharacterMotor : MonoBehaviour
     void Awake()
     {
         _controller = GetComponent<CharacterController>();
+        _vehicle = GetComponent<TransformMode>();
     }
 
     public void SetMoveInput(Vector2 input) => _moveInput = Vector2.ClampMagnitude(input, 1f);
@@ -56,8 +58,19 @@ public class CharacterMotor : MonoBehaviour
             head.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
     }
 
+    /// <summary>
+    /// Leap, if this character has legs to leap with.
+    ///
+    /// A tank does not jump. The rule lives here rather than at the input site
+    /// because jumps arrive from several places — the Space key, the on-screen
+    /// touch button — and a check at each one is a check somebody later forgets.
+    /// Mid-transformation counts as "not a robot" too: half a tank should not
+    /// spring off the floor.
+    /// </summary>
     public void Jump()
     {
+        if (_vehicle != null && (_vehicle.IsVehicle || _vehicle.IsBusy))
+            return;
         if (_controller.isGrounded)
             _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
     }

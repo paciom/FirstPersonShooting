@@ -237,6 +237,10 @@ public class ArenaKit
         link.endPoint = go.transform.InverseTransformPoint(to);
         link.width = width;
         link.bidirectional = bidirectional;
+        // Every link sits on the "Jump" area so that forms which cannot jump —
+        // tanks — are routed around it by the pathfinder instead of committing
+        // to a gap they cannot cross. See RobotJump.JumpArea.
+        link.area = RobotJump.JumpArea;
     }
 
     // ---------- lighting ----------
