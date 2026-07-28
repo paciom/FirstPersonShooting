@@ -76,6 +76,8 @@ public class LaserBolt : MonoBehaviour
             var shield = hit.transform.root.GetComponent<EnergyShield>();
             if (shield != null && shield.teamId != teamId)
                 shield.TakeHit(damage, hit.point, ownerRoot);
+            else
+                WeaponUtil.DamageProp(hit.collider, damage, hit.point);
 
             VfxUtil.ImpactBurst(hit.point + hit.normal * 0.05f, color);
             Destroy(gameObject);

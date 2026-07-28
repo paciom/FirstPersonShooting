@@ -11,6 +11,11 @@ public static class MainMenu
     static readonly Color ButtonColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
     static readonly Color ButtonHover = new Color(0.10f, 0.30f, 0.42f, 1f);
 
+    const string DesktopHint =
+        "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope";
+
+    static Text _hint;
+
     public static GameObject Build(GameModeController controller)
     {
         var canvasGo = new GameObject("MainMenu");
@@ -35,15 +40,26 @@ public static class MainMenu
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -225), new Vector2(800, 40));
 
-        MakeButton(canvasGo.transform, "AI  v  AI", 40, controller.StartAIvAI);
-        MakeButton(canvasGo.transform, "PLAYER  v  AI", -80, controller.StartPlayerVsAI);
+        // Both AI modes route through the robot select screen first.
+        MakeButton(canvasGo.transform, "AI  v  AI", 40, () => controller.OpenRobotSelect(GameMode.AIvAI));
+        MakeButton(canvasGo.transform, "PLAYER  v  AI", -80, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
         MakeButton(canvasGo.transform, "ARENA  BUILDER", -200, controller.StartArenaPreview);
 
-        MakeText(canvasGo.transform, "Hint", "WASD move   ·   Mouse aim   ·   LMB fire   ·   Shift sprint   ·   Space jump",
+        _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
             20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
             new Vector2(0.5f, 0f), new Vector2(0, 40), new Vector2(1200, 30));
 
         return canvasGo;
+    }
+
+    /// <summary>
+    /// Swap the control hint when the input scheme changes (TouchControls calls
+    /// this). Null restores the keyboard wording.
+    /// </summary>
+    public static void SetHint(string hint)
+    {
+        if (_hint != null)
+            _hint.text = string.IsNullOrEmpty(hint) ? DesktopHint : hint;
     }
 
     static void MakeButton(Transform parent, string label, float y, UnityEngine.Events.UnityAction onClick)

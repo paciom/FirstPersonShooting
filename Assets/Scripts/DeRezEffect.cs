@@ -39,6 +39,18 @@ public class DeRezEffect : MonoBehaviour
             _shield.OnDeRezzed -= HandleDeRez;
     }
 
+    /// <summary>
+    /// Re-point where this character re-materializes. The spawn is captured at
+    /// Awake, which is right for a fixed arena and wrong the moment arenas can
+    /// be swapped: without this, everyone comes back at the previous arena's
+    /// coordinates — usually inside a wall. Called by ArenaRuntime on load.
+    /// </summary>
+    public void SetSpawn(Vector3 position, Quaternion rotation)
+    {
+        _spawnPosition = position;
+        _spawnRotation = rotation;
+    }
+
     void HandleDeRez()
     {
         StartCoroutine(DeRezRoutine());

@@ -13,12 +13,24 @@
 # API keys and local secrets — never commit
 .secrets/
 
+# Rejected/superseded Meshy models, parked outside Assets/ so Unity ignores
+# them. Kept on disk for reference but not versioned — ~120 MB of LFS quota
+# for geometry the game never loads.
+/RetiredModels/
+
+# Raw PBR maps pulled from a retexture task. They are an intermediate — the
+# copies that matter get injected into the GLBs, which are versioned.
+/Tools/.retexture_maps/
+/Tools/__pycache__/
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
 /[Bb]uild/
 /[Bb]uilds/
+# Burst drops lib_burst_generated.* here during a WebGL build.
+/Data/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
 *.log
@@ -108,3 +120,10 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Diagnostic renders from PreviewCaptureTool — regenerable, never versioned.
+/PreviewCaptures/
+
+# Regenerable from the stage GLBs via Tools/stopmotion.py; 28 MB of LFS for
+# something one command rebuilds.
+/TransformerTest/RANGER_stopmotion.glb
