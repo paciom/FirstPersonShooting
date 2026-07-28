@@ -5,7 +5,12 @@ using UnityEngine.UI;
 /// <summary>
 /// Roblox-style on-screen controls for touch screens: a dynamic thumbstick on
 /// the left half, drag-anywhere-else to look, and big round action buttons on
-/// the right (fire, jump, x-ray, morph, weapon cycle, menu).
+/// the right (fire, jump, x-ray, snipe, morph, weapon cycle, menu).
+///
+/// FIRE doubles as the right-hand stick — hold to shoot, push to swing the
+/// body that way at a speed set by how far it is pushed. That makes the layout
+/// twin-stick: left thumb walks, right thumb aims and fires, and neither has
+/// to let go to do the other.
 ///
 /// Built entirely at runtime like the rest of the UI, and bootstrapped by
 /// <see cref="GameModeController"/>, so no scene rebuild is needed. Reads raw
@@ -47,11 +52,23 @@ public class TouchControls : MonoBehaviour
 
     public Availability availability = Availability.Auto;
 
-    [Tooltip("Degrees turned per screen-height of drag, over 180. 0.55 ≈ a full-height swipe turns 99°.")]
-    public float lookSensitivity = 0.55f;
+    [Tooltip("Degrees turned per screen-height of drag, over 180. 1.0 ≈ a full-height swipe turns 180°.")]
+    public float lookSensitivity = 1.0f;
 
     [Tooltip("Thumbstick travel in canvas units (reference height 1080).")]
     public float stickRadius = 135f;
+
+    [Tooltip("Travel on the FIRE stick before it is steering at full rate.")]
+    public float fireStickRadius = 130f;
+
+    [Tooltip("Degrees per second the body turns at full deflection of the FIRE stick.")]
+    public float turnDegreesPerSecond = 170f;
+
+    [Tooltip("Degrees per second the aim rises or drops at full deflection.")]
+    public float pitchDegreesPerSecond = 110f;
+
+    [Tooltip("Fraction of the FIRE stick's travel that only fires, without steering.")]
+    [Range(0f, 0.5f)] public float fireStickDeadZone = 0.18f;
 
     [Tooltip("Let the mouse stand in for a finger while the controls are forced on with '='.")]
     public bool simulateWithMouse = true;
@@ -73,6 +90,13 @@ public class TouchControls : MonoBehaviour
     /// <summary>Pushing the stick to its rim sprints, so there's no separate sprint button.</summary>
     public bool Sprint => Move.sqrMagnitude > 0.85f;
 
+    /// <summary>
+    /// Steering from the FIRE stick, -1..1 per axis. Already folded into
+    /// <see cref="LookDelta"/> — exposed for readouts, not for driving the
+    /// motor a second time.
+    /// </summary>
+    public Vector2 Turn { get; private set; }
+
     public bool Fire => Held(_fire);
     public bool Scope => Held(_scope);
     public bool Rise => Held(_rise);
@@ -90,6 +114,9 @@ public class TouchControls : MonoBehaviour
     RectTransform _stickBase;
     RectTransform _stickKnob;
     Vector2 _stickHome;
+    RectTransform _fireKnob;
+    int _fireFinger = int.MinValue;
+    Vector2 _fireCenter;
 
     readonly List<Button> _buttons = new List<Button>();
     Button _fire, _jump, _scope, _snipe, _morph, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
@@ -276,9 +303,11 @@ public class TouchControls : MonoBehaviour
     {
         Move = Vector2.zero;
         LookDelta = Vector2.zero;
+        Turn = Vector2.zero;
         _roles.Clear();
         _positions.Clear();
         _stickFinger = int.MinValue;
+        _fireFinger = int.MinValue;
         foreach (var button in _buttons)
             button.held = false;
         // Unread edges die with the mode — otherwise a jump tapped just before
@@ -426,6 +455,8 @@ public class TouchControls : MonoBehaviour
             _roles.Remove(id);
         if (_stickFinger != int.MinValue && !_roles.ContainsKey(_stickFinger))
             _stickFinger = int.MinValue;
+        if (_fireFinger != int.MinValue && !_roles.ContainsKey(_fireFinger))
+            _fireFinger = int.MinValue;
 
         foreach (var pointer in _pointers)
         {
@@ -455,6 +486,13 @@ public class TouchControls : MonoBehaviour
         // and on a tablet.
         LookDelta = look / Mathf.Max(1, Screen.height) * 180f * lookSensitivity;
 
+        // The FIRE stick steers at a RATE rather than by displacement: held off
+        // centre it keeps turning, and the further out, the faster. Folded into
+        // the same look delta so it inherits the sniper scope's fine aim.
+        UpdateFireStick();
+        LookDelta += new Vector2(Turn.x * turnDegreesPerSecond, Turn.y * pitchDegreesPerSecond)
+            * Time.deltaTime;
+
         // Turning is the one control with no widget to point at, so it gets a
         // label until the player has actually turned with it.
         if (Mathf.Abs(LookDelta.x) + Mathf.Abs(LookDelta.y) > 0.5f)
@@ -473,6 +511,14 @@ public class TouchControls : MonoBehaviour
             if (!RectTransformUtility.RectangleContainsScreenPoint(button.rect, pointer.position, null))
                 continue;
             _roles[pointer.id] = i;
+            if (button == _fire)
+            {
+                // Steering is measured from where the button sits, not from
+                // where the thumb landed: a press dead centre must fire without
+                // also turning.
+                _fireFinger = pointer.id;
+                _fireCenter = ToCanvas(RectTransformUtility.WorldToScreenPoint(null, button.rect.position));
+            }
             OnButtonDown(button);
             return;
         }
@@ -508,6 +554,35 @@ public class TouchControls : MonoBehaviour
             GameModeController.Instance.EnterMenu();
         else if (button == _shuffle && GameModeController.Instance != null)
             GameModeController.Instance.RequestReshuffle();
+    }
+
+    /// <summary>
+    /// The FIRE button doubles as the right-hand stick: hold it to shoot, push
+    /// it to swing the body that way. Both at once is the point — it is the
+    /// only way to track a moving robot while firing with one thumb.
+    /// </summary>
+    void UpdateFireStick()
+    {
+        if (_fireFinger == int.MinValue || !_positions.TryGetValue(_fireFinger, out Vector2 screen)
+            || _fire == null || !_fire.Visible)
+        {
+            Turn = Vector2.zero;
+            if (_fireKnob != null)
+                _fireKnob.anchoredPosition = Vector2.zero;
+            return;
+        }
+
+        Vector2 offset = Vector2.ClampMagnitude(ToCanvas(screen) - _fireCenter, fireStickRadius);
+        if (_fireKnob != null)
+            _fireKnob.anchoredPosition = offset;
+
+        // Rescaled past the dead zone rather than clipped, so the first degree
+        // of steering is gentle instead of arriving at full speed.
+        Vector2 raw = offset / fireStickRadius;
+        float magnitude = raw.magnitude;
+        Turn = magnitude <= fireStickDeadZone
+            ? Vector2.zero
+            : raw.normalized * ((magnitude - fireStickDeadZone) / (1f - fireStickDeadZone));
     }
 
     void UpdateStick()
@@ -585,6 +660,10 @@ public class TouchControls : MonoBehaviour
         // Right thumb: fire and jump where a Roblox player expects them, with
         // the situational buttons stacked above and inboard.
         _fire = MakeRoundButton("Fire", "FIRE", new Vector2(1, 0), new Vector2(-370, 280), 210);
+        _fireKnob = MakeStickKnob(_fire.rect, 92f);
+        // The knob is built after the label and would otherwise cover it.
+        if (_fire.label != null)
+            _fire.label.transform.SetAsLastSibling();
         _jump = MakeRoundButton("Jump", "JUMP", new Vector2(1, 0), new Vector2(-150, 150), 170);
         _scope = MakeRoundButton("Scope", "X-RAY", new Vector2(1, 0), new Vector2(-175, 470), 140);
         _snipe = MakeRoundButton("Snipe", "SNIPE", new Vector2(1, 0), new Vector2(-175, 630), 140);
@@ -618,16 +697,23 @@ public class TouchControls : MonoBehaviour
         _stickBase.sizeDelta = Vector2.one * (stickRadius * 2f);
         _stickBase.anchoredPosition = _stickHome;
 
-        var knobGo = new GameObject("StickKnob");
-        knobGo.transform.SetParent(_stickBase, false);
-        var knobImage = knobGo.AddComponent<Image>();
-        knobImage.sprite = DiscSprite();
-        knobImage.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.65f);
-        knobImage.raycastTarget = false;
-        _stickKnob = knobImage.rectTransform;
-        _stickKnob.anchorMin = _stickKnob.anchorMax = new Vector2(0.5f, 0.5f);
-        _stickKnob.sizeDelta = Vector2.one * (stickRadius * 0.95f);
-        _stickKnob.anchoredPosition = Vector2.zero;
+        _stickKnob = MakeStickKnob(_stickBase, stickRadius * 0.95f);
+    }
+
+    /// <summary>The bit that follows the thumb. Drawn last so it rides over its base.</summary>
+    RectTransform MakeStickKnob(RectTransform parent, float size)
+    {
+        var go = new GameObject("Knob");
+        go.transform.SetParent(parent, false);
+        var image = go.AddComponent<Image>();
+        image.sprite = DiscSprite();
+        image.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.65f);
+        image.raycastTarget = false;
+        var rect = image.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = Vector2.one * size;
+        rect.anchoredPosition = Vector2.zero;
+        return rect;
     }
 
     /// <summary>
