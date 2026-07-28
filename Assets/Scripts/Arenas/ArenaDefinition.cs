@@ -27,6 +27,31 @@ public abstract class ArenaDefinition
     /// <summary>How many destructible/regrowing cover blocks to scatter.</summary>
     public virtual int CoverCount => 24;
 
+    /// <summary>
+    /// What the cover blocks are made of. They are the most numerous objects in
+    /// any arena, so leaving them on one shared style is the fastest way to make
+    /// ten arenas look like one arena in different colours. The default derives
+    /// a set from the palette in this arena's own style; override to supply
+    /// something the archetypes do not cover.
+    /// </summary>
+    public virtual Material[] CoverMaterials()
+    {
+        var p = Palette;
+        return new[]
+        {
+            ArenaMaterials.Style("Cover_A", CoverStyle, p.wall, p.floor * 0.6f,
+                                 CoverFeatureSize, CoverRoughness),
+            ArenaMaterials.Style("Cover_B", CoverStyle, p.wall * 0.82f, p.floor * 0.5f,
+                                 CoverFeatureSize * 1.4f, CoverRoughness),
+            ArenaMaterials.Style("Cover_C", CoverStyle, p.floor * 1.5f, p.wall * 0.55f,
+                                 CoverFeatureSize * 0.8f, CoverRoughness),
+        };
+    }
+
+    public virtual ArenaMaterials.SurfaceStyle CoverStyle => ArenaMaterials.SurfaceStyle.Hull;
+    public virtual float CoverFeatureSize => 1.2f;
+    public virtual float CoverRoughness => 0.85f;
+
     /// <summary>Shown as a badge on the select card. 1 = flat.</summary>
     public virtual int Levels => 1;
 
@@ -57,6 +82,14 @@ public abstract class ArenaDefinition
     public virtual float[] DropPlanes => new[] { 0f };
 
     public virtual Vector3 SpectatorPerch => new Vector3(0f, 8f, -14f);
+
+    /// <summary>
+    /// Is this ground point clear floor that cover may stand on and slide to?
+    /// Arenas built around a large central structure say no over its footprint;
+    /// otherwise cover churn parks blocks inside the scenery. Consulted both
+    /// when scattering cover and when the block manager picks somewhere to move.
+    /// </summary>
+    public virtual bool IsOpenFloor(Vector3 point) => true;
 
     /// <summary>Keep-out points cover and loot avoid — spawns, by default.</summary>
     public virtual Vector3[] KeepOut

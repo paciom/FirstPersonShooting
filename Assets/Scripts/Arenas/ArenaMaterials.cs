@@ -28,6 +28,54 @@ public static class ArenaMaterials
         Cache.Clear();
     }
 
+    /// <summary>
+    /// Material archetypes on PhotonArena/Surface. These are what make arenas
+    /// differ by more than hue — stone is mottled and matte with wandering
+    /// crevices, brick has staggered courses and mortar, tread plate is glossy
+    /// diamond checker. Only Hull, Organic and Crystal emit at all.
+    /// </summary>
+    public enum SurfaceStyle
+    {
+        Hull = 0,     // spaceship interior plating with lit seams
+        Stone = 1,    // rough rock, dark crevices
+        Brick = 2,    // running-bond courses and mortar
+        Tread = 3,    // metal diamond checker plate
+        Organic = 4,  // soft cells with glowing veins
+        Crystal = 5,  // flat cut facets
+        Strata = 6,   // sedimentary bands
+        Plank = 7,    // painted boards with grain
+    }
+
+    /// <summary>
+    /// A real material surface. <paramref name="featureSize"/> is the world size
+    /// of one feature (one plate, one brick, one board) in metres.
+    /// </summary>
+    public static Material Style(string key, SurfaceStyle style, Color baseColor, Color second,
+                                 float featureSize, float roughness = 0.85f,
+                                 Color? emit = null, float emitStrength = 0f,
+                                 float bump = 1f, float cavity = 0.55f)
+    {
+        if (Cache.TryGetValue(key, out var cached) && cached != null)
+            return cached;
+
+        var shader = Shader.Find("PhotonArena/Surface");
+        if (shader == null)
+            return Lit(key, baseColor);
+
+        var mat = new Material(shader) { name = key };
+        mat.SetColor("_BaseColor", baseColor);
+        mat.SetColor("_SecondColor", second);
+        mat.SetColor("_EmitColor", emit ?? Color.black);
+        mat.SetFloat("_Tiling", featureSize);
+        mat.SetFloat("_Style", (float)style);
+        mat.SetFloat("_Roughness", roughness);
+        mat.SetFloat("_EmitStrength", emitStrength);
+        mat.SetFloat("_BumpStrength", bump);
+        mat.SetFloat("_Cavity", cavity);
+        Cache[key] = mat;
+        return mat;
+    }
+
     /// <summary>Sci-fi panelling: triplanar grooves plus glowing seams.</summary>
     public static Material Surface(string key, Color baseColor, Color seam, float tiling,
                                    float seamGlow = 0.8f, int patternMode = 0, Color? accent = null)

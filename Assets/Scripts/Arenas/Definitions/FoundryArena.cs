@@ -41,14 +41,27 @@ public class FoundryArena : ArenaDefinition
             : new[] { new Vector3(-8f, 0f, 15f), new Vector3(0f, 0f, 16f), new Vector3(8f, 0f, 15f) };
     }
 
+    // Nothing here is panelled sci-fi: the deck is quarried basalt, the walls
+    // are firebrick, and the only metal is the tread plate underfoot.
+    public override ArenaMaterials.SurfaceStyle CoverStyle => ArenaMaterials.SurfaceStyle.Stone;
+    public override float CoverFeatureSize => 1.8f;
+    public override float CoverRoughness => 0.95f;
+
     public override void Build(Transform root, ArenaKit kit)
     {
-        var basalt = ArenaMaterials.Surface("Foundry_Basalt", new Color(0.07f, 0.06f, 0.06f),
-                                            Ember, 3.2f, 0.5f, 0);
-        var steel = ArenaMaterials.Surface("Foundry_Steel", new Color(0.16f, 0.14f, 0.13f),
-                                           Ember, 1.6f, 0.9f, 1, Ember);
-        var wallMat = ArenaMaterials.Surface("Foundry_Wall", new Color(0.11f, 0.09f, 0.08f),
-                                             Ember, 3f, 0.6f, 3);
+        var basalt = ArenaMaterials.Style("Foundry_Basalt", ArenaMaterials.SurfaceStyle.Stone,
+                                          new Color(0.12f, 0.10f, 0.10f), new Color(0.03f, 0.025f, 0.02f),
+                                          3.5f, roughness: 0.97f, bump: 1.5f, cavity: 0.7f);
+        // Firebrick: the furnace lining, and the clearest "not sci-fi" read in
+        // the arena.
+        var firebrick = ArenaMaterials.Style("Foundry_Firebrick", ArenaMaterials.SurfaceStyle.Brick,
+                                             new Color(0.34f, 0.17f, 0.11f), new Color(0.13f, 0.11f, 0.10f),
+                                             1.1f, roughness: 0.92f, bump: 1.3f, cavity: 0.6f);
+        // Tread plate — glossy enough to catch the lava light and read as metal.
+        var steel = ArenaMaterials.Style("Foundry_Tread", ArenaMaterials.SurfaceStyle.Tread,
+                                         new Color(0.20f, 0.18f, 0.17f), new Color(0.07f, 0.06f, 0.06f),
+                                         0.9f, roughness: 0.40f, bump: 1.1f, cavity: 0.5f);
+        var wallMat = firebrick;
         var lavaMat = ArenaMaterials.Emissive("Foundry_Lava", Lava, 2.3f);
 
         kit.Box("Floor", new Vector3(0f, -0.25f, 0f), new Vector3(40f, 0.5f, 40f), basalt);

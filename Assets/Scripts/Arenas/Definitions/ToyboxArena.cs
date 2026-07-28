@@ -47,10 +47,31 @@ public class ToyboxArena : ArenaDefinition
             : new[] { new Vector3(-8f, 0f, 15f), new Vector3(0f, 0f, 16f), new Vector3(8f, 0f, 15f) };
     }
 
+    /// <summary>
+    /// Cover here is moulded plastic toy blocks: flat bright colour, no surface
+    /// pattern at all, and glossy enough to catch a highlight. None of the
+    /// procedural archetypes describe that, so this arena supplies its own.
+    /// </summary>
+    public override Material[] CoverMaterials()
+    {
+        return new[]
+        {
+            ArenaMaterials.Lit("ToyCover_Red", ToyRed, 0.72f),
+            ArenaMaterials.Lit("ToyCover_Blue", ToyBlue, 0.72f),
+            ArenaMaterials.Lit("ToyCover_Yellow", ToyYellow, 0.72f),
+            ArenaMaterials.Lit("ToyCover_Green", ToyGreen, 0.72f),
+        };
+    }
+
     public override void Build(Transform root, ArenaKit kit)
     {
-        var desk = ArenaMaterials.Lit("Toy_Desk", new Color(0.55f, 0.38f, 0.24f), 0.15f);
-        var rim = ArenaMaterials.Lit("Toy_Rim", new Color(0.40f, 0.27f, 0.17f), 0.2f);
+        // Varnished wood, with boards and grain — not a flat brown plane.
+        var desk = ArenaMaterials.Style("Toy_Desk", ArenaMaterials.SurfaceStyle.Plank,
+                                        new Color(0.62f, 0.42f, 0.25f), new Color(0.34f, 0.21f, 0.12f),
+                                        6f, roughness: 0.55f, bump: 0.7f, cavity: 0.4f);
+        var rim = ArenaMaterials.Style("Toy_Rim", ArenaMaterials.SurfaceStyle.Plank,
+                                       new Color(0.44f, 0.29f, 0.17f), new Color(0.24f, 0.15f, 0.09f),
+                                       4f, roughness: 0.5f, bump: 0.8f, cavity: 0.45f);
         var paper = ArenaMaterials.Lit("Toy_Paper", new Color(0.93f, 0.91f, 0.86f), 0.05f);
         var red = ArenaMaterials.Lit("Toy_Red", ToyRed, 0.45f);
         var blue = ArenaMaterials.Lit("Toy_Blue", ToyBlue, 0.45f);

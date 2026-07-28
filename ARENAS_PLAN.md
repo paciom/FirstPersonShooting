@@ -200,8 +200,21 @@ each is one self-contained file.
 
 Procedural-only means the shaders carry the visual difference.
 
-- **Extend `PA_SciFiPanel`** with pattern modes 4–6: rough stone, sand strata,
-  glossy toy plastic. Cheaper than new shaders and reuses a working file.
+**Correction (2026-07-28):** extending `PA_SciFiPanel` with more pattern modes
+was the wrong call and has been abandoned. That shader draws panel grooves *and*
+applies its glowing seam unconditionally in every mode, so anything built from
+it reads as "neon lines" whatever colours and mode you feed it. Stone and brick
+are not reachable from it at all.
+
+Replaced by **`PA_Surface`** — a triplanar shader carrying genuine material
+archetypes: `Hull` (spaceship plating, the only one with lit seams), `Stone`,
+`Brick`, `Tread`, `Organic`, `Crystal`, `Strata`, `Plank`. Three things do the
+differentiating: a per-style procedural pattern, cavity shading so recesses
+genuinely darken, and derivative-based bump so the height field perturbs the
+normal without UVs or tangents. Roughness drives the specular lobe, which is
+most of why dry sandstone and moulded plastic do not read the same in identical
+light. `PA_SciFiPanel` stays for HANGAR and GRIDSPACE, where neon *is* the
+intended style.
 - **`PA_Foliage`** — translucent gradient + emissive veins + vertex wind sway.
   Serves BIODOME plants and REEF coral.
 - **`PA_Crystal`** — fresnel rim, inner glow, fake refraction. Serves CRYOVAULT

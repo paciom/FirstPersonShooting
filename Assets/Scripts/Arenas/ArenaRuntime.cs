@@ -106,13 +106,9 @@ public static class ArenaRuntime
             return;
 
         var p = def.Palette;
-        var mats = new[]
-        {
-            ArenaMaterials.Surface("Cover_A", p.wall, p.accentA, 1.6f, 0.8f, 0),
-            ArenaMaterials.Surface("Cover_B", p.wall * 0.85f, p.accentA, 2.2f, 0.9f, 3),
-            ArenaMaterials.Surface("Cover_C", p.floor * 1.6f, p.accentB, 1.4f, 1.1f, 1, p.accentB),
-            ArenaMaterials.Surface("Cover_D", p.wall * 1.1f, p.accentB, 1.2f, 0.7f, 2),
-        };
+        var mats = def.CoverMaterials();
+        if (mats == null || mats.Length == 0)
+            mats = new[] { ArenaMaterials.Lit("Cover_Fallback", p.wall) };
 
         // Fixed seed: the same arena lays out the same way every time it loads,
         // so a layout problem found once can be looked at again.
@@ -128,6 +124,9 @@ public static class ArenaRuntime
         {
             var size = new Vector3(Next(1.4f, 3.4f), Next(1.2f, 2.4f), Next(1f, 1.9f));
             var pos = new Vector3(Next(-extent, extent), def.GroundY + size.y * 0.5f, Next(-extent, extent));
+
+            if (!def.IsOpenFloor(pos))
+                continue;
 
             bool blocked = false;
             foreach (var keep in keepOut)

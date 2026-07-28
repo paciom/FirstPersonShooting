@@ -235,6 +235,10 @@ public class ArenaBlockManager : MonoBehaviour
         {
             var p = new Vector3(Random.Range(-extent, extent), 0f, Random.Range(-extent, extent));
 
+            // Structures the arena has claimed — a ziggurat's footprint, say.
+            if (!ArenaContext.Current.IsOpenFloor(p))
+                continue;
+
             bool clear = true;
             foreach (var zone in keepOut)
                 if (Vector3.Distance(p, zone) < minSpawnClearance) { clear = false; break; }

@@ -22,6 +22,7 @@ public static class ArenaLibrary
                     new HangarArena(),
                     new GridspaceArena(),
                     new FoundryArena(),
+                    new ZigguratArena(),
                     new ToyboxArena(),
                 };
             }

@@ -57,7 +57,7 @@ public static class ArenaBuilder
         // strips it, Shader.Find returns null, and `new Material(null)` throws
         // mid-setup — which reads as frozen bots and magenta VFX, not a shader bug.
         EnsureShadersIncluded("PhotonArena/Additive", "PhotonArena/ForceField", "PhotonArena/XRay",
-            "PhotonArena/SciFiPanel", "PhotonArena/TeamRecolor",
+            "PhotonArena/SciFiPanel", "PhotonArena/Surface", "PhotonArena/TeamRecolor",
             "Universal Render Pipeline/Unlit", "Universal Render Pipeline/Lit");
         RepairModelImports();
         SpriteForge.GenerateAll();
