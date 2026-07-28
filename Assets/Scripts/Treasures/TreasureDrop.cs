@@ -68,6 +68,58 @@ public class TreasureDrop : MonoBehaviour
     Vector3 _launchFrom;
     float _launchT;
     TrailRenderer _launchTrail;
+    float _nextSupportScan;
+    bool _armAnnounced;
+
+    static readonly RaycastHit[] SupportProbe = new RaycastHit[12];
+
+    /// <summary>
+    /// Highest solid surface in the crate's column, searching down from
+    /// <paramref name="fromY"/>. This is what stops a drop falling through
+    /// scenery: the landing point is chosen from the world as it is right now,
+    /// not from what was there when the drop was scheduled.
+    ///
+    /// Skips characters and other crates — a robot walking underneath is not
+    /// something to land on, it is something to land next to.
+    /// </summary>
+    bool TryFindSupport(float fromY, float depth, out float surfaceY)
+    {
+        surfaceY = 0f;
+        var origin = new Vector3(_ground.x, fromY + 0.25f, _ground.z);
+
+        int count = Physics.RaycastNonAlloc(origin, Vector3.down, SupportProbe,
+                                            depth, ~0, QueryTriggerInteraction.Ignore);
+        bool found = false;
+        float best = float.NegativeInfinity;
+        for (int i = 0; i < count; i++)
+        {
+            var hit = SupportProbe[i];
+            if (hit.collider == null)
+                continue;
+            if (hit.collider.transform.IsChildOf(transform))
+                continue;                                                   // ourselves
+            if (hit.collider.GetComponentInParent<TreasureDrop>() != null)
+                continue;                                                   // another crate
+            if (hit.collider.GetComponentInParent<EnergyShield>() != null)
+                continue;                                                   // a robot passing under
+            if (hit.point.y > best)
+            {
+                best = hit.point.y;
+                found = true;
+            }
+        }
+        if (found)
+            surfaceY = best;
+        return found;
+    }
+
+    /// <summary>Move the planned landing surface, taking the ground marker with it.</summary>
+    void SetGroundHeight(float surfaceY)
+    {
+        _ground.y = surfaceY;
+        if (_marker != null)
+            _marker.transform.position = _ground + Vector3.up * 0.03f;
+    }
 
     // ------------------------------------------------------------------ spawn
 
@@ -323,6 +375,15 @@ public class TreasureDrop : MonoBehaviour
     void TickFall()
     {
         float y = transform.position.y - FallSpeed * Time.deltaTime;
+
+        // Re-ask what is underneath on the way down. The spawner picks a clear
+        // column, but cover slides around the arena constantly, so a block can
+        // arrive under a crate that is already falling. Landing on top of it is
+        // right; sinking through it is what this fixes.
+        if (TryFindSupport(y, Mathf.Max(0f, y - _ground.y) + 0.9f, out float surfaceY)
+            && surfaceY > _ground.y + 0.05f)
+            SetGroundHeight(surfaceY);
+
         float restY = _ground.y + RestHeight;
 
         // Drift under the canopy, damping to nothing so it lands on the marker.
@@ -353,8 +414,14 @@ public class TreasureDrop : MonoBehaviour
             _launchTrail = null;
         }
 
-        if (IsHazard)
+        // Announced once per crate, not once per touchdown: a crate whose cover
+        // block slides away lands a second time, and the arena does not need
+        // telling twice.
+        if (IsHazard && !_armAnnounced)
+        {
+            _armAnnounced = true;
             MatchAnnouncer.Say("SCRAP MINE ARMED", Def.blurb, Def.color);
+        }
     }
 
     void TickLanded()
@@ -369,6 +436,21 @@ public class TreasureDrop : MonoBehaviour
         {
             Expire();
             return;
+        }
+
+        // A crate that landed on a cover block is standing on something that
+        // moves, and blocks slide, sink when shot, and regrow elsewhere. When
+        // the support goes, finish the fall instead of hanging in mid-air.
+        if (Time.time >= _nextSupportScan)
+        {
+            _nextSupportScan = Time.time + 0.25f;
+            if (TryFindSupport(_ground.y + RestHeight, 60f, out float surfaceY)
+                && surfaceY < _ground.y - 0.15f)
+            {
+                SetGroundHeight(surfaceY);
+                _state = State.Falling;
+                return;
+            }
         }
 
         bool armed = !IsHazard || Time.time - _landedAt >= MineArmSeconds;

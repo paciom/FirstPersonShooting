@@ -31,6 +31,10 @@ public class TreasureSpawner : MonoBehaviour
     // comes from the active arena (ArenaContext.HalfExtent), so a swap moves
     // the drop zone with the geometry.
 
+    [Tooltip("A spot needs this much clear air above it to be worth dropping into. " +
+             "Below it there is no descent to show, only a crate appearing.")]
+    public float minDropClearance = 3f;
+
     [Tooltip("Minimum spacing between two drops so they don't stack.")]
     public float dropSpacing = 6f;
 
@@ -103,7 +107,9 @@ public class TreasureSpawner : MonoBehaviour
             return;
 
         var def = TreasureCatalog.Roll();
-        TreasureDrop.Spawn(def, spot, dropHeight);
+        // Release from under whatever roof is overhead, so the crate never has
+        // to pass through a ceiling to arrive.
+        TreasureDrop.Spawn(def, spot, ReleaseHeightAt(spot));
 
         // At a drop every few seconds the sky is permanently busy, so an
         // "inbound" toast per crate is noise — the marked landing ring and the
@@ -151,12 +157,46 @@ public class TreasureSpawner : MonoBehaviour
             if (IsOnCover(hit.position) || IsCrowded(hit.position))
                 continue;
 
+            // The crate also has to be able to REACH this spot from the sky.
+            // Under a low ceiling — pinned beneath a catwalk or a tier — there
+            // is no descent to show, and landing on the thing overhead instead
+            // would strand the prize where bots cannot path. Somewhere else.
+            if (!HasDropRoom(hit.position))
+                continue;
+
             spot = hit.position;
             return true;
         }
 
         spot = Vector3.zero;
         return false;
+    }
+
+    /// <summary>
+    /// How far above <paramref name="groundPoint"/> the crate is released:
+    /// <see cref="dropHeight"/>, or just under whatever roof is overhead.
+    ///
+    /// Clamping rather than rejecting matters for the arenas built around a
+    /// ceiling — CRYSTAL HOLLOW is roofed over most of its floor, and refusing
+    /// every covered spot would push its drops out to the walls.
+    /// </summary>
+    float ReleaseHeightAt(Vector3 groundPoint)
+    {
+        var origin = groundPoint + Vector3.up * 0.3f;
+        if (Physics.Raycast(origin, Vector3.up, out RaycastHit hit,
+                            dropHeight, ~0, QueryTriggerInteraction.Ignore))
+            return Mathf.Max(0.5f, hit.point.y - groundPoint.y - 0.5f);
+        return dropHeight;
+    }
+
+    /// <summary>
+    /// Is there room above this spot for a crate to come down at all? A spot
+    /// pinned under a catwalk with a metre of headroom is not a drop zone; one
+    /// under a high cave roof is.
+    /// </summary>
+    bool HasDropRoom(Vector3 groundPoint)
+    {
+        return ReleaseHeightAt(groundPoint) >= minDropClearance;
     }
 
     bool IsOnCover(Vector3 point)
