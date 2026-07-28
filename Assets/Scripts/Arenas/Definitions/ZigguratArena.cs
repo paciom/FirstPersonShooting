@@ -49,10 +49,29 @@ public class ZigguratArena : ArenaDefinition
     public override float CoverFeatureSize => 1.1f;
     public override float CoverRoughness => 0.93f;
 
-    /// <summary>Keep cover off the pyramid — it would be buried inside a tier.</summary>
+    /// <summary>Fallen masonry at the corners — the jump-up route onto tier one.</summary>
+    static readonly Vector3[] Rubble =
+    {
+        new Vector3(11.5f, 0f, 11.5f), new Vector3(-11.5f, 0f, 11.5f),
+        new Vector3(11.5f, 0f, -11.5f), new Vector3(-11.5f, 0f, -11.5f),
+    };
+    const float RubbleTop = 1.5f;
+
+    /// <summary>
+    /// Keep cover off the pyramid — it would be buried inside a tier — and off
+    /// the rubble blocks, which cover would otherwise spawn inside.
+    /// </summary>
     public override bool IsOpenFloor(Vector3 point)
     {
-        return Mathf.Abs(point.x) > Tier1Half + 1.5f || Mathf.Abs(point.z) > Tier1Half + 1.5f;
+        if (Mathf.Abs(point.x) <= Tier1Half + 1.5f && Mathf.Abs(point.z) <= Tier1Half + 1.5f)
+            return false;
+        foreach (var block in Rubble)
+        {
+            var flat = new Vector2(point.x - block.x, point.z - block.z);
+            if (flat.magnitude < 3.2f)
+                return false;
+        }
+        return true;
     }
 
     public override Vector3[] TeamSpawns(int teamId)
@@ -116,6 +135,24 @@ public class ZigguratArena : ArenaDefinition
         kit.Ramp("RampE", new Vector3(8.5f, Tier1Top, 0f), new Vector3(5.5f, Tier2Top, 0f), 2.6f, brickDark);
         kit.Ramp("RampW", new Vector3(-8.5f, Tier1Top, 0f), new Vector3(-5.5f, Tier2Top, 0f), 2.6f, brickDark);
         kit.Ramp("RampTop", new Vector3(0f, Tier2Top, 5.5f), new Vector3(0f, Tier3Top, 2.5f), 2.2f, brick);
+
+        // Fallen masonry: a two-hop shortcut up onto tier one for anything
+        // willing to jump. Each step is inside ArenaKit.MaxLeapUp, so the links
+        // come out two-way and bots use them in both directions — up as a
+        // shortcut, down as an escape.
+        foreach (var block in Rubble)
+        {
+            kit.Box("Rubble", block + Vector3.up * (RubbleTop * 0.5f),
+                    new Vector3(3f, RubbleTop, 3f), brickDark, 20f);
+
+            Vector3 top = block + Vector3.up * RubbleTop;
+            var outward = new Vector3(Mathf.Sign(block.x), 0f, Mathf.Sign(block.z));
+            // Ground up onto the rubble (1.5 m)...
+            kit.Link(top, block + outward * 2.6f);
+            // ...and rubble across to the tier lip (0.7 m more).
+            kit.Link(top, new Vector3(Mathf.Sign(block.x) * 8.2f, Tier1Top,
+                                      Mathf.Sign(block.z) * 8.2f));
+        }
 
         // Bots take the drop off a tier rather than walking back round to a ramp.
         kit.Link(new Vector3(0f, Tier1Top, 9.4f), new Vector3(0f, 0f, 10.8f));

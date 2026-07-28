@@ -209,10 +209,25 @@ public class ArenaKit
     }
 
     /// <summary>
-    /// A one-way drop bots are willing to take, so an upper floor is not a dead
-    /// end they path away from.
+    /// Height a robot is willing to leap UP. Below this a link works both ways;
+    /// above it, it is a drop only — robots jump down off a catwalk, they do not
+    /// spring three metres onto one.
     /// </summary>
-    public void Link(Vector3 from, Vector3 to, float width = 1.5f, bool bidirectional = false)
+    public const float MaxLeapUp = 1.8f;
+
+    /// <summary>
+    /// A gap bots will jump rather than walk around, so an upper floor is not a
+    /// dead end they path away from. RobotJump turns the crossing into an arc.
+    ///
+    /// Direction is decided by the drop: short steps are two-way, real drops are
+    /// one-way down.
+    /// </summary>
+    public void Link(Vector3 from, Vector3 to, float width = 1.5f)
+    {
+        Link(from, to, width, (from.y - to.y) <= MaxLeapUp);
+    }
+
+    public void Link(Vector3 from, Vector3 to, float width, bool bidirectional)
     {
         var go = new GameObject("NavLink");
         go.transform.SetParent(_root, false);

@@ -113,6 +113,12 @@ public class AIBrain : MonoBehaviour
         // loot-dash multiplier has to have somewhere to live from frame one.
         _statusEffects = StatusEffects.Get(transform);
 
+        // Every bot leaps the gaps in its own path. Ensured here as well as in
+        // ArenaBuilder so it reaches bots already serialized into the scene, and
+        // reinforcement clones, without waiting on a scene rebuild.
+        if (GetComponent<RobotJump>() == null)
+            gameObject.AddComponent<RobotJump>();
+
         if (weapons == null || weapons.Length == 0)
             weapons = GetComponentsInChildren<Weapon>();
         _weights = new float[weapons.Length];

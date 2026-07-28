@@ -28,6 +28,13 @@ public class RobotLocomotion : MonoBehaviour
     [Tooltip("Legs and hover bob fight each other — switch the bob off on our character.")]
     public bool disableHoverBob = true;
 
+    /// <summary>
+    /// Set while the character is mid-leap (see RobotJump). The legs settle
+    /// instead of sprinting through the air — a robot running on nothing reads
+    /// worse than one holding a pose.
+    /// </summary>
+    public bool Airborne { get; set; }
+
     Animator _animator;
     Transform _character;
     Vector3 _lastPosition;
@@ -65,6 +72,8 @@ public class RobotLocomotion : MonoBehaviour
         float planar = new Vector3(delta.x, 0f, delta.z).magnitude / dt;
         if (planar > 40f)
             planar = 0f;    // teleport / respawn, not a sprint
+        if (Airborne)
+            planar = 0f;    // crossing a gap, not running along the ground
 
         _speed = Mathf.Lerp(_speed, planar, 1f - Mathf.Exp(-responsiveness * dt));
         _animator.SetFloat(_speedHash, _speed);

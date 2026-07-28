@@ -851,6 +851,11 @@ public static class ArenaBuilder
             agent.radius = 0.4f;
             agent.height = 2f;
 
+            // Leaps the arena's NavMeshLinks instead of sliding down them.
+            // After the agent exists: RobotJump requires one, and adding it
+            // first would auto-create a second.
+            bot.AddComponent<RobotJump>();
+
             // The real Meshy blaster, parented under the Body rig so it shrinks
             // away with the robot on de-rez.
             var cubeMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/BlasterBody.mat");
