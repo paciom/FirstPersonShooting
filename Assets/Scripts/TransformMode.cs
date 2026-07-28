@@ -136,6 +136,9 @@ public class TransformMode : MonoBehaviour
 
     public void Toggle() => SetVehicle(!IsVehicle);
 
+    /// <summary>Frozen solid — _status is created up front in Awake.</summary>
+    bool IsFrozen => _status != null && _status.IsFrozen;
+
     /// <summary>
     /// Ask to be a vehicle (or a robot again). A request that arrives mid-fold
     /// is remembered and applied when the current one finishes rather than
@@ -145,6 +148,14 @@ public class TransformMode : MonoBehaviour
     public void SetVehicle(bool vehicle)
     {
         if (!CanTransform)
+            return;
+        // Encased in ice: nothing folds. Guarded here rather than at the T key
+        // because the request also arrives from AIBrain and from treasure
+        // effects, and a statue that reassembles itself is not a statue.
+        //
+        // ForceRobotForm deliberately does NOT come through here — a de-rez has
+        // to be able to reset the rig whatever else is going on.
+        if (IsFrozen)
             return;
         if (IsBusy)
         {

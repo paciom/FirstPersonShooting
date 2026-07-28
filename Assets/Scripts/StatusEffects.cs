@@ -44,6 +44,7 @@ public class StatusEffects : MonoBehaviour
     float _hasteUntil;
     float _hasteFactor = 1f;
     float _freezeUntil;
+    bool _rotationFrozen;
     float _stuckUntil;
     float _floatUntil;
     float _blindUntil;
@@ -283,6 +284,24 @@ public class StatusEffects : MonoBehaviour
                 _agent.speed = _baseAgentSpeed * moveFactor;
             }
 
+            // Ice holds the pose. Zeroing the speed stops a bot travelling but
+            // not turning — the agent goes on rotating toward its steering
+            // target on the spot, so a frozen robot would still swivel to
+            // track whoever it was chasing.
+            if (frozen && !_rotationFrozen && _agent.enabled)
+            {
+                _rotationFrozen = true;
+                _agent.updateRotation = false;
+                if (_agent.isOnNavMesh)
+                    _agent.velocity = Vector3.zero;
+            }
+            else if (!frozen && _rotationFrozen)
+            {
+                _rotationFrozen = false;
+                if (_agent.enabled)
+                    _agent.updateRotation = true;
+            }
+
             // Knockback for bots.
             if (_impulse.sqrMagnitude > 0.02f)
             {
@@ -380,6 +399,12 @@ public class StatusEffects : MonoBehaviour
         {
             _hoverBob.enabled = true;
             _hoverDisabled = false;
+        }
+        if (_rotationFrozen)
+        {
+            _rotationFrozen = false;
+            if (_agent != null && _agent.enabled)
+                _agent.updateRotation = true;
         }
         if (_freezeShell != null) Destroy(_freezeShell);
         if (_bubbleShell != null) Destroy(_bubbleShell);
