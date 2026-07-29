@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -42,11 +42,15 @@ public class GameModeController : MonoBehaviour
     PlayerBrain _playerBrain;
     CharacterMotor _playerMotor;
     // A list, not an array: teams grow mid-match when a team banks enough gold
-    // to build a reinforcement (see RobotReinforcements).
-    readonly List<AIBrain> _bots = new List<AIBrain>();
+    // to build a reinforcement (see RobotReinforcements). Not readonly: plain
+    // private fields survive a recompile-during-Play reload, readonly ones are
+    // silently reset — and an empty bot list here means no mode can ever pause
+    // or resume the bots again.
+    List<AIBrain> _bots = new List<AIBrain>();
     ArenaBlockManager _blockManager;
     TreasureSpawner _treasureSpawner;
     GameObject _spectatorRig;
+    CommanderController _commander;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -199,6 +203,13 @@ public class GameModeController : MonoBehaviour
     {
         Mode = GameMode.Menu;
         DestroySpectatorRig();
+        // Torn down before anything touches the characters: Teardown is what
+        // brings the hidden FPS cast back and swaps the arena world back in.
+        if (_commander != null)
+        {
+            _commander.Teardown();
+            _commander = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -491,6 +502,28 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         ShowOverlay("AI v AI — ESC for Menu", "AI v AI — tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The Commander RTS mode. No robot/arena select in front of it (yet):
+    /// the battlefield is its own fixed map, and army composition is decided
+    /// in-match by what you build, not on a select screen.
+    /// </summary>
+    public void StartCommander()
+    {
+        Mode = GameMode.Commander;
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden: deactivating a mid-cycle de-rez
+        // or fold would strand its coroutine — same order every mode uses.
+        RestoreAllDeRez();
+
+        _commander = CommanderController.Begin(this);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("WASD / edge — Pan   ·   Wheel — Zoom   ·   Middle-drag — Pan   ·   ESC — Menu",
+            "COMMANDER — tap MENU to go back");
         LockCursor(false);
     }
 
