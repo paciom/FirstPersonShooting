@@ -361,13 +361,13 @@ public class VehicleSkin : MonoBehaviour
         return null;
     }
 
-    static Bounds Combine(Renderer[] renderers)
-    {
-        var bounds = renderers[0].bounds;
-        foreach (var renderer in renderers)
-            bounds.Encapsulate(renderer.bounds);
-        return bounds;
-    }
+    /// <summary>
+    /// Through RobotFactory rather than Renderer.bounds directly: the robot
+    /// being measured here is a skinned mesh whose renderer box is not around
+    /// its geometry, and a tank fitted to that box is the wrong size and sits
+    /// off the floor. See RobotFactory.MeasureWorldBounds.
+    /// </summary>
+    static Bounds Combine(Renderer[] renderers) => RobotFactory.MeasureWorldBounds(renderers);
 
     /// <summary>
     /// Repaints copies of the imported materials into the team's colors — never
