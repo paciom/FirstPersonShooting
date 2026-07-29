@@ -238,6 +238,11 @@ public class CommanderAI : MonoBehaviour
     /// </summary>
     void Command()
     {
+        // Machine-commanded robots don't stand around: idle fighters work
+        // the mines. Re-asserted every tick, which also heals the static
+        // across a mid-play recompile.
+        CommanderUnit.IdleWorkEnabled[teamId] = true;
+
         var fighters = Fighters();
 
         if (_assaulting && fighters.Count <= 2)
@@ -269,6 +274,12 @@ public class CommanderAI : MonoBehaviour
         {
             if (fighter.InCombat)
                 continue;   // never yank a robot out of a live fight
+            // Between waves, a robot in the mines is where it should be —
+            // recalling miners to stand at the rally line is the exact
+            // idleness this feature removes. Assault pushes still gather
+            // everyone, miners included.
+            if (!_assaulting && fighter.IsWorking)
+                continue;
             Vector3 flat = fighter.transform.position - target;
             flat.y = 0f;
             if (flat.magnitude <= slack)

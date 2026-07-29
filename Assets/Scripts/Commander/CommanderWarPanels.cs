@@ -224,13 +224,17 @@ public class CommanderWarPanels : MonoBehaviour
     void RefreshPanel(int team)
     {
         // --- the ledger ---
-        int fighters = 0, collectors = 0;
+        int fighters = 0, collectors = 0, mining = 0;
         foreach (var unit in CommanderUnit.All)
         {
             if (unit == null || unit.TeamId != team || !unit.IsAlive)
                 continue;
             if (unit is CommanderCollector) collectors++;
-            else fighters++;
+            else
+            {
+                fighters++;
+                if (unit.IsWorking) mining++;
+            }
         }
 
         var structures = new System.Text.StringBuilder();
@@ -253,10 +257,13 @@ public class CommanderWarPanels : MonoBehaviour
             structures.Append(count > 1 ? $"{shortName}x{count}" : shortName);
         }
 
+        string army = mining > 0
+            ? $"ARMY      {fighters} robots ({mining} mining)   ·   {collectors} collectors"
+            : $"ARMY      {fighters} robots   ·   {collectors} collectors";
         _stats[team].text =
             $"CREDITS   {CommanderEconomy.Credits(team):N0}\n" +
             $"POWER     {CommanderPower.Supply(team)} / {CommanderPower.Draw(team)}\n" +
-            $"ARMY      {fighters} robots   ·   {collectors} collectors\n" +
+            $"{army}\n" +
             $"BASE      {structureCount} structures\n" +
             $"{structures}";
 

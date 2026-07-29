@@ -64,6 +64,27 @@ public class CommanderUnit : MonoBehaviour
     const float TransformDistance = 32f;
     const float VehicleSpeedFactor = 1.55f;
 
+    /// <summary>
+    /// Per-team permission for idle fighters to work the mines. The AI
+    /// commanders assert their flag every tick (which also self-heals the
+    /// static across a reload); the player's team never sets it — a human's
+    /// parked robots are a defensive line, not shirkers, and units that
+    /// wander off a hold position are worse than units that idle.
+    /// </summary>
+    public static readonly bool[] IdleWorkEnabled = new bool[2];
+
+    /// <summary>A fighter's pockets — a fraction of a collector's hold.</summary>
+    const float FighterCarry = 60f;
+    const float FighterMineSeconds = 10f;
+    const float FighterUnloadRadius = 9f;
+
+    [SerializeField] float _workCarrying;
+    CrystalField _workField;
+
+    /// <summary>Currently moonlighting in the mines (and interruptible by anything).</summary>
+    public bool IsWorking =>
+        _order == OrderKind.Idle && (_workCarrying > 0f || _workField != null);
+
     OrderKind _order = OrderKind.Idle;
     Vector3 _destination;
     Vector3 _leashOrigin;
@@ -444,8 +465,10 @@ public class CommanderUnit : MonoBehaviour
 
     /// <summary>
     /// What an unoccupied unit does with its slow tick. Fighters look for
-    /// trouble; the Collector overrides this with its harvest cycle. Runs
-    /// only while no order is active, so a player Move always wins.
+    /// trouble first — and finding none, help in the mines rather than
+    /// stand posing at the rally line. The Collector overrides this with
+    /// its own full-time harvest cycle. Runs only while no order is active,
+    /// so a player Move (or an AI wave push) always wins.
     /// </summary>
     protected virtual void ThinkIdle()
     {
@@ -456,7 +479,58 @@ public class CommanderUnit : MonoBehaviour
             _leashed = true;
             _order = OrderKind.Attack;
             _target = intruder;
+            return;
         }
+        TickIdleWork();
+    }
+
+    /// <summary>
+    /// The moonlight shift: nearest live field, chip a pocketful, haul it
+    /// home, repeat. A pale imitation of a collector — small pockets, slow
+    /// hands — but an army of imitations between waves adds up, and robots
+    /// WORKING is what a battlefield of robots should look like.
+    /// </summary>
+    void TickIdleWork()
+    {
+        int team = TeamId;
+        if (team < 0 || team >= IdleWorkEnabled.Length || !IdleWorkEnabled[team])
+            return;
+
+        // Full pockets (or nothing left anywhere to mine): bank it.
+        if (_workCarrying >= FighterCarry
+            || (_workCarrying > 0f && CrystalField.Nearest(transform.position) == null))
+        {
+            Vector3 depot = CommanderMap.BaseSite(team);
+            Vector3 flat = depot - transform.position;
+            flat.y = 0f;
+            if (flat.magnitude <= FighterUnloadRadius)
+            {
+                CommanderEconomy.Grant(team, Mathf.RoundToInt(_workCarrying));
+                _workCarrying = 0f;
+            }
+            else
+            {
+                SetAgentDestination(depot);
+            }
+            return;
+        }
+
+        if (_workField == null || _workField.IsExhausted)
+            _workField = CrystalField.Nearest(transform.position);
+        if (_workField == null)
+            return;   // map mined dry — stand down for real
+
+        Vector3 fieldPos = _workField.transform.position;
+        Vector3 toField = fieldPos - transform.position;
+        toField.y = 0f;
+        if (toField.magnitude > CrystalField.HarvestRadius)
+        {
+            // Park short of the centre, same as the professionals do.
+            SetAgentDestination(fieldPos - toField.normalized * 4f);
+            return;
+        }
+
+        _workCarrying += _workField.Harvest(FighterCarry * (ThinkInterval / FighterMineSeconds));
     }
 
     /// <summary>Per-frame attack behaviour: chase, face, fire.</summary>
