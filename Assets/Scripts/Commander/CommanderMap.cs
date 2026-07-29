@@ -1,20 +1,25 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Builds the Commander battlefield: a 180 m map with a base site at each end,
-/// ridge lines that force army traffic through chokepoints, and eight photon
-/// crystal fields for the economy to fight over.
+/// Builds the Commander battlefield: a 180 m map with a base site at each
+/// end, ridge lines that force army traffic through chokepoints, ten photon
+/// crystal fields for the economy to fight over, and a battlefield's worth
+/// of dressing — craters, ruins, rocks, vents — so the ground between the
+/// bases has stories on it.
 ///
 /// Runtime-generated like the arenas, and with the same tools (ArenaKit +
 /// ArenaMaterials), but deliberately NOT an ArenaDefinition: arenas are 32 m
 /// combat rooms sized for one firefight, and everything an ArenaDefinition
-/// promises — cover churn bounds, treasure drop planes, spawn keep-outs — is
-/// FPS-match vocabulary that means nothing here.
+/// promises is FPS-match vocabulary that means nothing here.
 ///
-/// The layout is fixed, not randomized per match: the same map every time is
-/// what lets a strategy be practiced, and (like the arenas' fixed cover seed)
-/// what lets a layout problem found once be looked at again. It is mirrored by
-/// 180° rotation so neither base gets the better half.
+/// Every match rolls a different map from one MAP CODE (the seed): every
+/// draw comes from a single System.Random in a fixed order, so the same
+/// code always rebuilds the same battlefield — type a code you liked into
+/// the menu's MAP CODE box and you are back on it. Layout stays mirrored by
+/// 180° rotation so neither base gets the better half, and the bases
+/// themselves never move: (0, ±70) is load-bearing for spawns, AI rallies
+/// and the camera's opening shot.
 /// </summary>
 public static class CommanderMap
 {
@@ -23,27 +28,19 @@ public static class CommanderMap
 
     public const float GroundY = 0f;
 
+    /// <summary>The map code the current battlefield was rolled from.</summary>
+    public static int CurrentSeed { get; private set; }
+
     /// <summary>Where each team's base pad sits: cyan south, magenta north.</summary>
     public static Vector3 BaseSite(int teamId) =>
         new Vector3(0f, GroundY, teamId == 0 ? -70f : 70f);
 
     /// <summary>
-    /// Crystal field centres. The first four are the "safe" pair behind each
-    /// base's ridge line; the last four sit in the contested middle, which is
-    /// the point of them. Phase 2 hangs harvestable components off these; until
-    /// then the layout is already decided so the geometry never shifts under a
-    /// later phase.
+    /// This battlefield's crystal field centres, rolled at build time. Index
+    /// order: starter pair (beside each base), safe pair per base, contested
+    /// flanks, contested centre. The minimap reads these for its amber dots.
     /// </summary>
-    public static readonly Vector2[] CrystalFields =
-    {
-        new Vector2(-42f, -58f), new Vector2(42f, -58f),   // cyan's own
-        new Vector2(42f, 58f), new Vector2(-42f, 58f),     // magenta's own
-        new Vector2(-72f, 0f), new Vector2(72f, 0f),       // contested flanks
-        new Vector2(-16f, 14f), new Vector2(16f, -14f),    // contested centre
-    };
-
-    /// <summary>Ridge lines cross the map at ±this z, gapped by chokepoints.</summary>
-    const float RidgeZ = 28f;
+    public static Vector2[] CrystalFields { get; private set; } = new Vector2[0];
 
     /// <summary>
     /// Everything past the world's edge — the camera clear colour, the fog it
@@ -52,15 +49,19 @@ public static class CommanderMap
     /// </summary>
     public static readonly Color VoidColor = new Color(0.05f, 0.07f, 0.12f);
 
-    public static GameObject Build(Transform envRoot)
+    // Rolled per build; consumed by the keep-out checks the dressing uses.
+    static float _ridgeZ;
+    static float[] _gapCenters = new float[0];
+
+    public static GameObject Build(Transform envRoot, int seed)
     {
+        CurrentSeed = seed;
+
         var root = new GameObject("CommanderBattlefield");
         root.transform.SetParent(envRoot, false);
         var kit = new ArenaKit(root.transform, "Commander");
 
-        // Fixed seed for the rock jitter — same reasoning as ArenaRuntime's
-        // cover seed.
-        var rng = new System.Random(9021);
+        var rng = new System.Random(seed);
         float Next(float min, float max) => Mathf.Lerp(min, max, (float)rng.NextDouble());
 
         var ground = ArenaMaterials.Style("Cmd_Ground", ArenaMaterials.SurfaceStyle.Stone,
@@ -78,41 +79,164 @@ public static class CommanderMap
         kit.Box("Cliff_S", new Vector3(0f, 3f, -92f), new Vector3(188f, 6f, 4f), rock);
         kit.Box("Cliff_N", new Vector3(0f, 3f, 92f), new Vector3(188f, 6f, 4f), rock);
 
+        // --- the seed decides the terrain ---
+        _ridgeZ = Next(24f, 33f);
+        RollGaps(Next);
+        RollCrystalFields(Next);
+
         BuildRidges(kit, rock, Next);
         BuildCrystalFields(root.transform, kit, Next);
         BuildBasePads(kit);
+        BuildGroundPatches(kit, Next);
+        BuildCraters(kit, rock, Next);
+        BuildRuins(kit, Next);
+        BuildVents(kit, Next);
         ScatterRocks(kit, rock, Next);
 
         return root;
     }
 
+    // ------------------------------------------------------------- layout rolls
+
     /// <summary>
-    /// Two ridge lines, each broken by a west, a centre and an east chokepoint.
-    /// A ridge is a chain of jittered rock blocks rather than one wall so it
-    /// reads as terrain, but every block is tall enough (3.5 m+) that nothing
-    /// paths over it — the gaps are the only ways through.
-    ///
+    /// Three chokepoints per ridge line: a west, a centre-ish and an east
+    /// gap, each rolled inside its own band so they can wander without ever
+    /// merging into one super-gap or crowding a flank shut.
+    /// </summary>
+    static void RollGaps(System.Func<float, float, float> next)
+    {
+        _gapCenters = new[]
+        {
+            next(-58f, -34f),
+            next(-10f, 10f),
+            next(34f, 58f),
+        };
+    }
+
+    /// <summary>Half-width of each chokepoint opening, per gap.</summary>
+    static float[] _gapHalfWidths = new float[0];
+
+    /// <summary>
+    /// Ten fields in five mirrored pairs. The STARTER pair sits right beside
+    /// each base — the fast first mine that gets the economy moving inside
+    /// the opening minute — and is deliberately the smallest, so depleting
+    /// it pushes the war outward to the contested ground, Red Alert style.
+    /// </summary>
+    static void RollCrystalFields(System.Func<float, float, float> next)
+    {
+        var fields = new List<Vector2>();
+
+        // Starter: flanking the pad, a collector's stone's-throw from home.
+        float starterX = next(12f, 16f) * (next(0f, 1f) > 0.5f ? 1f : -1f);
+        float starterZ = -70f + next(2f, 8f);
+        AddPair(fields, new Vector2(starterX, starterZ));
+
+        // Safe: behind the ridge line, off to a flank.
+        float safeX = next(30f, 52f) * (next(0f, 1f) > 0.5f ? 1f : -1f);
+        float safeZ = next(-62f, -46f);
+        AddPair(fields, new Vector2(safeX, safeZ));
+
+        // A second safe-ish pair, wider and nearer the ridge.
+        float midX = next(36f, 66f) * (next(0f, 1f) > 0.5f ? 1f : -1f);
+        float midZ = next(-46f, -(_ridgeZ + 9f));
+        AddPair(fields, new Vector2(midX, midZ));
+
+        // Contested flank: out wide at midfield.
+        float flankX = next(58f, 78f) * (next(0f, 1f) > 0.5f ? 1f : -1f);
+        float flankZ = next(-12f, 12f);
+        AddPair(fields, new Vector2(flankX, flankZ));
+
+        // Contested centre: inside the ridge lines, near the middle.
+        float angle = next(0f, Mathf.PI * 2f);
+        float radius = next(8f, 24f);
+        var centre = new Vector2(Mathf.Cos(angle) * radius,
+            Mathf.Clamp(Mathf.Sin(angle) * radius, -(_ridgeZ - 10f), _ridgeZ - 10f));
+        AddPair(fields, centre);
+
+        // Nudge any pair that landed on another apart. Deterministic: fixed
+        // iteration order, pure function of positions already rolled.
+        for (int i = 2; i < fields.Count; i += 2)
+            for (int j = 0; j < i; j += 2)
+                if (Vector2.Distance(fields[i], fields[j]) < 16f)
+                {
+                    Vector2 push = (fields[i] - fields[j]).normalized * 16f;
+                    if (push == Vector2.zero) push = new Vector2(16f, 0f);
+                    fields[i] = fields[j] + push;
+                    fields[i + 1] = -fields[i];
+                }
+
+        // A nudge can shove a field into the ridge band, where its crystal
+        // would grow through rock a collector can't reach (1-in-8 maps, per
+        // simulation). Snap those just clear, on whichever side they were.
+        for (int i = 2; i < fields.Count; i += 2)
+        {
+            float band = Mathf.Abs(Mathf.Abs(fields[i].y) - _ridgeZ);
+            if (band < 9f)
+            {
+                float sign = Mathf.Sign(fields[i].y);
+                float absZ = Mathf.Abs(fields[i].y) > _ridgeZ ? _ridgeZ + 9f : _ridgeZ - 9f;
+                fields[i] = new Vector2(fields[i].x, sign * absZ);
+                fields[i + 1] = -fields[i];
+            }
+        }
+
+        CrystalFields = fields.ToArray();
+    }
+
+    /// <summary>A field and its 180°-rotated twin, so the roll stays fair.</summary>
+    static void AddPair(List<Vector2> fields, Vector2 southSide)
+    {
+        fields.Add(southSide);
+        fields.Add(-southSide);
+    }
+
+    /// <summary>Capacity by pair: starter small, contested rich.</summary>
+    static float FieldCapacity(int index)
+    {
+        int pair = index / 2;
+        switch (pair)
+        {
+            case 0: return 1500f;    // starter — spends fast, pushes you out
+            case 4: return 4000f;    // centre — worth the fight
+            default: return 3000f;
+        }
+    }
+
+    // ------------------------------------------------------------- terrain
+
+    /// <summary>
+    /// Two ridge lines at ±ridgeZ, broken by this map's rolled chokepoints.
     /// Only the south ridge is generated; every block is emitted twice, as
-    /// drawn and rotated 180° through the origin. Two ridges drawing from one
-    /// RNG stream get different jitter, and with a fixed seed a chokepoint a
-    /// couple of metres narrower than its mirror is a permanent bias, not a
-    /// coin flip — the header's fairness promise has to hold at block level.
+    /// drawn and rotated 180° through the origin — one RNG stream for two
+    /// ridges would give the mirror different jitter, and with a fixed seed
+    /// a chokepoint narrower than its twin is a permanent bias.
     /// </summary>
     static void BuildRidges(ArenaKit kit, Material rock, System.Func<float, float, float> next)
     {
-        // Block-CENTRE ranges. The nominal gaps are (-52,-36), (-10,10),
-        // (36,52); chokepoint-facing ends are inset 5.2 m — the worst-case
-        // half-footprint of a yawed block (3.75·cos14° + 3·sin14° ≈ 4.36) plus
-        // its 0.8 x-jitter — so no block bites into a 16 m gap. The ±90
-        // map-edge ends are NOT inset: those blocks must keep overlapping the
-        // border cliffs, or a walkable slit opens between ridge and cliff.
-        var segments = new[]
-        {
-            new Vector2(-90f, -57.2f), new Vector2(-30.8f, -15.2f),
-            new Vector2(15.2f, 30.8f), new Vector2(57.2f, 90f),
-        };
+        // Gap half-widths rolled here (RNG order is the reproducibility
+        // contract — everything draws in one fixed sequence).
+        _gapHalfWidths = new float[_gapCenters.Length];
+        for (int i = 0; i < _gapCenters.Length; i++)
+            _gapHalfWidths[i] = next(7.5f, 10f);
 
-        foreach (var seg in segments)
+        // Block-CENTRE segment ranges between the gaps. Chokepoint-facing
+        // ends are inset 5.2 m — the worst-case half-footprint of a yawed
+        // block plus its jitter — so no block bites into an opening. The ±90
+        // map-edge ends are NOT inset: those blocks must keep overlapping
+        // the border cliffs, or a walkable slit opens between ridge and cliff.
+        var edges = new List<Vector2>();
+        float cursor = -90f;
+        for (int i = 0; i < _gapCenters.Length; i++)
+        {
+            float left = _gapCenters[i] - _gapHalfWidths[i] - 5.2f;
+            if (left - cursor > 4f)
+                edges.Add(new Vector2(cursor, left));
+            cursor = Mathf.Max(cursor, _gapCenters[i] + _gapHalfWidths[i] + 5.2f);
+        }
+        if (90f - cursor > 4f)
+            edges.Add(new Vector2(cursor, 90f));
+
+        foreach (var seg in edges)
         {
             // Endpoint-inclusive spacing: the chain must reach the inset line
             // exactly, not stop a stride short and widen the gap it guards.
@@ -122,15 +246,13 @@ public static class CommanderMap
 
             for (int i = 0; i < count; i++)
             {
-                // Height drawn first, centre-y derived from it: every block
-                // sits 0.3–1.0 m INTO the ground. Independent draws let a
-                // third of the blocks float with daylight underneath, which
-                // the 55° camera stares straight at.
+                // Height first, centre-y derived from it: every block sits
+                // 0.3–1.0 m INTO the ground, never floating on daylight.
                 float height = next(3.5f, 5.5f);
                 var pos = new Vector3(
                     seg.x + step * i + next(-0.8f, 0.8f),
                     height * 0.5f - next(0.3f, 1.0f),
-                    -RidgeZ + next(-1.2f, 1.2f));
+                    -_ridgeZ + next(-1.2f, 1.2f));
                 var size = new Vector3(next(5.5f, 7.5f), height, next(4f, 6f));
                 float yaw = next(-14f, 14f);
 
@@ -145,8 +267,8 @@ public static class CommanderMap
     /// <summary>
     /// A crystal field is a dozen tilted amber shards. Amber on purpose: the
     /// teams own cyan and magenta, so the thing they fight over is neither.
-    /// Shards keep their colliders — units pathing around a field they are not
-    /// harvesting is correct, and the NavMesh bake handles it.
+    /// Shards keep their colliders — units pathing around a field they are
+    /// not harvesting is correct, and the NavMesh bake handles it.
     ///
     /// Each field gets its own object carrying a CrystalField component, with
     /// the shards reparented under it — that is what collectors harvest, and
@@ -162,17 +284,22 @@ public static class CommanderMap
             new Color(0.45f, 0.30f, 0.10f), new Color(0.25f, 0.15f, 0.05f), 0.8f, 0.35f,
             amber, 1.5f);
 
-        foreach (var field in CrystalFields)
+        for (int index = 0; index < CrystalFields.Length; index++)
         {
+            var field = CrystalFields[index];
             var fieldGo = new GameObject("CrystalField");
             fieldGo.transform.SetParent(mapRoot, false);
             fieldGo.transform.localPosition = new Vector3(field.x, GroundY, field.y);
 
-            var shards = new System.Collections.Generic.List<Transform>(12);
-            for (int i = 0; i < 12; i++)
+            // Starter fields are compact — a claim, not a province.
+            float spread = index < 2 ? 3.2f : 4.5f;
+            int shardCount = index < 2 ? 9 : 12;
+
+            var shards = new List<Transform>(shardCount);
+            for (int i = 0; i < shardCount; i++)
             {
                 float angle = next(0f, Mathf.PI * 2f);
-                float dist = next(0f, 4.5f);
+                float dist = next(0f, spread);
                 var basePoint = new Vector3(field.x + Mathf.Cos(angle) * dist, GroundY,
                                             field.y + Mathf.Sin(angle) * dist);
 
@@ -197,14 +324,14 @@ public static class CommanderMap
             // it, which is what the camera mostly sees from 45 m up.
             kit.Point(new Vector3(field.x, 2.5f, field.y), amber, 1.8f, 10f);
 
-            fieldGo.AddComponent<CrystalField>().Init(shards, 3000f);
+            fieldGo.AddComponent<CrystalField>().Init(shards, FieldCapacity(index));
         }
     }
 
     /// <summary>
-    /// Each team's base site: a tread-plate pad with team-colour trim. Phase 3
-    /// puts the Command Center here; until then the pad itself marks whose end
-    /// is whose from any zoom.
+    /// Each team's base site: a tread-plate pad with team-colour trim. The
+    /// Command Center stands here; the pad marks whose end is whose from any
+    /// zoom.
     /// </summary>
     static void BuildBasePads(ArenaKit kit)
     {
@@ -234,27 +361,158 @@ public static class CommanderMap
         }
     }
 
+    // ------------------------------------------------------------- dressing
+
     /// <summary>
-    /// Loose rocks for visual texture, placed in 180°-rotated pairs like the
-    /// ridges. Kept clear of the base pads, the crystal fields and the ridge
-    /// lines so they never plug a chokepoint or squat on ground Phase 3 wants
-    /// buildable — and since all of those keep-outs are themselves symmetric,
-    /// one check clears both twins.
+    /// Big faint tonal patches on the floor — scorch and sediment. Zero
+    /// gameplay, huge difference from 45 m up: an untextured plain reads as
+    /// an empty table, a mottled one reads as land.
+    /// </summary>
+    static void BuildGroundPatches(ArenaKit kit, System.Func<float, float, float> next)
+    {
+        var dark = ArenaMaterials.Lit("Cmd_PatchDark", new Color(0.115f, 0.125f, 0.155f), 0.15f);
+        var pale = ArenaMaterials.Lit("Cmd_PatchPale", new Color(0.20f, 0.21f, 0.24f), 0.15f);
+
+        int pairs = (int)next(9f, 14f);
+        for (int i = 0; i < pairs; i++)
+        {
+            var pos = new Vector3(next(-80f, 80f), 0f, next(-80f, 80f));
+            if (NearBase(pos, 12f))
+                continue;   // the pad owns its own floor
+            var size = new Vector3(next(7f, 17f), 0.04f, next(7f, 17f));
+            float yaw = next(0f, 360f);
+            var mat = next(0f, 1f) > 0.45f ? dark : pale;
+            kit.Decor("Patch", new Vector3(pos.x, 0.02f, pos.z), size, mat, yaw);
+            kit.Decor("Patch", new Vector3(-pos.x, 0.02f, -pos.z), size, mat, yaw);
+        }
+    }
+
+    /// <summary>
+    /// Old impact craters: a dark floor disc with a rim of low broken rock.
+    /// The rim stones collide — a crater is soft cover, which is more
+    /// interesting than decoration.
+    /// </summary>
+    static void BuildCraters(ArenaKit kit, Material rock, System.Func<float, float, float> next)
+    {
+        var scorch = ArenaMaterials.Lit("Cmd_Scorch", new Color(0.06f, 0.065f, 0.09f), 0.1f);
+
+        int pairs = (int)next(3f, 6f);
+        int placed = 0, attempts = 0;
+        while (placed < pairs && attempts++ < 60)
+        {
+            var pos = new Vector3(next(-72f, 72f), 0f, next(-72f, 72f));
+            if (Blocked(pos, baseKeepOut: 24f, fieldKeepOut: 11f, gapKeepOut: 9f))
+                continue;
+
+            float radius = next(2.2f, 3.6f);
+            kit.Cylinder("Crater", new Vector3(pos.x, 0.005f, pos.z), radius, 0.03f, scorch, collide: false);
+            kit.Cylinder("Crater", new Vector3(-pos.x, 0.005f, -pos.z), radius, 0.03f, scorch, collide: false);
+
+            int stones = (int)next(4f, 7f);
+            for (int s = 0; s < stones; s++)
+            {
+                float angle = next(0f, Mathf.PI * 2f);
+                float size = next(0.6f, 1.2f);
+                var stone = new Vector3(pos.x + Mathf.Cos(angle) * radius,
+                    size * 0.3f, pos.z + Mathf.Sin(angle) * radius);
+                var scale = new Vector3(size, size * 0.6f, size * next(0.7f, 1.1f));
+                float yaw = next(0f, 360f);
+                kit.Box("CraterRim", stone, scale, rock, yaw);
+                kit.Box("CraterRim", new Vector3(-stone.x, stone.y, -stone.z), scale, rock, yaw);
+            }
+            placed++;
+        }
+    }
+
+    /// <summary>
+    /// Ruined half-walls between the ridge lines — two low slabs in an L,
+    /// chest-high on a robot. Midfield cover that armies actually trade
+    /// around, on the ground where the waves meet.
+    /// </summary>
+    static void BuildRuins(ArenaKit kit, System.Func<float, float, float> next)
+    {
+        var wall = ArenaMaterials.Style("Cmd_Ruin", ArenaMaterials.SurfaceStyle.Brick,
+            new Color(0.17f, 0.16f, 0.19f), new Color(0.09f, 0.09f, 0.11f), 1.1f, 0.9f);
+
+        int pairs = (int)next(2f, 5f);
+        int placed = 0, attempts = 0;
+        while (placed < pairs && attempts++ < 60)
+        {
+            float band = _ridgeZ - 7f;
+            var pos = new Vector3(next(-70f, 70f), 0f, next(-band, band));
+            if (Blocked(pos, baseKeepOut: 26f, fieldKeepOut: 12f, gapKeepOut: 10f))
+                continue;
+
+            float yaw = next(0f, 360f);
+            float height = next(1.5f, 2.2f);
+            var longArm = new Vector3(next(4f, 7f), height, next(0.7f, 1f));
+            var shortArm = new Vector3(next(0.7f, 1f), height * next(0.6f, 0.9f), next(2.5f, 4.5f));
+            var armOffset = Quaternion.Euler(0f, yaw, 0f)
+                * new Vector3(longArm.x * 0.5f, 0f, shortArm.z * 0.5f);
+
+            EmitRuin(kit, wall, pos, yaw, height, longArm, shortArm, armOffset, 1f);
+            EmitRuin(kit, wall, -pos, yaw, height, longArm, shortArm, armOffset, -1f);
+            placed++;
+        }
+    }
+
+    static void EmitRuin(ArenaKit kit, Material wall, Vector3 pos, float yaw, float height,
+        Vector3 longArm, Vector3 shortArm, Vector3 armOffset, float mirror)
+    {
+        var at = new Vector3(pos.x, 0f, pos.z);
+        kit.Box("Ruin", at + new Vector3(0f, height * 0.5f - 0.15f, 0f), longArm, wall, yaw);
+        kit.Box("Ruin", at + armOffset * mirror + new Vector3(0f, shortArm.y * 0.5f - 0.15f, 0f),
+            shortArm, wall, yaw);
+    }
+
+    /// <summary>
+    /// Teal energy vents: little glowing shard clusters, no collider, no
+    /// light — pure signs of life on the plain, in the one hot colour
+    /// nothing else on this map uses.
+    /// </summary>
+    static void BuildVents(ArenaKit kit, System.Func<float, float, float> next)
+    {
+        var teal = new Color(0.3f, 1f, 0.8f);
+        var vent = ArenaMaterials.Style("Cmd_Vent", ArenaMaterials.SurfaceStyle.Crystal,
+            new Color(0.08f, 0.22f, 0.18f), new Color(0.04f, 0.12f, 0.10f), 0.6f, 0.4f,
+            teal, 1.5f);
+
+        int pairs = (int)next(6f, 10f);
+        int placed = 0, attempts = 0;
+        while (placed < pairs && attempts++ < 80)
+        {
+            var pos = new Vector3(next(-78f, 78f), 0f, next(-78f, 78f));
+            if (Blocked(pos, baseKeepOut: 18f, fieldKeepOut: 10f, gapKeepOut: 7f))
+                continue;
+
+            int shards = (int)next(2f, 4f);
+            for (int s = 0; s < shards; s++)
+            {
+                var basePoint = pos + new Vector3(next(-1.2f, 1.2f), 0f, next(-1.2f, 1.2f));
+                float height = next(0.5f, 1.1f);
+                var tip = basePoint + new Vector3(next(-0.3f, 0.3f), height, next(-0.3f, 0.3f));
+                var mirrorBase = new Vector3(-basePoint.x, 0f, -basePoint.z);
+                var mirrorTip = new Vector3(-tip.x, tip.y, -tip.z);
+                float thickness = next(0.25f, 0.45f);
+                kit.Beam("Vent", basePoint - Vector3.up * 0.2f, tip, thickness, vent, collide: false);
+                kit.Beam("Vent", mirrorBase - Vector3.up * 0.2f, mirrorTip, thickness, vent, collide: false);
+            }
+            placed++;
+        }
+    }
+
+    /// <summary>
+    /// Loose rocks for texture, in 180°-rotated pairs like everything else.
     /// </summary>
     static void ScatterRocks(ArenaKit kit, Material rock, System.Func<float, float, float> next)
     {
+        int target = (int)next(10f, 15f);
         int placed = 0, attempts = 0;
-        while (placed < 7 && attempts++ < 200)
+        while (placed < target && attempts++ < 200)
         {
             var pos = new Vector3(next(-80f, 80f), 0f, next(-80f, 80f));
-
-            if (Vector3.Distance(pos, BaseSite(0)) < 22f) continue;
-            if (Vector3.Distance(pos, BaseSite(1)) < 22f) continue;
-            if (Mathf.Abs(Mathf.Abs(pos.z) - RidgeZ) < 7f) continue;
-            bool nearField = false;
-            foreach (var field in CrystalFields)
-                if (Vector2.Distance(new Vector2(pos.x, pos.z), field) < 9f) { nearField = true; break; }
-            if (nearField) continue;
+            if (Blocked(pos, baseKeepOut: 22f, fieldKeepOut: 9f, gapKeepOut: 7f))
+                continue;
 
             float size = next(1.6f, 3.4f);
             var scale = new Vector3(size, size * 0.7f, size * next(0.7f, 1.1f));
@@ -264,6 +522,37 @@ public static class CommanderMap
             placed++;
         }
     }
+
+    // ------------------------------------------------------------- keep-outs
+
+    /// <summary>
+    /// Whether a prop at <paramref name="pos"/> would crowd a base, a
+    /// crystal field, a ridge line or a chokepoint lane. All keep-out
+    /// geometry is itself symmetric, so one check clears both twins.
+    /// </summary>
+    static bool Blocked(Vector3 pos, float baseKeepOut, float fieldKeepOut, float gapKeepOut)
+    {
+        if (NearBase(pos, baseKeepOut))
+            return true;
+        foreach (var field in CrystalFields)
+            if (Vector2.Distance(new Vector2(pos.x, pos.z), field) < fieldKeepOut)
+                return true;
+        // The ridge band itself...
+        if (Mathf.Abs(Mathf.Abs(pos.z) - _ridgeZ) < 7f)
+            return true;
+        // ...and the traffic lanes through it: a chokepoint with a rock in
+        // its mouth is a chokepoint the design lied about.
+        foreach (var gap in _gapCenters)
+            if (Mathf.Abs(Mathf.Abs(pos.z) - _ridgeZ) < 14f
+                && (Mathf.Abs(pos.x - gap) < gapKeepOut || Mathf.Abs(pos.x + gap) < gapKeepOut))
+                return true;
+        return false;
+    }
+
+    static bool NearBase(Vector3 pos, float range) =>
+        Vector3.Distance(pos, BaseSite(0)) < range || Vector3.Distance(pos, BaseSite(1)) < range;
+
+    // ------------------------------------------------------------- extras
 
     /// <summary>
     /// A vast dark apron under the world's edge. Called by the controller
@@ -281,9 +570,10 @@ public static class CommanderMap
     }
 
     /// <summary>
-    /// Battlefield atmosphere: a whisper of fog for depth over 180 m sightlines
-    /// and the scene's flat ambient. ArenaRuntime.Load reapplies the arena's
-    /// own atmosphere on the way out, so nothing here needs undoing by hand.
+    /// Battlefield atmosphere: a whisper of fog for depth over 180 m
+    /// sightlines and the scene's flat ambient. ArenaRuntime.Load reapplies
+    /// the arena's own atmosphere on the way out, so nothing here needs
+    /// undoing by hand.
     /// </summary>
     public static void ApplyAtmosphere()
     {

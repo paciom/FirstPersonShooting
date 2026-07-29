@@ -15,6 +15,22 @@ public static class MainMenu
         "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope";
 
     static Text _hint;
+    static InputField _seedField;
+
+    /// <summary>
+    /// The MAP CODE the player typed for Commander, or null for "roll one".
+    /// Codes are how a map is revisited: every battlefield prints its code
+    /// in the overlay, and typing it here rebuilds that exact map.
+    /// </summary>
+    public static int? RequestedSeed
+    {
+        get
+        {
+            if (_seedField == null || string.IsNullOrWhiteSpace(_seedField.text))
+                return null;
+            return int.TryParse(_seedField.text.Trim(), out int seed) ? seed : (int?)null;
+        }
+    }
 
     public static GameObject Build(GameModeController controller)
     {
@@ -51,7 +67,50 @@ public static class MainMenu
             20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
             new Vector2(0.5f, 0f), new Vector2(0, 40), new Vector2(1200, 30));
 
+        MakeSeedBox(canvasGo.transform);
+
         return canvasGo;
+    }
+
+    /// <summary>
+    /// The Commander MAP CODE entry, tucked into the bottom-right corner:
+    /// blank rolls a fresh battlefield, a code rebuilds a known one.
+    /// </summary>
+    static void MakeSeedBox(Transform parent)
+    {
+        MakeText(parent, "SeedLabel", "COMMANDER  MAP  CODE", 16,
+            new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
+            new Vector2(1f, 0f), new Vector2(-118, 128), new Vector2(220, 22));
+
+        var box = MakeImage(parent, "SeedBox", new Color(0.04f, 0.10f, 0.16f, 0.95f));
+        var boxRect = box.rectTransform;
+        boxRect.anchorMin = boxRect.anchorMax = new Vector2(1f, 0f);
+        boxRect.pivot = new Vector2(0.5f, 0.5f);
+        boxRect.anchoredPosition = new Vector2(-118, 92);
+        boxRect.sizeDelta = new Vector2(200, 40);
+
+        var underline = MakeImage(box.transform, "Underline",
+            new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.6f));
+        underline.rectTransform.anchorMin = new Vector2(0, 0);
+        underline.rectTransform.anchorMax = new Vector2(1, 0);
+        underline.rectTransform.offsetMin = new Vector2(4, 0);
+        underline.rectTransform.offsetMax = new Vector2(-4, 2);
+
+        var text = MakeText(box.transform, "Text", "", 20, Color.white, FontStyle.Normal,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(184, 34));
+        text.alignment = TextAnchor.MiddleCenter;
+
+        var placeholder = MakeText(box.transform, "Placeholder", "random", 20,
+            new Color(1f, 1f, 1f, 0.25f), FontStyle.Italic,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(184, 34));
+        placeholder.alignment = TextAnchor.MiddleCenter;
+
+        _seedField = box.gameObject.AddComponent<InputField>();
+        _seedField.targetGraphic = box;
+        _seedField.textComponent = text;
+        _seedField.placeholder = placeholder;
+        _seedField.characterLimit = 7;
+        _seedField.contentType = InputField.ContentType.IntegerNumber;
     }
 
     /// <summary>

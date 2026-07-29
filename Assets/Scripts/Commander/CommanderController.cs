@@ -42,12 +42,16 @@ public class CommanderController : MonoBehaviour
     /// <summary>True when a human holds the cyan seat; false is the AI-war spectator mode.</summary>
     [SerializeField] bool _playerCommands = true;
 
-    public static CommanderController Begin(GameModeController owner, bool playerCommands)
+    /// <summary>The MAP CODE this session's battlefield is rolled from.</summary>
+    [SerializeField] int _seed;
+
+    public static CommanderController Begin(GameModeController owner, bool playerCommands, int seed)
     {
         var go = new GameObject("Commander");
         go.transform.SetParent(owner.transform, false);
         var controller = go.AddComponent<CommanderController>();
         controller._playerCommands = playerCommands;
+        controller._seed = seed;
         controller.Setup();
         return controller;
     }
@@ -95,7 +99,7 @@ public class CommanderController : MonoBehaviour
         foreach (Transform child in surface.transform)
             child.gameObject.SetActive(false);
 
-        _mapRoot = CommanderMap.Build(surface.transform);
+        _mapRoot = CommanderMap.Build(surface.transform, _seed);
         CommanderMap.ApplyAtmosphere();
         surface.BuildNavMesh();
         // After the bake — the skirt must never be walkable.

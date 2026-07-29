@@ -535,16 +535,21 @@ public class GameModeController : MonoBehaviour
         // or fold would strand its coroutine — same order every mode uses.
         RestoreAllDeRez();
 
-        _commander = CommanderController.Begin(this, playerCommands);
+        // The MAP CODE: whatever the menu box asked for, or a fresh roll.
+        // Printed in the hint so a battlefield worth revisiting can be —
+        // type its code back into the menu box.
+        int seed = MainMenu.RequestedSeed ?? Random.Range(1, 1000000);
+        _commander = CommanderController.Begin(this, playerCommands, seed);
 
         _menuCanvas.SetActive(false);
         if (playerCommands)
-            ShowOverlay("Drag — Select   ·   RMB — Move / Attack   ·   A + Click — Attack-move   ·   " +
-                "WASD / Wheel — Camera   ·   H — Home   ·   ESC — Menu",
-                "tap robot — select   ·   tap ground — move   ·   drag — pan   ·   pinch — zoom");
+            ShowOverlay($"MAP #{seed}   ·   Drag — Select   ·   RMB — Move / Attack   ·   " +
+                "A + Click — Attack-move   ·   WASD / Wheel — Camera   ·   H — Home   ·   ESC — Menu",
+                $"MAP #{seed}   ·   tap robot — select   ·   tap ground — move   ·   drag — pan");
         else
-            ShowOverlay("AI WAR — the camera follows the fighting; touch WASD / wheel to take it   ·   ESC — Menu",
-                "AI WAR — tap MENU to go back");
+            ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting; " +
+                "touch WASD / wheel to take it   ·   ESC — Menu",
+                $"AI WAR — MAP #{seed}   ·   tap MENU to go back");
         LockCursor(false);
     }
 

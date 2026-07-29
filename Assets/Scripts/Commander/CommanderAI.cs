@@ -29,8 +29,12 @@ public class CommanderAI : MonoBehaviour
     /// gate, two 12-robot starting armies meet an 8-robot wave quorum on the
     /// very first think tick, brawl mid-map, and the survivors end the match
     /// against a base that never got to build its guns.
+    ///
+    /// 120, down from 150, since the starter crystal fields put the first
+    /// load in the bank inside the opening minute — the build-up act runs
+    /// faster now, so it can be shorter.
     /// </summary>
-    const float BuildupSeconds = 150f;
+    const float BuildupSeconds = 120f;
 
     float _nextTick;
     float _nextStragglerPush;
