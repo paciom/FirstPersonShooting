@@ -92,6 +92,18 @@ public class CommanderSelection : MonoBehaviour
                 return;
         }
 
+        // While a build ghost is on the cursor, the mouse belongs to the
+        // placer — a placement click must not also box-select the builders.
+        // The frame the ghost went away counts too: Update order between the
+        // two components is undefined, and the cancelling click must not
+        // fall through to us as a world order.
+        if (BuildPlacer.Active || BuildPlacer.LastActiveFrame == Time.frameCount)
+        {
+            _dragging = false;
+            _rect.gameObject.SetActive(false);
+            return;
+        }
+
         Prune(_selected);
 
         // While the cursor is on a UI control the world should not also hear

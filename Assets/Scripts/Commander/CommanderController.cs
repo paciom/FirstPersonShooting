@@ -24,6 +24,9 @@ public class CommanderController : MonoBehaviour
     /// <summary>The player's input surface — GameModeController's Escape handling asks it first.</summary>
     public CommanderSelection Selection { get; private set; }
 
+    /// <summary>The build cursor. Escape cancels it before it cancels anything else.</summary>
+    public BuildPlacer Placer { get; private set; }
+
     GameObject _mapRoot;
     GameObject _cameraRig;
     ArenaBlockManager _blockManager;
@@ -100,8 +103,17 @@ public class CommanderController : MonoBehaviour
         // under their feet from frame one. The roster rides on the same
         // GameController object that owns this controller's parent.
         CommanderEconomy.Reset();
+
+        // Each side opens with its Command Center standing on the pad — the
+        // adjacency seed every other structure grows from, and the thing
+        // whose loss will end the match.
+        for (int team = 0; team < 2; team++)
+            Building.Construct(BuildingCatalog.Get(BuildingCatalog.CommandCenter), team,
+                CommanderMap.BaseSite(team) + Vector3.up * 0.12f);
+
         CommanderArmy.SpawnSkirmish(GetComponentInParent<RobotRoster>());
         Selection = gameObject.AddComponent<CommanderSelection>();
+        Placer = gameObject.AddComponent<BuildPlacer>();
         gameObject.AddComponent<CommanderHud>();
     }
 
@@ -128,6 +140,7 @@ public class CommanderController : MonoBehaviour
         // Units go with the map, and just as immediately — they are agents
         // standing on the mesh the arena bake below is about to replace.
         CommanderArmy.DespawnAll();
+        Building.DespawnAll();
 
         // Belt and braces for the recompile-during-Play landmine: the list
         // survives a reload as a serialized field, but if it is empty anyway,

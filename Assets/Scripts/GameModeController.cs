@@ -92,12 +92,17 @@ public class GameModeController : MonoBehaviour
     {
         if (Mode != GameMode.Menu && Input.GetKeyDown(KeyCode.Escape))
         {
-            // In Commander, Escape cancels a pending targeting order before
-            // it exits the mode — asked through here rather than read in two
-            // Updates, where execution order would decide which one wins.
-            if (Mode == GameMode.Commander && _commander != null
-                && _commander.Selection != null && _commander.Selection.CancelPendingOrder())
-                return;
+            // In Commander, Escape unwinds one intent at a time before it
+            // exits the mode: first a build ghost, then an armed attack-move.
+            // Asked through here rather than read in three Updates, where
+            // execution order would decide which one wins.
+            if (Mode == GameMode.Commander && _commander != null)
+            {
+                if (_commander.Placer != null && _commander.Placer.CancelPending())
+                    return;
+                if (_commander.Selection != null && _commander.Selection.CancelPendingOrder())
+                    return;
+            }
             EnterMenu();
             return;
         }
