@@ -2,9 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Paints a robot into its team's colours by rewriting its albedo, so the same
+/// Repaints a robot for the away team by rewriting its albedo, so the same
 /// robot picked by both teams is two visibly different robots on the field and
-/// on the select screen.
+/// on the select screen. The home team keeps the robots exactly as they were
+/// made — see <see cref="FactoryTeam"/>.
 ///
 /// WHY NOT A COLOUR MULTIPLY. This replaces one — the imported glTF materials
 /// used to get `baseColor *= Lerp(white, teamColor, 0.35)`. Two things were
@@ -22,19 +23,36 @@ using UnityEngine;
 /// Results are cached per source texture, team hue and size, so six bots on a
 /// team, their reinforcements and their select-screen card all share one
 /// repainted texture. Cards ask for <see cref="CardSize"/> — they are 190px on
-/// screen and there are eighteen of them, so a full-size copy each would cost
-/// more memory than the entire robot fleet.
+/// screen and there is one per robot, so a full-size copy each would cost more
+/// memory than the entire robot fleet.
+///
+/// Only ONE team is repainted; see <see cref="FactoryTeam"/>.
 /// </summary>
 public static class TeamPaint
 {
+    /// <summary>
+    /// The team that wears the robots as they were made — no repaint at all.
+    ///
+    /// Telling two teams apart only needs ONE of them moved. Repainting both
+    /// costs a second set of textures for no extra readability, and it throws
+    /// away the palette the robots were designed in: every robot is somebody's
+    /// idea of what that robot looks like, and cyan keeps it.
+    ///
+    /// Matched with a tolerance rather than exactly, because the cyan the
+    /// select screen draws its labels in, the one ArenaBuilder gives the bots
+    /// and the one MatchAnnouncer names are three separate constants that only
+    /// happen to agree today. See <see cref="KeepsFactoryColors"/>.
+    /// </summary>
+    public static readonly Color FactoryTeam = new Color(0.2f, 0.9f, 1f);
+
     /// <summary>Repaint size for the select screen's card previews.</summary>
     public const int CardSize = 256;
 
     /// <summary>
     /// Repaint size for the in-between frames of a transformation. Those are on
     /// screen for a fraction of the second the fold takes, and there are seven
-    /// of them per robot per team — full-size copies would cost more texture
-    /// memory than every robot on the field put together.
+    /// of them per robot — full-size copies would cost more texture memory than
+    /// every robot on the field put together.
     /// </summary>
     public const int StageSize = 512;
 
@@ -44,6 +62,35 @@ public static class TeamPaint
     /// <summary>The size a request of <paramref name="maxSize"/> actually gets;
     /// 0 (an unset inspector field) means <see cref="DefaultSize"/>.</summary>
     public static int Resolve(int maxSize) => maxSize > 0 ? maxSize : DefaultSize;
+
+    /// <summary>
+    /// True when <paramref name="teamColor"/> is the team that wears the robots'
+    /// own colours, and so is never repainted. See <see cref="FactoryTeam"/>.
+    ///
+    /// Compared as a colour with a tolerance, NOT by hue. Hue would be the
+    /// tidier identity — it is what the repaint cache is keyed by — but hue is
+    /// meaningless on an unsaturated colour, and not every caller passes a team
+    /// colour: CommanderMap paints wrecks with an ash grey whose nominal hue is
+    /// an artifact of a 0.04 spread between its channels. Matching on hue would
+    /// let a grey drift into "this is the cyan team" and silently stop painting
+    /// wrecks. The tolerance still absorbs the real risk, which is the three
+    /// separate cyan constants (select screen, ArenaBuilder, MatchAnnouncer)
+    /// drifting apart from each other.
+    /// </summary>
+    public static bool KeepsFactoryColors(Color teamColor) =>
+        Mathf.Abs(teamColor.r - FactoryTeam.r) < FactoryTolerance &&
+        Mathf.Abs(teamColor.g - FactoryTeam.g) < FactoryTolerance &&
+        Mathf.Abs(teamColor.b - FactoryTeam.b) < FactoryTolerance;
+
+    const float FactoryTolerance = 0.12f;
+
+    /// <summary>A team's hue in whole degrees — the identity a repaint is keyed
+    /// and compared by, so near-identical constants land on one entry.</summary>
+    static int HueKey(Color teamColor)
+    {
+        Color.RGBToHSV(teamColor, out float hue, out _, out _);
+        return Mathf.RoundToInt(hue * 360f);
+    }
 
     // Matched to the shader's own defaults; see PA_TeamRecolor.shader for what
     // each one does. Kept here as well so the colour-factor path (materials with
@@ -58,14 +105,16 @@ public static class TeamPaint
     /// replacement above.
     ///
     /// The hue rule alone wants this at zero — neutrals staying neutral is what
-    /// lets two robots on opposite teams still read as the SAME robot instead of
-    /// as a cyan silhouette and a magenta one. But it cannot repaint white, and
-    /// the default robot (the ranger) is nearly all white plating with a handful
-    /// of coloured accents: at zero, two rangers across the two rows differ by a
-    /// few scattered patches and that is the exact case this whole thing exists
-    /// to fix. A light wash separates them while leaving every panel line,
-    /// shadow and highlight reading through it — the armour goes from white to
-    /// tinted white, not to solid team colour.
+    /// lets the repainted robot still read as the SAME robot as its factory-
+    /// coloured twin rather than as a magenta silhouette. But it cannot repaint
+    /// white, and the default robot (the ranger) is nearly all white plating
+    /// with a handful of coloured accents: at zero, the two rangers across the
+    /// two rows differ by a few scattered patches, and that is the exact case
+    /// this whole thing exists to fix. It matters more now that only one team is
+    /// moved at all — the entire difference between the rows rests on this side.
+    /// A light wash separates them while leaving every panel line, shadow and
+    /// highlight reading through it: the armour goes from white to tinted white,
+    /// not to solid team colour.
     ///
     /// 0 restores strict neutrals; ~0.45 approaches a full team wash.
     /// </summary>
@@ -101,6 +150,11 @@ public static class TeamPaint
         bool editTime = false)
     {
         if (renderers == null)
+            return;
+
+        // The factory team is left strictly alone — not even a material copy,
+        // so its robots keep sharing the import assets and keep batching.
+        if (KeepsFactoryColors(teamColor))
             return;
 
         // Edit time is a no-op on purpose. A RenderTexture cannot be serialized,
@@ -166,6 +220,9 @@ public static class TeamPaint
     /// </summary>
     public static Color Recolor(Color source, Color teamColor)
     {
+        if (KeepsFactoryColors(teamColor))
+            return source;
+
         Color.RGBToHSV(source, out _, out float saturation, out float value);
         Color.RGBToHSV(teamColor, out float teamHue, out _, out _);
 
@@ -216,8 +273,8 @@ public static class TeamPaint
         // the default-size repaint rather than duplicating it.
         int budget = Resolve(maxSize);
 
-        Color.RGBToHSV(teamColor, out float hue, out _, out _);
-        var key = (source, Mathf.RoundToInt(hue * 360f), budget);
+        int hue = HueKey(teamColor);
+        var key = (source, hue, budget);
         if (Painted.TryGetValue(key, out var cached) && cached != null)
             return cached;
 
@@ -234,7 +291,7 @@ public static class TeamPaint
         var target = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32,
             RenderTextureReadWrite.sRGB)
         {
-            name = $"{source.name}_team{Mathf.RoundToInt(hue * 360f)}",
+            name = $"{source.name}_team{hue}",
             wrapMode = source.wrapMode,
             filterMode = source.filterMode,
             anisoLevel = source.anisoLevel,

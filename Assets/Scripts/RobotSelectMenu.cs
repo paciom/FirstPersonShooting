@@ -204,9 +204,11 @@ public static class RobotSelectMenu
 
     /// <summary>
     /// Builds both teams' rig sets. Each team gets its own copy of every robot,
-    /// painted in that team's colours, because a card has to show what the robot
-    /// will actually look like on the field — and on the field the same robot on
-    /// opposite teams is two different-coloured robots.
+    /// because a card has to show what the robot will actually look like on the
+    /// field — and on the field the same robot on opposite teams is two
+    /// different-coloured robots. Only the magenta set is repainted; cyan keeps
+    /// the factory colours (see TeamPaint.FactoryTeam), so its rigs cost nothing
+    /// beyond the camera that renders them.
     /// </summary>
     static void BuildPreviewRigs(GameObject root, RobotRoster roster,
         RenderTexture[] cyanPreviews, RenderTexture[] magentaPreviews)

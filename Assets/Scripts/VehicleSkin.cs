@@ -245,9 +245,9 @@ public class VehicleSkin : MonoBehaviour
             FitToRobot(stage, renderers, robotBounds, stageYawOffset);
             // Only the last stage is a form the robot lives in; the ones before
             // it are single frames of a one-second fold, so they get a cheaper
-            // repaint. With eight stages per robot and two teams painting them,
-            // full-size copies of the in-between frames would cost more texture
-            // memory than every robot on the field put together.
+            // repaint. With eight stages per robot, full-size copies of the
+            // in-between frames would cost more texture memory than every robot
+            // on the field put together.
             Tint(renderers, i == transformStages.Length - 1
                 ? paintSize
                 : Mathf.Min(TeamPaint.Resolve(paintSize), TeamPaint.StageSize));
