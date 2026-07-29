@@ -108,7 +108,8 @@ public static class RobotFactory
             // VehicleRig belongs to TransformMode, which builds it once and
             // hands out no way to rebuild it — losing it to a reskin would
             // leave a robot that transforms with no wheels.
-            if (child.name == "Blaster" || child.name == "TeamRing" || child.name == "VehicleRig")
+            if (child.name == "Blaster" || child.name == "TeamRing" ||
+                child.name == TransformMode.RigName)
                 continue;
             Object.Destroy(child.gameObject);
         }

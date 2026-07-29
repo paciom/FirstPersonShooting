@@ -48,6 +48,13 @@ public class VehicleSkin : MonoBehaviour
              "alone. Flip by 180 if a robot's tank still reverses.")]
     public float stageYawOffset = 180f;
 
+    /// <summary>
+    /// Name prefix on every model this component instantiates, so a set left
+    /// behind by something other than this component can still be recognised.
+    /// See <see cref="PurgeParts"/>.
+    /// </summary>
+    const string PartPrefix = "VehiclePart_";
+
     public bool HasVehicle =>
         vehiclePrefab != null || (transformStages != null && transformStages.Length > 1);
 
@@ -101,15 +108,48 @@ public class VehicleSkin : MonoBehaviour
 
     void ClearBuilt()
     {
-        if (_vehicle != null)
-            Destroy(_vehicle);
-        _vehicle = null;
-        if (_stages != null)
-            foreach (var stage in _stages)
-                if (stage != null)
-                    Destroy(stage);
-        _stages = null;
+        PurgeParts();
         _built = false;
+    }
+
+    /// <summary>
+    /// Destroy every vehicle model under the holder — the ones tracked here and
+    /// any that aren't.
+    ///
+    /// Untracked ones exist because a live robot can be cloned:
+    /// <see cref="RobotReinforcements"/> builds a bought robot by instantiating
+    /// a team-mate, which copies the models this component has already built
+    /// along with everything else, but NOT the private fields that point at
+    /// them. The clone's VehicleSkin therefore starts out believing it has
+    /// built nothing, builds a second set, and leaves the copies behind: a tank
+    /// frozen at whatever the template happened to be showing, parented under
+    /// the clone's Body so it follows the robot everywhere it goes. That is the
+    /// robot standing on its own tank.
+    ///
+    /// Sweeping by name rather than through the tracked references is the whole
+    /// point — the copies are exactly the ones nothing points at.
+    /// </summary>
+    void PurgeParts()
+    {
+        if (holder == null)
+            holder = transform;
+
+        for (int i = holder.childCount - 1; i >= 0; i--)
+        {
+            var child = holder.GetChild(i);
+            if (!child.name.StartsWith(PartPrefix))
+                continue;
+
+            // Hidden as well as destroyed: Destroy only takes effect at the end
+            // of the frame, and a tank that lingers for even one more frame is
+            // the exact thing being fixed here.
+            child.gameObject.SetActive(false);
+            if (Application.isPlaying) Destroy(child.gameObject);
+            else DestroyImmediate(child.gameObject);
+        }
+
+        _vehicle = null;
+        _stages = null;
         IsShowingVehicle = false;
     }
 
@@ -122,6 +162,10 @@ public class VehicleSkin : MonoBehaviour
         if (holder == null)
             holder = transform;
 
+        // Before anything is instantiated, so this clears the previous set (or a
+        // clone's inherited one) rather than the set built just below.
+        PurgeParts();
+
         var robot = FindNewestModel();
         if (robot == null)
             return;
@@ -129,6 +173,12 @@ public class VehicleSkin : MonoBehaviour
 
         if (_robotRenderers.Length == 0)
             return;
+
+        // A fresh build has every vehicle model hidden, so the robot is the
+        // thing that must be showing. Stated rather than assumed: a clone's
+        // renderers arrive disabled whenever its template was copied while
+        // showing a tank, and nothing else would ever switch them back on.
+        ShowRobotRenderers(true);
 
         Bounds robotBounds = Combine(_robotRenderers);
 
@@ -142,7 +192,7 @@ public class VehicleSkin : MonoBehaviour
             return;
 
         _vehicle = Instantiate(vehiclePrefab, holder);
-        _vehicle.name = "VehicleModel";
+        _vehicle.name = PartPrefix + "Vehicle";
         _vehicle.transform.localPosition = Vector3.zero;
         _vehicle.transform.localRotation = Quaternion.identity;
         _vehicle.transform.localScale = Vector3.one;
@@ -180,7 +230,7 @@ public class VehicleSkin : MonoBehaviour
                 continue;
 
             var stage = Instantiate(transformStages[i], holder);
-            stage.name = $"Stage{i + 1}";
+            stage.name = $"{PartPrefix}Stage{i + 1}";
             stage.transform.localPosition = Vector3.zero;
             stage.transform.localRotation = Quaternion.identity;
             stage.transform.localScale = Vector3.one;
@@ -256,10 +306,7 @@ public class VehicleSkin : MonoBehaviour
         index = Mathf.Clamp(index, 0, _stages.Length - 1);
         IsShowingVehicle = index >= _stages.Length - 1;
 
-        if (_robotRenderers != null)
-            foreach (var renderer in _robotRenderers)
-                if (renderer != null)
-                    renderer.enabled = index == 0;
+        ShowRobotRenderers(index == 0);
 
         for (int i = 1; i < _stages.Length; i++)
             if (_stages[i] != null)
@@ -284,10 +331,16 @@ public class VehicleSkin : MonoBehaviour
 
         IsShowingVehicle = vehicle;
         _vehicle.SetActive(vehicle);
-        if (_robotRenderers != null)
-            foreach (var renderer in _robotRenderers)
-                if (renderer != null)
-                    renderer.enabled = !vehicle;
+        ShowRobotRenderers(!vehicle);
+    }
+
+    void ShowRobotRenderers(bool show)
+    {
+        if (_robotRenderers == null)
+            return;
+        foreach (var renderer in _robotRenderers)
+            if (renderer != null)
+                renderer.enabled = show;
     }
 
     /// <summary>

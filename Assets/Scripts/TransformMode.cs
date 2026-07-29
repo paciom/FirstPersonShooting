@@ -33,6 +33,13 @@ public class TransformMode : MonoBehaviour
     public const string VehicleParameter = "Vehicle";
 
     /// <summary>
+    /// Child of Body holding the wheels and thrusters. Named rather than
+    /// anonymous because RobotFactory.Reskin keeps it by name, and because a
+    /// cloned robot has to be able to find the one it inherited.
+    /// </summary>
+    public const string RigName = "VehicleRig";
+
+    /// <summary>
     /// How far into the fold the light burst fires and the vehicle mesh takes
     /// over. Deliberately before halfway: by this point the robot has crouched
     /// enough to sell the wind-up, but not far enough to look like a heap —
@@ -342,10 +349,10 @@ public class TransformMode : MonoBehaviour
     /// </summary>
     void EnsureRig()
     {
-        if (_rig != null)
+        if (ResolveRig() != null)
             return;
 
-        var go = new GameObject("VehicleRig");
+        var go = new GameObject(RigName);
         _rig = go.transform;
         _rig.SetParent(body, false);
 
@@ -417,10 +424,29 @@ public class TransformMode : MonoBehaviour
 
     void ScaleRig(float amount)
     {
-        if (_rig == null)
+        if (ResolveRig() == null)
             return;
         _rig.gameObject.SetActive(amount > 0.001f);
         _rig.localScale = Vector3.one * Mathf.Clamp01(amount);
+    }
+
+    /// <summary>
+    /// The rig already hanging off Body, if there is one.
+    ///
+    /// A cloned robot — how <see cref="RobotReinforcements"/> builds a bought
+    /// one — arrives with the rig its template built, because Instantiate
+    /// copies the child but not the field pointing at it. Adopting it is what
+    /// keeps the clone from growing a second set of wheels over the first, and
+    /// what lets ForceRobotForm retract the inherited set at all.
+    ///
+    /// Also how the rig survives a reskin: RobotFactory keeps the object by
+    /// name precisely because nothing here can rebuild it.
+    /// </summary>
+    Transform ResolveRig()
+    {
+        if (_rig == null && body != null)
+            _rig = body.Find(RigName);
+        return _rig;
     }
 
     /// <summary>
