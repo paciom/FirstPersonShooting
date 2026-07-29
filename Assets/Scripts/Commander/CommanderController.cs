@@ -112,6 +112,7 @@ public class CommanderController : MonoBehaviour
         // GameController object that owns this controller's parent.
         CommanderEconomy.Reset();
         CommanderOps.Clear();
+        CommanderAmmo.Reset();
 
         // Each side opens with its Command Center standing on the pad — the
         // adjacency seed every other structure grows from, and the thing

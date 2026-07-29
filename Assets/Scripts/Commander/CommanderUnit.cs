@@ -48,8 +48,21 @@ public class CommanderUnit : MonoBehaviour
     NavMeshAgent _agent;
     EnergyShield _shield;
     Weapon _weapon;
+    Weapon[] _weapons = new Weapon[0];
     Transform _body;
     GameObject _selectRing;
+
+    // Transformation state: robots fold into their roster vehicle form for
+    // long drives and unfold to fight, arena fiction kept.
+    [SerializeField] GameObject _modelPrefab;
+    [SerializeField] GameObject _vehiclePrefab;
+    [SerializeField] Color _tint;
+    [SerializeField] bool _vehicleForm;
+    [SerializeField] float _robotSpeed;
+
+    /// <summary>Travel further than this and the robot folds into its vehicle.</summary>
+    const float TransformDistance = 32f;
+    const float VehicleSpeedFactor = 1.55f;
 
     OrderKind _order = OrderKind.Idle;
     Vector3 _destination;
@@ -97,6 +110,18 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     public static T Build<T>(string name, GameObject modelPrefab, int teamId,
         Vector3 position, float yaw, bool armed) where T : CommanderUnit
+    {
+        return Build<T>(name, modelPrefab, null, teamId, position, yaw, armed, null);
+    }
+
+    /// <summary>
+    /// Full form: <paramref name="vehiclePrefab"/> enables the travel
+    /// transformation, <paramref name="secondaryWeapon"/> ("plasma", "rail",
+    /// "beam") adds a second gun to swap to mid-fight.
+    /// </summary>
+    public static T Build<T>(string name, GameObject modelPrefab, GameObject vehiclePrefab,
+        int teamId, Vector3 position, float yaw, bool armed, string secondaryWeapon)
+        where T : CommanderUnit
     {
         Color tint = MatchAnnouncer.TeamColor(teamId);
 
@@ -160,7 +185,7 @@ public class CommanderUnit : MonoBehaviour
             agent.Warp(navHit.position);
 
         if (armed)
-            BuildGun(root, body, tint);
+            BuildGun(root, body, tint, secondaryWeapon);
 
         // Selection ring: white so it reads as "yours, selected" against both
         // team colours, flat on the ground like the team rings.
@@ -168,6 +193,9 @@ public class CommanderUnit : MonoBehaviour
         unit._selectRing = GlowQuad(root.transform, "SelectRing", "VFX/ring",
             Color.white, 1.2f, 2.2f, 0.06f);
         unit._selectRing.SetActive(false);
+        unit._modelPrefab = modelPrefab;
+        unit._vehiclePrefab = vehiclePrefab;
+        unit._tint = tint;
 
         return unit;
     }
@@ -175,9 +203,11 @@ public class CommanderUnit : MonoBehaviour
     /// <summary>
     /// A stub blaster: one dark box and a muzzle. Built inactive so the weapon
     /// component's Awake — which caches muzzle, ownerRoot and team — runs only
-    /// after those fields are assigned, then switched on.
+    /// after those fields are assigned, then switched on. The optional second
+    /// gun shares the muzzle: it is added AFTER activation, when Awake's
+    /// defaults (muzzle = its own transform, owner = root) are already right.
     /// </summary>
-    static void BuildGun(GameObject root, Transform body, Color tint)
+    static void BuildGun(GameObject root, Transform body, Color tint, string secondaryWeapon)
     {
         var gun = new GameObject("Blaster");
         gun.SetActive(false);
@@ -205,6 +235,20 @@ public class CommanderUnit : MonoBehaviour
         // are whose matters more than which gun they came from.
         weapon.color = tint;
         gun.SetActive(true);
+
+        Weapon secondary = null;
+        switch (secondaryWeapon)
+        {
+            case "plasma": secondary = gun.AddComponent<PlasmaLobber>(); break;
+            case "rail": secondary = gun.AddComponent<RailZapper>(); break;
+            case "beam": secondary = gun.AddComponent<PhotonBeam>(); break;
+        }
+        if (secondary != null)
+        {
+            secondary.muzzle = muzzle;
+            secondary.color = tint;
+            secondary.damage = 10f;
+        }
     }
 
     /// <summary>
@@ -244,7 +288,8 @@ public class CommanderUnit : MonoBehaviour
     {
         _agent = GetComponent<NavMeshAgent>();
         _shield = GetComponent<EnergyShield>();
-        _weapon = GetComponentInChildren<Weapon>();
+        _weapons = GetComponentsInChildren<Weapon>();
+        _weapon = _weapons.Length > 0 ? _weapons[0] : null;
         _body = transform.Find("Body");
         _leashOrigin = transform.position;
         // Stagger thinking so a hundred units don't all scan on the same frame.
@@ -352,6 +397,9 @@ public class CommanderUnit : MonoBehaviour
         if (!All.Contains(this))
             All.Add(this);   // recompile during Play wiped the registry
 
+        ConsiderForm();
+        ConsiderWeaponSwap();
+
         switch (_order)
         {
             case OrderKind.Idle:
@@ -444,11 +492,106 @@ public class CommanderUnit : MonoBehaviour
         Quaternion face = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(transform.rotation, face, 540f * Time.deltaTime);
 
-        if (Quaternion.Angle(transform.rotation, face) < 15f)
+        if (_weapon != null && Quaternion.Angle(transform.rotation, face) < 15f)
         {
             Vector3 aim = _target.transform.position + Vector3.up * 1.1f - _weapon.muzzle.position;
             _weapon.TryFire(aim.normalized);
+            // Ammunition is cheap, never free — trigger time goes on the books.
+            CommanderAmmo.AccrueFiring(TeamId, _weapon, Time.deltaTime);
         }
+    }
+
+    // ------------------------------------------------------------- forms & guns
+
+    /// <summary>
+    /// The travel transformation: a long drive is done in vehicle form —
+    /// faster, and the fold/unfold on each end is the transformation show
+    /// the arena modes made this fiction's signature. Combat is always
+    /// fought unfolded; a robot that closes to fighting range stands up.
+    /// </summary>
+    void ConsiderForm()
+    {
+        if (_vehiclePrefab == null || _modelPrefab == null || _body == null)
+            return;
+
+        bool wantVehicle = false;
+        Vector3 goal = transform.position;
+        if (_order == OrderKind.Move || _order == OrderKind.AttackMove)
+            goal = _destination;
+        else if (_order == OrderKind.Attack && _target != null)
+            goal = _target.transform.position;
+        Vector3 flat = goal - transform.position;
+        flat.y = 0f;
+        wantVehicle = flat.magnitude > TransformDistance;
+
+        if (wantVehicle != _vehicleForm)
+            Morph(wantVehicle);
+    }
+
+    void Morph(bool toVehicle)
+    {
+        _vehicleForm = toVehicle;
+
+        var old = _body.Find("Model");
+        if (old != null)
+            Destroy(old.gameObject);
+
+        if (toVehicle)
+        {
+            SwapToVehicleModel();
+            _robotSpeed = _agent.speed;
+            _agent.speed = _robotSpeed * VehicleSpeedFactor;
+        }
+        else
+        {
+            RobotFactory.InstantiateNormalized(_modelPrefab, _body, _tint);
+            if (_robotSpeed > 0f)
+                _agent.speed = _robotSpeed;
+        }
+
+        VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.55f);
+    }
+
+    /// <summary>
+    /// Vehicle models carry no RobotLocomotion, so the factory's normalizer
+    /// would centre them mid-air; ground them by bounds instead, nose along
+    /// +Z with the unit's facing.
+    /// </summary>
+    void SwapToVehicleModel()
+    {
+        var instance = Instantiate(_vehiclePrefab, _body);
+        instance.name = "Model";
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return;
+        var bounds = renderers[0].bounds;
+        foreach (var renderer in renderers)
+            bounds.Encapsulate(renderer.bounds);
+
+        float scale = 2.2f / Mathf.Max(0.01f, Mathf.Max(bounds.size.x, bounds.size.z));
+        instance.transform.localScale *= scale;
+        Vector3 centre = _body.InverseTransformPoint(bounds.center);
+        Vector3 bottom = _body.InverseTransformPoint(
+            new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+        instance.transform.localPosition = new Vector3(
+            -centre.x * scale,
+            -bottom.y * scale - _body.localPosition.y,
+            -centre.z * scale);
+        TeamPaint.Apply(renderers, _tint);
+    }
+
+    /// <summary>
+    /// Arena robots famously will not stick to one gun; these carry two and
+    /// swap on a whim mid-fight — variety on camera, same damage numbers.
+    /// </summary>
+    void ConsiderWeaponSwap()
+    {
+        if (_weapons.Length < 2 || _order != OrderKind.Attack)
+            return;
+        if (Random.value > 0.22f)
+            return;
+        // Weighted toward the laser: the exotics are seasoning, not the meal.
+        _weapon = Random.value < 0.62f ? _weapons[0] : _weapons[Random.Range(1, _weapons.Length)];
     }
 
     void FightOver()

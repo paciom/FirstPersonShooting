@@ -132,13 +132,14 @@ public class ProductionQueue : MonoBehaviour
         door.y = CommanderMap.GroundY;
 
         var roster = FindFirstObjectByType<RobotRoster>();
-        var model = UnitCatalog.Model(roster, def.robotName);
+        var entry = UnitCatalog.EntryOf(roster, def.robotName);
         float yaw = Quaternion.LookRotation(toCentre, Vector3.up).eulerAngles.y;
         string name = $"CmdUnit{team}_{def.key}_{++_serial}";
 
         CommanderUnit unit = def.isCollector
-            ? CommanderCollector.BuildCollector(name, model, team, door, yaw)
-            : CommanderUnit.Build(name, model, team, door, yaw);
+            ? CommanderCollector.BuildCollector(name, entry.modelPrefab, team, door, yaw)
+            : CommanderUnit.Build<CommanderUnit>(name, entry.modelPrefab, entry.vehiclePrefab,
+                team, door, yaw, armed: true, secondaryWeapon: def.secondaryWeapon);
         def.ApplyTo(unit);
 
         VfxUtil.Explosion(door + Vector3.up * 1f, MatchAnnouncer.TeamColor(team), 0.8f);

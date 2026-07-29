@@ -83,7 +83,10 @@ public class BuildingTurret : MonoBehaviour
 
         // Fire once the barrel is roughly on — turrets telegraph by swiveling.
         if (Vector3.Angle(_pivot.forward, flat) < 20f)
+        {
             _weapon.TryFire(aim.normalized);
+            CommanderAmmo.AccrueFiring(_teamId, _weapon, Time.deltaTime);
+        }
     }
 
     CommanderUnit Acquire()

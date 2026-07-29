@@ -24,6 +24,12 @@ public class UnitDefinition
     public float sightRange;
     public float attackRange;
 
+    /// <summary>
+    /// Second gun in the loadout: "plasma", "rail" or "beam" (null = laser
+    /// only). Units swap between their weapons mid-fight, arena-style.
+    /// </summary>
+    public string secondaryWeapon;
+
     /// <summary>Seconds of factory work at full power. Priced at cost/100.</summary>
     public float BuildSeconds => cost / 100f;
 
@@ -44,11 +50,13 @@ public class UnitDefinition
             shield.Rematerialize();   // resync Current, as ever
         }
 
-        var weapon = unit.GetComponentInChildren<LaserBlaster>();
-        if (weapon != null)
+        // The whole loadout takes the unit's damage number; each weapon
+        // keeps its own cadence and projectile, which is the variety.
+        foreach (var weapon in unit.GetComponentsInChildren<Weapon>())
         {
             weapon.damage = damage;
-            weapon.shotsPerSecond = shotsPerSecond;
+            if (weapon is LaserBlaster blaster)
+                blaster.shotsPerSecond = shotsPerSecond;
         }
     }
 }
@@ -78,26 +86,26 @@ public static class UnitCatalog
                     {
                         key = Ranger, displayName = "RANGER", cost = 300, robotName = "ranger",
                         speed = 4.2f, maxShield = 80f, damage = 10f, shotsPerSecond = 4f,
-                        sightRange = 26f, attackRange = 20f,
+                        sightRange = 26f, attackRange = 20f, secondaryWeapon = "plasma",
                     },
                     new UnitDefinition
                     {
                         key = Scout, displayName = "SCOUT", cost = 400, robotName = "scout",
                         speed = 6.5f, maxShield = 50f, damage = 6f, shotsPerSecond = 5f,
-                        sightRange = 34f, attackRange = 20f,
+                        sightRange = 34f, attackRange = 20f, secondaryWeapon = "rail",
                     },
                     new UnitDefinition
                     {
                         key = Panther, displayName = "PANTHER", cost = 500, robotName = "panther",
                         speed = 5.5f, maxShield = 70f, damage = 12f, shotsPerSecond = 4f,
-                        sightRange = 26f, attackRange = 20f,
+                        sightRange = 26f, attackRange = 20f, secondaryWeapon = "beam",
                     },
                     new UnitDefinition
                     {
                         key = Titan, displayName = "TITAN", cost = 700, robotName = "titan",
                         prerequisite = BuildingCatalog.TechLab,
                         speed = 3.2f, maxShield = 200f, damage = 22f, shotsPerSecond = 1.6f,
-                        sightRange = 26f, attackRange = 22f,
+                        sightRange = 26f, attackRange = 22f, secondaryWeapon = "plasma",
                     },
                     new UnitDefinition
                     {
@@ -123,13 +131,20 @@ public static class UnitCatalog
     /// The roster model for a chassis name, or the roster default, or null
     /// (capsule fallback) when no roster exists at all.
     /// </summary>
-    public static GameObject Model(RobotRoster roster, string robotName)
+    public static GameObject Model(RobotRoster roster, string robotName) =>
+        EntryOf(roster, robotName).modelPrefab;
+
+    /// <summary>
+    /// The full roster entry — model AND vehicle form — for a chassis name,
+    /// falling back to entry 0, or to default (all nulls) with no roster.
+    /// </summary>
+    public static RobotRoster.Entry EntryOf(RobotRoster roster, string robotName)
     {
         if (roster == null || !roster.HasRobots)
-            return null;
+            return default;
         foreach (var entry in roster.robots)
             if (string.Equals(entry.displayName, robotName, System.StringComparison.OrdinalIgnoreCase))
-                return entry.modelPrefab;
-        return roster.Get(0).modelPrefab;
+                return entry;
+        return roster.Get(0);
     }
 }
