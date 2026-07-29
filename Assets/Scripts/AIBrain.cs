@@ -31,8 +31,31 @@ public class AIBrain : MonoBehaviour
     [Tooltip("Debug: when >= 0 the bot locks to this weapon index (set by WeaponDebugConsole).")]
     public int forcedWeaponIndex = -1;
 
+    [Tooltip("Never walk closer than this to whatever it is shooting at, whatever " +
+             "the gun would prefer. A robot that closes to arm's length has thrown " +
+             "away the only advantage its weapon had.")]
+    public float minEngageDistance = 7f;
+
     [Header("Movement")]
     public float repathInterval = 0.4f;
+
+    [Header("Under fire")]
+    [Tooltip("Seconds of evasive movement after being hit. Each new hit restarts it.")]
+    public float evadeSeconds = 1.7f;
+
+    [Tooltip("How far to the side an evading robot breaks.")]
+    public float evadeDistance = 4.5f;
+
+    [Tooltip("Seconds before an evading robot reverses its strafe, so it weaves " +
+             "instead of committing to one long slide.")]
+    public float evadeFlipSeconds = 0.65f;
+
+    [Tooltip("Speed multiplier while under fire.")]
+    public float evadeSprint = 1.25f;
+
+    [Tooltip("Below this shield fraction, being shot means breaking contact " +
+             "rather than dancing in front of it.")]
+    [Range(0f, 1f)] public float breakOffShieldFraction = 0.3f;
 
     [Header("Treasure")]
     [Tooltip("How far away a crate still looks worth walking to.")]
@@ -102,6 +125,12 @@ public class AIBrain : MonoBehaviour
     bool _running;
     float[] _weights;
 
+    Transform _threat;        // whoever last shot us; may outlive _target
+    Vector3 _threatPoint;     // where their shot landed, if we never saw them
+    float _evadeUntil;
+    float _evadeFlipAt;
+    int _evadeSide = 1;
+
     void Awake()
     {
         _running = true;
@@ -125,6 +154,60 @@ public class AIBrain : MonoBehaviour
         if (weapons.Length > 0)
             _active = weapons[Mathf.Clamp(favoriteWeapon, 0, weapons.Length - 1)];
         RefreshLoadout();
+
+        _myShield.OnDamaged += HandleDamaged;
+    }
+
+    void OnDestroy()
+    {
+        if (_myShield != null)
+            _myShield.OnDamaged -= HandleDamaged;
+    }
+
+    /// <summary>
+    /// Getting shot is the loudest thing that happens to a robot, and standing
+    /// there taking it is what made these fights look unwatchable — the bot
+    /// held its ground because nothing in the movement code had any idea it was
+    /// being hit.
+    ///
+    /// So a hit does three things: it points the robot at whoever fired if it
+    /// was not already fighting someone, it opens an evasion window (see
+    /// <see cref="TryEvade"/>), and it re-rolls which way to break. Only the
+    /// FIRST hit of a burst picks a side — re-rolling on every hit would leave
+    /// a robot under sustained fire twitching on the spot instead of moving.
+    /// </summary>
+    void HandleDamaged(float damage, Vector3 hitPoint)
+    {
+        if (!_running)
+            return;
+
+        _threatPoint = hitPoint;
+
+        // Set even when null: not every hit site names an attacker, and a stale
+        // one from the last fight is a worse guess than the point on our own hull
+        // the shot landed on, which at least has the right side of us.
+        var attacker = _myShield.LastAttacker;
+        _threat = attacker;
+
+        if (attacker != null)
+        {
+            // Shot from somewhere we weren't looking: fight whoever it is. Only
+            // when there's nothing else in play, so a bot can't be pulled off a
+            // target it can actually see by a stray splash from across the map.
+            if (!IsValidTarget(_target))
+            {
+                var theirs = attacker.GetComponentInChildren<EnergyShield>();
+                if (IsValidTarget(theirs))
+                    _target = theirs;
+            }
+        }
+
+        if (Time.time >= _evadeUntil)
+        {
+            _evadeSide = Random.value < 0.5f ? -1 : 1;
+            _evadeFlipAt = Time.time + evadeFlipSeconds;
+        }
+        _evadeUntil = Time.time + evadeSeconds;
     }
 
     /// <summary>
@@ -171,6 +254,8 @@ public class AIBrain : MonoBehaviour
         _treasureTarget = null;
         _mineToAvoid = null;
         _mineToShoot = null;
+        _threat = null;
+        _evadeUntil = 0f;
         SetSprinting(false);
 
         // Menus and de-rezzes both land here. Unfold synchronously rather than
@@ -207,8 +292,10 @@ public class AIBrain : MonoBehaviour
         if (!IsValidTarget(_target))
         {
             _sawTargetAt = -1f;
-            // No enemy in play, but a crate on the ground is still worth walking to.
-            DriveMovement(null, 0f, 0f, false);
+            // No enemy in play, but a crate on the ground is still worth walking
+            // to — and a robot being shot at from somewhere it cannot see still
+            // has every reason to stop standing in the open.
+            DriveMovement(null, 0f, 0f, false, false);
             return;
         }
 
@@ -218,6 +305,7 @@ public class AIBrain : MonoBehaviour
 
         MaybeSwitchWeapon(distance);
         float engageRange = _active != null ? _active.preferredRange : 18f;
+        float standoff = StandoffRange(engageRange);
 
         bool hasLineOfSight = false;
         if (distance < sightRange)
@@ -230,9 +318,14 @@ public class AIBrain : MonoBehaviour
         // "Engaged" means this bot can actually put shots on someone right now
         // (the same test the firing block uses). That's the line between
         // fighting and being free to go collect — see WantsTreasure.
-        bool engaged = hasLineOfSight && distance <= engageRange * 1.15f;
+        //
+        // Measured against the standoff as well as the preferred range, because
+        // the standoff is where the bot is going to be STANDING: a floor that
+        // parked it further out than it was willing to shoot from would leave it
+        // holding position and never firing.
+        bool engaged = hasLineOfSight && distance <= Mathf.Max(engageRange, standoff) * 1.15f;
 
-        DriveMovement(_target, distance, engageRange, engaged);
+        DriveMovement(_target, distance, standoff, engaged, hasLineOfSight);
 
         // A mine with an enemy standing next to it beats any shot at the enemy.
         if (TryShootMine())
@@ -300,11 +393,17 @@ public class AIBrain : MonoBehaviour
 
     /// <summary>
     /// Where the agent walks this tick, in priority order: get clear of a live
-    /// mine, then whatever <see cref="WantsTreasure"/> decided, then chase the
-    /// enemy. Note the bot keeps firing at anything it can see the whole time —
-    /// running for a crate doesn't holster the gun.
+    /// mine, then get out of the way of whoever is shooting, then whatever
+    /// <see cref="WantsTreasure"/> decided, then take up position on the enemy.
+    /// Note the bot keeps firing at anything it can see the whole time — neither
+    /// running for a crate nor dodging holsters the gun.
+    ///
+    /// Evasion sits above looting deliberately. A crate is worth a detour; it is
+    /// not worth walking a straight line through someone's fire to reach, which
+    /// is exactly what the old order did.
     /// </summary>
-    void DriveMovement(EnergyShield target, float distance, float engageRange, bool engaged)
+    void DriveMovement(EnergyShield target, float distance, float standoff, bool engaged,
+                       bool sighted)
     {
         // Deliberately ahead of the repath gate: which form to be in is a
         // slower decision than where to walk, and it has its own dwell timer.
@@ -326,6 +425,9 @@ public class AIBrain : MonoBehaviour
             return;
         }
 
+        if (TryEvade(target))
+            return;
+
         if (WantsTreasure(engaged))
         {
             _agent.isStopped = false;
@@ -342,11 +444,140 @@ public class AIBrain : MonoBehaviour
             return;
         }
 
-        // Chase: close to the active weapon's preferred range, then hold.
-        bool close = distance <= engageRange && engaged;
-        _agent.isStopped = close;
-        if (!close)
-            _agent.SetDestination(target.transform.position);
+        // Take up position at the gun's range and hold there — never walk to the
+        // enemy's feet. Closing all the way in throws away whatever reach the
+        // weapon had and reads as a robot with no plan; it is also why fights
+        // used to collapse into a scrum the moment anyone spotted anyone.
+        //
+        // With no line of sight there is nothing to hold a range against, so the
+        // bot closes to the floor distance instead — walking round the cover is
+        // the only way to find an angle on someone behind it.
+        float wanted = sighted ? standoff : Mathf.Min(minEngageDistance, standoff);
+
+        // A band rather than a point: matching the distance exactly leaves a bot
+        // shuffling forward and back on the spot forever.
+        if (distance <= wanted * 1.15f && distance >= wanted * 0.75f)
+        {
+            _agent.isStopped = true;
+            return;
+        }
+
+        _agent.isStopped = false;
+        _agent.SetDestination(StandoffPoint(target.transform.position, wanted));
+    }
+
+    /// <summary>
+    /// How far this bot wants to be from what it is shooting at: the active
+    /// gun's preferred range, floored by <see cref="minEngageDistance"/> so it
+    /// never walks into arm's reach — and then capped by what the gun can
+    /// actually hit, so the floor can never park a short-range weapon outside
+    /// its own range and leave the bot standing there holding it.
+    /// </summary>
+    float StandoffRange(float engageRange)
+    {
+        float reach = _active != null ? _active.range : engageRange;
+        return Mathf.Min(Mathf.Max(minEngageDistance, engageRange), Mathf.Max(2f, reach * 0.9f));
+    }
+
+    /// <summary>
+    /// A point <paramref name="range"/> out from <paramref name="center"/> on the
+    /// side this bot is already on, snapped to the navmesh.
+    ///
+    /// Approaching this instead of the enemy itself is what puts a floor under
+    /// how close a bot gets, and it doubles as the back-off destination when
+    /// something has shoved it too near — the same ring works in both
+    /// directions, so there is only one number to reason about.
+    /// </summary>
+    Vector3 StandoffPoint(Vector3 center, float range)
+    {
+        Vector3 out_ = transform.position - center;
+        out_.y = 0f;
+        if (out_.sqrMagnitude < 0.01f)
+            out_ = -transform.forward;
+
+        Vector3 wanted = center + out_.normalized * range;
+        if (NavMesh.SamplePosition(wanted, out NavMeshHit hit, 3f, _agent.areaMask))
+            return hit.position;
+        return wanted;
+    }
+
+    /// <summary>
+    /// Move like something is shooting at you, for a moment after something was.
+    ///
+    /// Two behaviours, chosen on how much shield is left, because they read as
+    /// two different decisions to anyone watching:
+    ///
+    ///  * Healthy — sidestep. Break across the threat's line rather than away
+    ///    from it, so the robot keeps its own gun on target and the exchange
+    ///    stays a fight. The side flips every <see cref="evadeFlipSeconds"/>, so
+    ///    it weaves instead of sliding away in one long straight line.
+    ///  * Hurt — leave. Straight back out of the line of fire, or to a Repair
+    ///    Pack if one is on the field, which turns "about to lose" into a robot
+    ///    visibly going to fix itself.
+    ///
+    /// Returns true when it has taken the tick's movement decision.
+    /// </summary>
+    bool TryEvade(EnergyShield target)
+    {
+        if (Time.time >= _evadeUntil)
+            return false;
+
+        Vector3 threat = ThreatPosition(target);
+        Vector3 away = transform.position - threat;
+        away.y = 0f;
+        if (away.sqrMagnitude < 0.01f)
+            away = -transform.forward;
+        away.Normalize();
+
+        bool hurt = _myShield != null && _myShield.Normalized < breakOffShieldFraction;
+        Vector3 wanted;
+
+        if (hurt && _treasureTarget != null && _treasureTarget.Def != null
+            && _treasureTarget.Def.kind == TreasureKind.RepairPack)
+        {
+            wanted = _treasureTarget.GroundPoint;
+        }
+        else if (hurt)
+        {
+            wanted = transform.position + away * (evadeDistance * 1.6f);
+        }
+        else
+        {
+            if (Time.time >= _evadeFlipAt)
+            {
+                _evadeSide = -_evadeSide;
+                _evadeFlipAt = Time.time + evadeFlipSeconds;
+            }
+            // A little backward lean on the strafe: purely sideways at close
+            // range still arcs round into their lap.
+            Vector3 side = Vector3.Cross(Vector3.up, away) * _evadeSide;
+            wanted = transform.position + side * evadeDistance + away * (evadeDistance * 0.3f);
+        }
+
+        if (NavMesh.SamplePosition(wanted, out NavMeshHit hit, 3f, _agent.areaMask))
+            wanted = hit.position;
+        else
+            _evadeSide = -_evadeSide;   // wall on that side; try the other way next tick
+
+        _agent.isStopped = false;
+        _agent.SetDestination(wanted);
+        SetSpeedScale(evadeSprint);
+        return true;
+    }
+
+    /// <summary>
+    /// Where the shooting is coming from. The attacker if we know who it was —
+    /// EnergyShield records that on every hit — and otherwise the point their
+    /// shot landed on us, which at least gives the right side of the robot to
+    /// break away from.
+    /// </summary>
+    Vector3 ThreatPosition(EnergyShield target)
+    {
+        if (_threat != null && _threat.gameObject.activeInHierarchy)
+            return _threat.position;
+        if (target != null)
+            return target.transform.position;
+        return _threatPoint;
     }
 
     /// <summary>
@@ -418,10 +649,12 @@ public class AIBrain : MonoBehaviour
     }
 
     /// <summary>Break into a run (or stop running). Goes through StatusEffects — see sprintMultiplier.</summary>
-    void SetSprinting(bool sprinting)
+    void SetSprinting(bool sprinting) => SetSpeedScale(sprinting ? lootSprint : 1f);
+
+    void SetSpeedScale(float scale)
     {
         if (_statusEffects != null)
-            _statusEffects.sprintMultiplier = sprinting ? lootSprint : 1f;
+            _statusEffects.sprintMultiplier = scale;
     }
 
     /// <summary>
