@@ -94,15 +94,25 @@ public class Building : MonoBehaviour
     }
 
     /// <summary>
-    /// The placeholder: a panelled block, a darker roof cap, an accent trim
-    /// ring near the top, and a team stripe down the front. Enough to tell
-    /// every structure apart at 45 m — which is the bar the Meshy pass has to
-    /// beat later, not meet now.
+    /// The structure's visual: the Meshy model when one is in Resources,
+    /// otherwise the block placeholder — a panelled block, a darker roof
+    /// cap, an accent trim ring and a team stripe. The fallback is permanent
+    /// on purpose: a missing or failed model can never break the mode.
     /// </summary>
     static Transform BuildBlockModel(Transform root, BuildingDefinition def, Color tint)
     {
         var body = new GameObject("Body").transform;
         body.SetParent(root, false);
+
+        // Resources rather than a scene-serialized roster: Commander owns no
+        // scene data, and Resources.Load works identically in editor Play
+        // and the WebGL player with zero ArenaBuilder involvement.
+        var modelPrefab = Resources.Load<GameObject>($"Buildings/{def.key}-building");
+        if (modelPrefab != null)
+        {
+            BuildFromMeshyModel(body, modelPrefab, def, tint);
+            return body;
+        }
 
         var wall = ArenaMaterials.Style($"Cmd_Bld_{def.key}", ArenaMaterials.SurfaceStyle.Hull,
             new Color(0.16f, 0.19f, 0.24f), new Color(0.09f, 0.11f, 0.15f), 1.4f, 0.6f);
@@ -128,6 +138,48 @@ public class Building : MonoBehaviour
             new Vector3(0.35f, h * 0.7f, 0.1f), team);
 
         return body;
+    }
+
+    /// <summary>
+    /// Fit the generated model into the footprint the whole game was
+    /// balanced around: uniform scale to the tightest of the three axis
+    /// ratios (MULTIPLIED into the prefab's own scale — glTF roots carry
+    /// unit-conversion factors that must survive), grounded at the root, and
+    /// ringed in team colour, since the Meshy texture carries the building's
+    /// identity but not its allegiance.
+    /// </summary>
+    static void BuildFromMeshyModel(Transform body, GameObject prefab, BuildingDefinition def,
+        Color tint)
+    {
+        var instance = Object.Instantiate(prefab, body);
+        instance.name = "Model";
+        instance.transform.localPosition = Vector3.zero;
+        instance.transform.localRotation = Quaternion.identity;
+
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            var bounds = renderers[0].bounds;
+            foreach (var renderer in renderers)
+                bounds.Encapsulate(renderer.bounds);
+
+            float scale = Mathf.Min(
+                def.footprint.x / Mathf.Max(0.01f, bounds.size.x),
+                def.height / Mathf.Max(0.01f, bounds.size.y),
+                def.footprint.y / Mathf.Max(0.01f, bounds.size.z));
+            instance.transform.localScale *= scale;
+
+            // Centre on the root in XZ, feet on the ground in Y — the root
+            // IS ground level for buildings.
+            Vector3 localCenter = body.InverseTransformPoint(bounds.center);
+            Vector3 localBottom = body.InverseTransformPoint(
+                new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+            instance.transform.localPosition = new Vector3(
+                -localCenter.x * scale, -localBottom.y * scale, -localCenter.z * scale);
+        }
+
+        float ringSize = Mathf.Max(def.footprint.x, def.footprint.y) + 2.5f;
+        CommanderUnit.GlowQuad(body, "TeamRing", "VFX/ring", tint, 1.4f, ringSize, 0.05f);
     }
 
     /// <summary>A renderer-only block — the root's BoxCollider is the hitbox.</summary>

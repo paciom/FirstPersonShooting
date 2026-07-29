@@ -214,7 +214,7 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     static readonly Dictionary<string, Material> QuadMaterials = new Dictionary<string, Material>();
 
-    protected static GameObject GlowQuad(Transform parent, string name, string texturePath,
+    public static GameObject GlowQuad(Transform parent, string name, string texturePath,
         Color color, float intensity, float size, float y)
     {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);

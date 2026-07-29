@@ -27,7 +27,10 @@ import urllib.request
 ROOT = "D:/Claude/FirstPersongShooting"
 KEY_PATH = f"{ROOT}/.secrets/meshy_key.txt"
 STATE_PATH = f"{ROOT}/Tools/building_tasks.json"
-OUT_DIR = f"{ROOT}/Assets/Models/Meshy"
+# Resources, not Models: Building.BuildBlockModel loads these by name at
+# runtime (Commander serializes nothing into the scene), and Resources is the
+# one folder that works identically in editor Play and the WebGL player.
+OUT_DIR = f"{ROOT}/Assets/Resources/Buildings"
 API = "https://api.meshy.ai/openapi"
 
 STYLE = ("chunky stylised low-poly toy look, clean flat panels, glowing light strips, "
