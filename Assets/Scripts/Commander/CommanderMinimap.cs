@@ -15,7 +15,8 @@ public class CommanderMinimap : MonoBehaviour
     const float RefreshSeconds = 0.1f;
 
     RectTransform _panel;
-    RectTransform _viewMarker;
+    readonly RectTransform[] _viewEdges = new RectTransform[4];
+    Camera _viewCamera;
     float _nextRefresh;
 
     readonly System.Collections.Generic.List<Image> _unitBlips =
@@ -62,10 +63,14 @@ public class CommanderMinimap : MonoBehaviour
             dot.rectTransform.anchoredPosition = ToPanel(new Vector3(field.x, 0f, field.y));
         }
 
-        // The camera's gaze: a hollow-reading diamond (a rotated square).
-        var marker = Blip("View", new Color(1f, 1f, 1f, 0.7f), 10f);
-        _viewMarker = marker.rectTransform;
-        _viewMarker.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        // The camera's gaze: the actual view frustum's footprint on the
+        // ground, drawn as four connected edges — the classic RTS trapezoid,
+        // narrow at the near edge, wide at the far one.
+        for (int i = 0; i < 4; i++)
+        {
+            var edge = Blip($"ViewEdge{i}", new Color(1f, 1f, 1f, 0.65f), 2f);
+            _viewEdges[i] = edge.rectTransform;
+        }
     }
 
     Image Blip(string name, Color color, float size)
@@ -105,6 +110,10 @@ public class CommanderMinimap : MonoBehaviour
 
     void Update()
     {
+        // The viewport trapezoid tracks every frame — the camera glides, and
+        // a 10 Hz rectangle stutters against it. Blips can afford the tick.
+        UpdateViewport();
+
         if (Time.time < _nextRefresh)
             return;
         _nextRefresh = Time.time + RefreshSeconds;
@@ -131,9 +140,58 @@ public class CommanderMinimap : MonoBehaviour
         }
         PoolTrim(_buildingBlips, buildingIndex);
 
-        var camera = FindFirstObjectByType<CommanderCamera>();
-        if (camera != null && _viewMarker != null)
-            _viewMarker.anchoredPosition = ToPanel(camera.Focus);
+    }
+
+    /// <summary>
+    /// Project the camera's four viewport corners onto the ground and draw
+    /// the resulting quad. Corner rays always point down at this rig's pitch
+    /// and FOV, but the guard clamps a near-horizontal ray to a far point
+    /// rather than trusting that forever; panel clamping keeps every edge
+    /// inside the map square regardless.
+    /// </summary>
+    void UpdateViewport()
+    {
+        if (_viewCamera == null)
+        {
+            var rig = FindFirstObjectByType<CommanderCamera>();
+            if (rig == null)
+                return;
+            _viewCamera = rig.GetComponent<Camera>();
+            if (_viewCamera == null)
+                return;
+        }
+
+        // Near-left, near-right, far-right, far-left — a closed loop.
+        var corners = new Vector2[4];
+        var viewport = new[]
+        {
+            new Vector3(0f, 0f), new Vector3(1f, 0f),
+            new Vector3(1f, 1f), new Vector3(0f, 1f),
+        };
+        float half = PanelSize * 0.5f - 1f;
+        for (int i = 0; i < 4; i++)
+        {
+            var ray = _viewCamera.ViewportPointToRay(viewport[i]);
+            float t = ray.direction.y < -0.001f
+                ? -ray.origin.y / ray.direction.y
+                : 300f;
+            Vector3 ground = ray.origin + ray.direction * t;
+            Vector2 panel = ToPanel(ground);
+            corners[i] = new Vector2(Mathf.Clamp(panel.x, -half, half),
+                                     Mathf.Clamp(panel.y, -half, half));
+        }
+
+        for (int i = 0; i < 4; i++)
+            SetEdge(_viewEdges[i], corners[i], corners[(i + 1) % 4]);
+    }
+
+    static void SetEdge(RectTransform edge, Vector2 a, Vector2 b)
+    {
+        Vector2 delta = b - a;
+        edge.anchoredPosition = (a + b) * 0.5f;
+        edge.sizeDelta = new Vector2(Mathf.Max(2f, delta.magnitude), 2f);
+        edge.localRotation = Quaternion.Euler(0f, 0f,
+            Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
     }
 
     Image PoolGet(System.Collections.Generic.List<Image> pool, int index, float size)

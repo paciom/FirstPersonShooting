@@ -15,9 +15,11 @@ public class CommanderCamera : MonoBehaviour
     public const float Pitch = 55f;
     public const float Fov = 45f;
 
-    const float MinHeight = 25f;
+    // 8, not 25: close enough to watch one robot unfold and fire — the
+    // broadcast close-up AI WAR was missing. Pan speed already scales with
+    // height, so ground level handles like a slow dolly, not a twitch.
+    const float MinHeight = 8f;
     const float MaxHeight = 80f;
-    const float ZoomStep = 6f;
 
     /// <summary>Pan speed scales with height: zoomed out crosses the map fast.</summary>
     const float PanPerHeight = 1.1f;
@@ -119,9 +121,11 @@ public class CommanderCamera : MonoBehaviour
         }
 
         // --- wheel zoom ---
+        // Proportional, not linear: a fixed step that feels right at 80 m is
+        // half the world at 10 m. Each notch scales height by 12%.
         float scroll = Input.mouseScrollDelta.y;
         if (scroll != 0f)
-            _height = Mathf.Clamp(_height - scroll * ZoomStep, MinHeight, MaxHeight);
+            _height = Mathf.Clamp(_height * Mathf.Pow(0.88f, scroll), MinHeight, MaxHeight);
 
         // Any hand on the controls pauses the auto-director for a while.
         if (pan.sqrMagnitude > 0.001f || scroll != 0f || Input.GetMouseButton(2))
@@ -153,7 +157,8 @@ public class CommanderCamera : MonoBehaviour
             return;
         float ease = 1f - Mathf.Exp(-1.4f * dt);
         _focus = Vector3.Lerp(_focus, new Vector3(target.x, 0f, target.z), ease);
-        float wantHeight = Mathf.Clamp(26f + spread * 1.15f, MinHeight, MaxHeight);
+        // A duel earns a close-up, a brawl the wide shot.
+        float wantHeight = Mathf.Clamp(14f + spread * 1.2f, MinHeight, MaxHeight);
         _height = Mathf.Lerp(_height, wantHeight, ease);
     }
 
