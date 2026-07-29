@@ -74,11 +74,11 @@ public class CommanderUnit : MonoBehaviour
     const float VehicleSpeedFactor = 1.55f;
 
     /// <summary>
-    /// Per-team permission for idle fighters to work the mines. The AI
-    /// commanders assert their flag every tick (which also self-heals the
-    /// static across a reload); the player's team never sets it — a human's
-    /// parked robots are a defensive line, not shirkers, and units that
-    /// wander off a hold position are worse than units that idle.
+    /// Per-team permission for idle fighters to work the mines. Asserted
+    /// every frame by CommanderController for BOTH teams (self-healing the
+    /// static across a reload): by playtest decree, no robot idles — the
+    /// player's included. Finish your orders, pick up a shovel; any command
+    /// or a spotted enemy drops it instantly.
     /// </summary>
     public static readonly bool[] IdleWorkEnabled = new bool[2];
 

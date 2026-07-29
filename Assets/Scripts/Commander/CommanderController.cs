@@ -150,6 +150,12 @@ public class CommanderController : MonoBehaviour
 
     void Update()
     {
+        // No robot idles, either side, either mode: an unordered fighter
+        // with no enemy in sight helps in the mines. Asserted every frame so
+        // a mid-play recompile can't silently lay anyone off.
+        CommanderUnit.IdleWorkEnabled[0] = true;
+        CommanderUnit.IdleWorkEnabled[1] = true;
+
         // H — home: snap the view back to your Command Center (cyan's, in
         // either mode — it is the bottom-of-screen base).
         if (!Input.GetKeyDown(KeyCode.H))
