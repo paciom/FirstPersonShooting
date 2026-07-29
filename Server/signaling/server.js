@@ -38,13 +38,25 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 5;
 const ROOM_TTL_MS = 30 * 60 * 1000;
 const HEARTBEAT_MS = 30 * 1000;
+const MAX_ROOMS = 500;
+const MAX_CONNECTIONS_PER_IP = 16;
+
+// A stray rejection anywhere (Node >=15) would otherwise kill the process —
+// one bad frame taking the server down for every player.
+process.on("unhandledRejection", (err) =>
+  console.error("unhandled rejection:", err)
+);
 
 const STUN_SERVERS = [
   { urls: "stun:stun.cloudflare.com:3478" },
   { urls: "stun:stun.l.google.com:19302" },
 ];
 
-/** code -> { host: ws|null, guest: ws|null, createdAt: number } */
+/**
+ * code -> { host, guest, idleSince }. idleSince is set whenever the room is
+ * waiting for a guest (creation, or the guest leaving) and cleared while the
+ * room is full — the TTL sweep only reaps waiting rooms, never live matches.
+ */
 const rooms = new Map();
 
 function makeCode() {
@@ -78,11 +90,16 @@ async function getIceServers() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+        // A hung mint must not stall every host/join behind the await.
+        signal: AbortSignal.timeout(5000),
       }
     );
     if (!res.ok) throw new Error(`Cloudflare TURN mint failed: ${res.status}`);
     const body = await res.json();
-    const servers = body.iceServers ? [body.iceServers] : body.ice_servers || [];
+    // generate-ice-servers returns { iceServers: [...] }; older examples show
+    // a single object — normalize either shape to a flat array.
+    const minted = body.iceServers ?? body.ice_servers ?? [];
+    const servers = Array.isArray(minted) ? minted : [minted];
     // Refresh at 80% of TTL so handed-out credentials outlive the match start.
     turnCache = {
       servers,
@@ -91,6 +108,9 @@ async function getIceServers() {
     return [...STUN_SERVERS, ...servers];
   } catch (err) {
     console.error("TURN credential mint failed, serving STUN-only:", err.message);
+    // Negative cache: without this, every host/join during a Cloudflare
+    // outage would stall the full mint timeout before falling back.
+    turnCache = { servers: [], expiresAt: now + 60 * 1000 };
     return STUN_SERVERS;
   }
 }
@@ -111,13 +131,15 @@ function leaveRoom(ws, notifyPeer) {
   if (!room) return;
   const peer = otherPeer(room, ws);
   if (room.host === ws) room.host = null;
-  if (room.guest === ws) room.guest = null;
+  if (room.guest === ws) {
+    room.guest = null;
+    // Back to waiting — the idle clock restarts.
+    room.idleSince = Date.now();
+  }
   if (notifyPeer && peer) send(peer, { t: "peer-left" });
   // A room without its host is unjoinable — drop it rather than strand guests.
-  if (!room.host || (!room.host && !room.guest)) {
-    if (room.guest) {
-      room.guest.roomCode = null;
-    }
+  if (!room.host) {
+    if (room.guest) room.guest.roomCode = null;
     rooms.delete(code);
   }
 }
@@ -129,13 +151,19 @@ async function handleMessage(ws, raw) {
   } catch {
     return send(ws, { t: "error", reason: "bad-json" });
   }
+  // JSON.parse("null") and friends succeed — only objects are messages.
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) {
+    return send(ws, { t: "error", reason: "bad-json" });
+  }
 
   switch (msg.t) {
     case "host": {
       leaveRoom(ws, true);
+      if (rooms.size >= MAX_ROOMS)
+        return send(ws, { t: "error", reason: "server-full" });
       const code = makeCode();
       if (!code) return send(ws, { t: "error", reason: "server-full" });
-      rooms.set(code, { host: ws, guest: null, createdAt: Date.now() });
+      rooms.set(code, { host: ws, guest: null, idleSince: Date.now() });
       ws.roomCode = code;
       // ice is stringified: the Unity client (JsonUtility) can't parse nested
       // arrays, so it relays this string to the browser's RTCPeerConnection
@@ -150,16 +178,20 @@ async function handleMessage(ws, raw) {
       if (room.guest) return send(ws, { t: "error", reason: "room-full" });
       leaveRoom(ws, true);
       room.guest = ws;
+      room.idleSince = null;
       ws.roomCode = code;
       send(ws, { t: "joined", ice: JSON.stringify(await getIceServers()) });
       send(room.host, { t: "peer-joined" });
       break;
     }
     case "signal": {
+      // Signals racing a departure (peer left while ours was on the wire)
+      // are dropped silently — the sender learns the real news from
+      // peer-left, and an error here would kill its healthy session.
       const room = rooms.get(ws.roomCode);
-      if (!room) return send(ws, { t: "error", reason: "not-in-room" });
+      if (!room) return;
       const peer = otherPeer(room, ws);
-      if (!peer) return send(ws, { t: "error", reason: "no-peer" });
+      if (!peer) return;
       send(peer, { t: "signal", data: msg.data });
       break;
     }
@@ -181,18 +213,44 @@ const server = http.createServer((req, res) => {
   res.end();
 });
 
-const wss = new WebSocketServer({ server });
+// maxPayload makes ws reject oversized frames before buffering them —
+// the in-handler length check alone would run only after the buffering.
+const wss = new WebSocketServer({ server, maxPayload: 64 * 1024 });
 
-wss.on("connection", (ws) => {
+/** remoteAddress -> live connection count, for a crude per-IP cap. */
+const connectionsPerIp = new Map();
+
+function clientIp(ws, req) {
+  // Behind Container Apps ingress the real address is in X-Forwarded-For.
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) return String(forwarded).split(",")[0].trim();
+  return req.socket.remoteAddress || "unknown";
+}
+
+wss.on("connection", (ws, req) => {
+  const ip = clientIp(ws, req);
+  const ipCount = (connectionsPerIp.get(ip) || 0) + 1;
+  if (ipCount > MAX_CONNECTIONS_PER_IP) {
+    ws.close(1013, "too many connections");
+    return;
+  }
+  connectionsPerIp.set(ip, ipCount);
+
   ws.roomCode = null;
   ws.isAlive = true;
   ws.on("pong", () => (ws.isAlive = true));
   ws.on("message", (raw) => {
-    // Oversized frames are not part of any legitimate handshake.
     if (raw.length > 64 * 1024) return ws.terminate();
-    handleMessage(ws, raw.toString());
+    handleMessage(ws, raw.toString()).catch((err) =>
+      console.error("handleMessage failed:", err)
+    );
   });
-  ws.on("close", () => leaveRoom(ws, true));
+  ws.on("close", () => {
+    const count = (connectionsPerIp.get(ip) || 1) - 1;
+    if (count <= 0) connectionsPerIp.delete(ip);
+    else connectionsPerIp.set(ip, count);
+    leaveRoom(ws, true);
+  });
   ws.on("error", () => leaveRoom(ws, true));
 });
 
@@ -209,11 +267,13 @@ setInterval(() => {
   }
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (now - room.createdAt > ROOM_TTL_MS) {
-      if (room.host) send(room.host, { t: "error", reason: "room-expired" });
-      if (room.guest) send(room.guest, { t: "error", reason: "room-expired" });
-      if (room.host) room.host.roomCode = null;
-      if (room.guest) room.guest.roomCode = null;
+    // Only rooms still WAITING for a guest expire — a full room is a live
+    // match, and reaping it would tear the game down under both players.
+    if (room.idleSince != null && now - room.idleSince > ROOM_TTL_MS) {
+      if (room.host) {
+        send(room.host, { t: "error", reason: "room-expired" });
+        room.host.roomCode = null;
+      }
       rooms.delete(code);
     }
   }

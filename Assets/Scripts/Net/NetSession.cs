@@ -92,29 +92,57 @@ public class NetSession : MonoBehaviour
     }
 
     /// <summary>
-    /// Signaling server address: `?net=wss://…` on the page URL wins, so a
-    /// deployed build can point at the real server without a rebuild.
+    /// The deployed signaling server. Fill in after `az containerapp up`
+    /// (see Server/signaling/README.md); until then, deployed pages need
+    /// `?net=wss://…` and only localhost pages get the localhost default.
+    /// </summary>
+    const string ProductionServerUrl = "";
+
+    /// <summary>
+    /// Signaling server address: `?net=wss://…` on the page URL wins, then
+    /// the baked production URL, then localhost for local runs. Null means
+    /// "deployed page with nothing configured" — an explicit setup error the
+    /// caller can explain, far better than dialing the player's own machine.
     /// </summary>
     public static string ServerUrl
     {
         get
         {
             string absolute = Application.absoluteURL;
-            if (!string.IsNullOrEmpty(absolute))
-            {
-                int at = absolute.IndexOf("net=", StringComparison.Ordinal);
-                if (at >= 0)
-                {
-                    string tail = absolute.Substring(at + 4);
-                    int amp = tail.IndexOf('&');
-                    if (amp >= 0) tail = tail.Substring(0, amp);
-                    tail = Uri.UnescapeDataString(tail);
-                    if (tail.StartsWith("ws", StringComparison.Ordinal))
-                        return tail;
-                }
-            }
-            return DefaultServerUrl;
+            string fromQuery = QueryParam(absolute, "net");
+            if (fromQuery != null && fromQuery.StartsWith("ws", StringComparison.Ordinal))
+                return fromQuery;
+            if (ProductionServerUrl.Length > 0)
+                return ProductionServerUrl;
+            // Editor / standalone (empty URL) and locally-served pages.
+            if (string.IsNullOrEmpty(absolute)
+                || absolute.Contains("//localhost")
+                || absolute.Contains("//127.0.0.1"))
+                return DefaultServerUrl;
+            return null;
         }
+    }
+
+    /// <summary>
+    /// Anchored query lookup — matches `?name=` / `&name=` only, so a
+    /// parameter like `planet=` can never hijack `net=`.
+    /// </summary>
+    static string QueryParam(string url, string name)
+    {
+        if (string.IsNullOrEmpty(url))
+            return null;
+        foreach (string prefix in new[] { "?" + name + "=", "&" + name + "=" })
+        {
+            int at = url.IndexOf(prefix, StringComparison.Ordinal);
+            if (at < 0)
+                continue;
+            string tail = url.Substring(at + prefix.Length);
+            int end = tail.IndexOfAny(new[] { '&', '#' });
+            if (end >= 0)
+                tail = tail.Substring(0, end);
+            return Uri.UnescapeDataString(tail);
+        }
+        return null;
     }
 
     public void Host() => Begin(isHost: true, code: "");
@@ -136,6 +164,14 @@ public class NetSession : MonoBehaviour
             return;
         }
 
+        string serverUrl = ServerUrl;
+        if (serverUrl == null)
+        {
+            FailReason = "match server not set up — add ?net=wss://… to the page address";
+            Status = NetStatus.Failed;
+            return;
+        }
+
         Disconnect();
         IsHost = isHost;
         MatchCode = code;
@@ -144,7 +180,7 @@ public class NetSession : MonoBehaviour
         Path = "unknown";
         _sentIntro = false;
         Status = NetStatus.Connecting;
-        NetBridge.PN_SigConnect(ServerUrl);
+        NetBridge.PN_SigConnect(serverUrl);
     }
 
     public void Disconnect()
@@ -166,6 +202,13 @@ public class NetSession : MonoBehaviour
         PumpSignaling();
         if (_rtcRunning)
             PumpRtc();
+
+        // A huge frame delta means the browser throttled or paused this tab
+        // (hidden tab ≈ 1 Hz, focus loss can stop the loop entirely). The
+        // stall wasn't the network's fault — push the deadline out instead
+        // of failing the instant the player comes back.
+        if (Time.unscaledDeltaTime > 2f)
+            _handshakeDeadline += Time.unscaledDeltaTime;
 
         // Stuck handshakes fail loudly. Hosting is exempt — waiting for a
         // friend to type the code takes as long as it takes.
@@ -252,6 +295,15 @@ public class NetSession : MonoBehaviour
                 break;
 
             case "error":
+                // Relay-race errors — our signal crossed a departure on the
+                // wire — must not kill a healthy session. The server drops
+                // these silently now; this is defense in depth.
+                if ((msg.reason == "no-peer" || msg.reason == "not-in-room")
+                    && (Status == NetStatus.Hosting || Status == NetStatus.Connected))
+                    break;
+                // Once the peer link is live, only the link itself decides.
+                if (Status == NetStatus.Connected)
+                    break;
                 Fail(DescribeServerError(msg.reason));
                 break;
         }
@@ -282,6 +334,10 @@ public class NetSession : MonoBehaviour
             Status = NetStatus.Connected;
             _nextPing = 0f;
             _nextPath = 0f;
+            // The signaling server's job is done — leave the room and hang
+            // up so the server never has a reason to message us mid-match.
+            NetBridge.PN_SigSend("{\"t\":\"leave\"}");
+            NetBridge.PN_SigClose();
         }
         else if (rtc == NetBridge.RtcFailed)
         {

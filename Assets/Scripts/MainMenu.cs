@@ -42,6 +42,9 @@ public static class MainMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
+        // Six buttons now reach y=-400: on ultrawide screens match-width
+        // scaling would shrink the reference height and clip the bottom row.
+        scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
         EnsureEventSystem();

@@ -109,7 +109,12 @@ public static class WebGLBuilder
         // the browser console without paying for full null-check instrumentation.
         PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly;
 
+        // Online PvP depends on this: with it off, the player pauses the moment
+        // the canvas loses focus — which is exactly when a host alt-tabs to
+        // send their friend the match code, stalling the handshake for both.
+        PlayerSettings.runInBackground = true;
+
         Debug.Log($"[WebGLBuilder] WebGL settings: {PlayerSettings.WebGL.compressionFormat}, " +
-                  "fallback off, wasm, data caching on.");
+                  "fallback off, wasm, data caching on, run in background.");
     }
 }

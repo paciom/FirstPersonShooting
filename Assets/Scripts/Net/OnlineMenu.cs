@@ -21,7 +21,15 @@ public static class OnlineMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
+        // Balance width and height so ultrawide viewports don't shrink the
+        // reference height and push the bottom buttons off screen.
+        scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
+
+        // A stale Failed session from a previous visit would flash its old
+        // error into the fresh screen.
+        if (NetSession.Instance != null && NetSession.Instance.Status == NetStatus.Failed)
+            NetSession.Instance.Disconnect();
 
         var ui = canvasGo.AddComponent<OnlineMenuUi>();
         ui.Init(mainMenuCanvas);
@@ -48,7 +56,10 @@ public class OnlineMenuUi : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
+        // Escape while typing a code just leaves the text box (the
+        // InputField's own behavior) — it shouldn't also close the screen.
+        if (Input.GetKeyDown(KeyCode.Escape)
+            && (_joinField == null || !_joinField.isFocused))
         {
             Back();
             return;

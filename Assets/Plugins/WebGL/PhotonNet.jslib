@@ -34,15 +34,21 @@ var PhotonNetLib = {
     EV_QUEUE_CAP: 1024,
     ST_QUEUE_CAP: 256,
 
+    // RTC-scoped state only. The signaling queue deliberately survives:
+    // PN_RtcStart runs from inside C#'s signaling drain loop, and wiping
+    // sigQueue there would destroy an offer/ICE already queued behind the
+    // "joined" message that triggered the start.
     reset: function () {
-      PN.sigQueue = [];
       PN.chQueues = [[], []];
       PN.localDescQueue = [];
       PN.localIceQueue = [];
       PN.path = "unknown";
+      PN.droppedMessages = 0;
     },
 
     pushCapped: function (queue, cap, item) {
+      // Empty strings would read as "queue empty" on the C# side.
+      if (!item) return;
       queue.push(item);
       // Oldest-first drop: for state snapshots the newest is the valuable one.
       while (queue.length > cap) {
@@ -67,18 +73,31 @@ var PhotonNetLib = {
         // A message too big for the buffer is dropped, not truncated —
         // half a JSON payload is worse than none. Try the next one.
         if (written !== -2) return written;
+        console.error("PhotonNet: dropped a message larger than the C# buffer");
         PN.droppedMessages++;
       }
       return 0;
     },
 
     adoptChannel: function (ch) {
-      var index = ch.label === "ev" ? 0 : 1;
+      var index = { ev: 0, st: 1 }[ch.label];
+      if (index === undefined) return; // unknown label — never clobber a slot
       PN.channels[index] = ch;
       ch.onmessage = function (e) {
-        if (typeof e.data === "string")
-          PN.pushCapped(PN.chQueues[index],
-            index === 0 ? PN.EV_QUEUE_CAP : PN.ST_QUEUE_CAP, e.data);
+        if (typeof e.data !== "string") return;
+        if (index === 0) {
+          // The reliable channel must never silently drop: an overflow here
+          // (C# not polling for minutes) is a corrupted protocol, and the
+          // honest outcome is a failed link, not missing events.
+          if (PN.chQueues[0].length >= PN.EV_QUEUE_CAP) {
+            console.error("PhotonNet: reliable queue overflow — failing the link");
+            PN.rtcState = 3;
+            return;
+          }
+          PN.pushCapped(PN.chQueues[0], PN.EV_QUEUE_CAP, e.data);
+        } else {
+          PN.pushCapped(PN.chQueues[1], PN.ST_QUEUE_CAP, e.data);
+        }
       };
       ch.onopen = function () { PN.refreshRtcState(); };
       ch.onclose = function () { PN.refreshRtcState(); };
@@ -102,14 +121,24 @@ var PhotonNetLib = {
   PN_SigConnect: function (urlPtr) {
     var url = UTF8ToString(urlPtr);
     try {
-      if (PN.ws) { PN.ws.onclose = null; PN.ws.close(); }
-      PN.ws = new WebSocket(url);
+      if (PN.ws) {
+        // Detach EVERYTHING before closing: close() on a still-CONNECTING
+        // socket fires an async error event, and a stale onerror writing to
+        // the shared state would kill the replacement session.
+        PN.ws.onopen = PN.ws.onclose = PN.ws.onerror = PN.ws.onmessage = null;
+        try { PN.ws.close(); } catch (err) {}
+      }
+      PN.sigQueue = [];
+      var sock = new WebSocket(url);
+      PN.ws = sock;
       PN.wsState = 1;
-      PN.ws.onopen = function () { PN.wsState = 2; };
-      PN.ws.onclose = function () { PN.wsState = 3; };
-      PN.ws.onerror = function () { PN.wsState = 3; };
-      PN.ws.onmessage = function (e) {
-        if (typeof e.data === "string")
+      // Each handler is bound to its own socket — a late event from a
+      // replaced socket must never touch the live session's state.
+      sock.onopen = function () { if (PN.ws === sock) PN.wsState = 2; };
+      sock.onclose = function () { if (PN.ws === sock) PN.wsState = 3; };
+      sock.onerror = function () { if (PN.ws === sock) PN.wsState = 3; };
+      sock.onmessage = function (e) {
+        if (PN.ws === sock && typeof e.data === "string")
           PN.pushCapped(PN.sigQueue, PN.SIG_QUEUE_CAP, e.data);
       };
     } catch (err) {
@@ -130,7 +159,7 @@ var PhotonNetLib = {
 
   PN_SigClose: function () {
     if (PN.ws) {
-      PN.ws.onclose = null;
+      PN.ws.onopen = PN.ws.onclose = PN.ws.onerror = PN.ws.onmessage = null;
       try { PN.ws.close(); } catch (err) {}
       PN.ws = null;
     }
@@ -234,13 +263,21 @@ var PhotonNetLib = {
   PN_RtcUpdatePath: function () {
     if (!PN.pc) return;
     PN.pc.getStats().then(function (stats) {
-      var pair = null, cands = {};
+      var pairs = {}, cands = {}, selectedId = null, fallback = null;
       stats.forEach(function (r) {
-        if (r.type === "candidate-pair" && (r.selected || r.nominated) && r.state === "succeeded")
-          pair = r;
+        if (r.type === "transport" && r.selectedCandidatePairId)
+          selectedId = r.selectedCandidatePairId;
+        if (r.type === "candidate-pair") {
+          pairs[r.id] = r;
+          // Heuristic fallback for browsers without transport stats:
+          // "selected" is Firefox-only, "nominated" is the Chrome signal.
+          if ((r.selected || r.nominated) && r.state === "succeeded")
+            fallback = r;
+        }
         if (r.type === "local-candidate" || r.type === "remote-candidate")
           cands[r.id] = r;
       });
+      var pair = (selectedId && pairs[selectedId]) || fallback;
       if (!pair) { PN.path = "unknown"; return; }
       var local = cands[pair.localCandidateId];
       var remote = cands[pair.remoteCandidateId];
