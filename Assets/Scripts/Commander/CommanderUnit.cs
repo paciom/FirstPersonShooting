@@ -350,6 +350,8 @@ public class CommanderUnit : MonoBehaviour
         {
             _shield.OnDeRezzed -= HandleDeRez;
             _shield.OnDeRezzed += HandleDeRez;
+            _shield.OnDamaged -= HandleDamaged;
+            _shield.OnDamaged += HandleDamaged;
         }
     }
 
@@ -357,7 +359,66 @@ public class CommanderUnit : MonoBehaviour
     {
         All.Remove(this);
         if (_shield != null)
+        {
             _shield.OnDeRezzed -= HandleDeRez;
+            _shield.OnDamaged -= HandleDamaged;
+        }
+    }
+
+    /// <summary>
+    /// Taking fire is intelligence sight never needed: a robot deep in a
+    /// crystal field can't SEE its attacker through its own shards — the
+    /// exact posture mining puts it in — but the shield knows who hit it.
+    /// Idle (mining included) and attack-moving units answer force with
+    /// force; an explicit Move order stays sacred, because interrupting a
+    /// commanded retreat gets robots killed.
+    /// </summary>
+    void HandleDamaged(float amount, Vector3 hitPoint)
+    {
+        if (_dying || _shield == null || _shield.IsDown)
+            return;
+        if (_order == OrderKind.Attack && _target != null && _target.IsAlive)
+            return;   // already in a fight — finish it
+        if (_order != OrderKind.Idle && _order != OrderKind.AttackMove)
+            return;
+
+        CommanderUnit attacker = null;
+        if (_shield.LastAttacker != null)
+            attacker = _shield.LastAttacker.GetComponent<CommanderUnit>();
+        if (attacker != null && (!attacker.IsAlive || attacker.TeamId == TeamId))
+            attacker = null;
+        OnUnderAttack(attacker);
+    }
+
+    /// <summary>
+    /// Fight back — or, when the attacker is nothing a robot can duel (a
+    /// turret), break contact toward home. The Collector overrides this to
+    /// always run: it has no gun to answer with.
+    /// </summary>
+    protected virtual void OnUnderAttack(CommanderUnit attacker)
+    {
+        if (attacker != null)
+        {
+            // Straight to Attack, preserving an attack-move's resume point —
+            // IssueAttack would erase it.
+            if (_order == OrderKind.Idle)
+            {
+                _leashOrigin = transform.position;
+                _leashed = true;
+            }
+            _order = OrderKind.Attack;
+            _target = attacker;
+            return;
+        }
+
+        // Shot by something un-duel-able while idle: step out of its range.
+        if (_order == OrderKind.Idle)
+        {
+            Vector3 home = CommanderMap.BaseSite(TeamId) - transform.position;
+            home.y = 0f;
+            if (home.sqrMagnitude > 1f)
+                SetAgentDestination(transform.position + home.normalized * 14f);
+        }
     }
 
     // ------------------------------------------------------------- orders

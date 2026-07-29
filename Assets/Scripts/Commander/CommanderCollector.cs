@@ -55,6 +55,16 @@ public class CommanderCollector : CommanderUnit
     public override void IssueAttack(CommanderUnit target) { }
 
     /// <summary>
+    /// A collector under fire has exactly one move: run home with whatever
+    /// is in the hold. IssueMove doubles as the retask, so the cycle
+    /// resumes from the base — at the nearest (hopefully safer) field.
+    /// </summary>
+    protected override void OnUnderAttack(CommanderUnit attacker)
+    {
+        IssueMove(CommanderMap.BaseSite(TeamId));
+    }
+
+    /// <summary>
     /// A player order is also a retask: forget the remembered field so the
     /// cycle resumes at the NEAREST one from wherever the move ends. Without
     /// this, a collector pulled out of a raid marches straight back into it —
