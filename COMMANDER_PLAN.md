@@ -8,6 +8,17 @@ Decisions taken 2026-07-29: full Red Alert economy loop; structures are built
 from primitives first and given Meshy models once footprints are final; both
 player-commanded and AI-v-AI matches.
 
+> **Status 2026-07-29: Phases 0–5 SHIPPED, Phase 6 mostly shipped**, one commit
+> per phase on `feature/commander`. Both menu entries live (`COMMANDER`,
+> `COMMANDER: AI WAR`). Shipped beyond the letter of the plan: minimap with
+> tap-to-jump, raw-touch controls (drag pan / pinch zoom / tap grammar, ghost
+> placement by finger), H-home hotkey, match-end de-rez cascade. Still open:
+> unit barks (ChatterDirector is deliberately gated to FPS modes — needs
+> commander-flavoured conversation content first), rally-point UI (factories
+> deliver toward map centre), fog of war, AI difficulty settings, and the
+> Meshy art pass — six structure previews are bought and awaiting approval
+> (`python Tools/meshybuildings.py thumbs`, then `refine` the survivors).
+
 ---
 
 ## 1. What this rides on (already built)
