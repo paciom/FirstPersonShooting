@@ -15,6 +15,17 @@ public static class RobotSelectMenu
     internal static readonly Color HoloMagenta = new Color(1f, 0.25f, 0.9f);
     static readonly Color CardColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
 
+    /// <summary>
+    /// What the preview cameras clear to, behind the robot. A neutral grey
+    /// rather than the near-black this used to be: several robots are mostly
+    /// dark plating, and their silhouettes disappeared into the background.
+    ///
+    /// Shared by the cards and the inspector so a robot reads the same in both.
+    /// Safe to raise — these cameras render with post-processing off, so a
+    /// lighter backdrop costs no bloom contrast on the cyan trim.
+    /// </summary>
+    internal static readonly Color PreviewBackdrop = new Color(0.29f, 0.30f, 0.32f, 1f);
+
     // Preview rigs live far below the arena so the tiny preview cameras
     // (short far plane) see nothing but their own robot.
     internal const float PreviewDepth = -150f;
@@ -283,7 +294,7 @@ public static class RobotSelectMenu
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 12f;
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+            cam.backgroundColor = PreviewBackdrop;
             var data = camGo.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = false;
             cameras.Add(cam);
@@ -719,7 +730,7 @@ public class RobotInspector : MonoBehaviour
         _camera.nearClipPlane = 0.05f;
         _camera.farClipPlane = 12f;
         _camera.clearFlags = CameraClearFlags.SolidColor;
-        _camera.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+        _camera.backgroundColor = RobotSelectMenu.PreviewBackdrop;
         camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
         // Only renders while the dialog is up; nine thumbnails are enough work.
         _camera.enabled = false;

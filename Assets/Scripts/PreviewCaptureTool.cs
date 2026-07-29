@@ -242,7 +242,9 @@ public static class PreviewCaptureTool
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 12f;
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+            // Must track the select screen's own backdrop — the point of this
+            // tool is that the capture and the card are the same picture.
+            cam.backgroundColor = RobotSelectMenu.PreviewBackdrop;
             camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
 
             // Front and back, because the reported screenshots were of the back
