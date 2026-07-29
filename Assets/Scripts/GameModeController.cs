@@ -547,9 +547,9 @@ public class GameModeController : MonoBehaviour
                 "A + Click — Attack-move   ·   WASD / Wheel — Camera   ·   H — Home   ·   ESC — Menu",
                 $"MAP #{seed}   ·   tap robot — select   ·   tap ground — move   ·   drag — pan");
         else
-            ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting; " +
-                "touch WASD / wheel to take it   ·   ESC — Menu",
-                $"AI WAR — MAP #{seed}   ·   tap MENU to go back");
+            ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting — " +
+                "drag / WASD / wheel to take it   ·   ESC — Menu",
+                $"AI WAR — MAP #{seed}   ·   drag — pan   ·   pinch — zoom   ·   MENU to go back");
         LockCursor(false);
     }
 

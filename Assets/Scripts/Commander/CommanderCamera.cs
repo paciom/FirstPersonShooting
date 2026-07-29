@@ -27,9 +27,18 @@ public class CommanderCamera : MonoBehaviour
     /// <summary>Screen-edge band that auto-pans, in pixels.</summary>
     const float EdgeMargin = 12f;
 
+    /// <summary>
+    /// Spectate only: the LEFT button (the one every hand reaches for) also
+    /// drag-pans. Off in the player mode, where left is selection's — there
+    /// the middle button keeps the grab.
+    /// </summary>
+    public bool primaryDragPans;
+
     float _height = 45f;
     Vector3 _focus;
     Vector3 _lastDragMouse;
+    Vector3 _lastPrimaryMouse;
+    bool _primaryDragging;
     float _lastManualAt = -999f;
 
     /// <summary>Where the camera is looking, on the ground — the minimap's view marker.</summary>
@@ -90,7 +99,7 @@ public class CommanderCamera : MonoBehaviour
         //  - not while the cursor reports outside the window, which is what
         //    the editor does whenever the mouse rests on another panel.
         var mouse = Input.mousePosition;
-        if (!TouchControls.Active && !Input.GetMouseButton(2)
+        if (!TouchControls.Active && !Input.GetMouseButton(2) && !_primaryDragging
             && mouse.x >= 0f && mouse.x <= Screen.width && mouse.y >= 0f && mouse.y <= Screen.height)
         {
             if (mouse.x < EdgeMargin) pan.x -= 1f;
@@ -118,6 +127,29 @@ public class CommanderCamera : MonoBehaviour
             // by the foreshortening of the pitched view.
             _focus -= new Vector3(delta.x * perPixel, 0f,
                                   delta.y * perPixel / Mathf.Sin(Pitch * Mathf.Deg2Rad));
+        }
+
+        // --- left-drag pan (spectate) ---
+        // Drags that BEGIN on UI (the minimap jump, the MENU button) belong
+        // to the UI; a drag that started on the world keeps panning even if
+        // it crosses a panel.
+        if (primaryDragPans)
+        {
+            if (Input.GetMouseButtonDown(0)
+                && !(UnityEngine.EventSystems.EventSystem.current != null
+                     && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()))
+            {
+                _primaryDragging = true;
+                _lastPrimaryMouse = mouse;
+            }
+            if (!Input.GetMouseButton(0))
+                _primaryDragging = false;
+            if (_primaryDragging)
+            {
+                Vector3 delta = mouse - _lastPrimaryMouse;
+                _lastPrimaryMouse = mouse;
+                PanBy(new Vector2(delta.x, delta.y));   // grab-the-ground math + manual stamp
+            }
         }
 
         // --- wheel zoom ---

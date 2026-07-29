@@ -251,6 +251,9 @@ public class CommanderController : MonoBehaviour
         data.renderPostProcessing = true;
 
         var rts = rig.AddComponent<CommanderCamera>();
+        // In the spectator seat the left button has no selection to serve,
+        // so it drag-pans — the control every mouse hand tries first.
+        rts.primaryDragPans = !_playerCommands;
         // Open on the cyan base with the map ahead of it, the way an RTS
         // match starts: your base bottom-of-screen, the war to the north.
         rts.SnapTo(CommanderMap.BaseSite(0) + new Vector3(0f, 0f, 8f));
