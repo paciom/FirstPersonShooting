@@ -1,0 +1,16 @@
+{
+  "name": "photon-arena-signaling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebSocket signaling + lobby server for Photon Arena online PvP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

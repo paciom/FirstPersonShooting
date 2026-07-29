@@ -57,11 +57,12 @@ public static class MainMenu
             new Vector2(0.5f, 1f), new Vector2(0, -225), new Vector2(800, 40));
 
         // Both AI modes route through the robot select screen first.
-        MakeButton(canvasGo.transform, "AI  v  AI", 140, () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeButton(canvasGo.transform, "PLAYER  v  AI", 20, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeButton(canvasGo.transform, "COMMANDER", -100, controller.StartCommander);
-        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -220, controller.StartCommanderWar);
-        MakeButton(canvasGo.transform, "ARENA  BUILDER", -340, controller.StartArenaPreview);
+        MakeButton(canvasGo.transform, "AI  v  AI", 200, () => controller.OpenRobotSelect(GameMode.AIvAI));
+        MakeButton(canvasGo.transform, "PLAYER  v  AI", 80, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
+        MakeButton(canvasGo.transform, "ONLINE  PVP", -40, () => OnlineMenu.Open(controller, canvasGo));
+        MakeButton(canvasGo.transform, "COMMANDER", -160, controller.StartCommander);
+        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -280, controller.StartCommanderWar);
+        MakeButton(canvasGo.transform, "ARENA  BUILDER", -400, controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
             20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
