@@ -91,6 +91,7 @@ public static class CommanderMap
         BuildCraters(kit, rock, Next);
         BuildRuins(kit, Next);
         BuildVents(kit, Next);
+        BuildWrecks(root.transform, Next);
         ScatterRocks(kit, rock, Next);
 
         return root;
@@ -364,27 +365,105 @@ public static class CommanderMap
     // ------------------------------------------------------------- dressing
 
     /// <summary>
-    /// Big faint tonal patches on the floor — scorch and sediment. Zero
-    /// gameplay, huge difference from 45 m up: an untextured plain reads as
-    /// an empty table, a mottled one reads as land.
+    /// Tonal patches on the floor — scorch and sediment. The material is the
+    /// SAME triplanar stone family as the ground, just shifted in tone: a
+    /// plain flat-colour quad up here reads as a missing texture, not as
+    /// terrain (found out the hard way on the first playtest).
     /// </summary>
     static void BuildGroundPatches(ArenaKit kit, System.Func<float, float, float> next)
     {
-        var dark = ArenaMaterials.Lit("Cmd_PatchDark", new Color(0.115f, 0.125f, 0.155f), 0.15f);
-        var pale = ArenaMaterials.Lit("Cmd_PatchPale", new Color(0.20f, 0.21f, 0.24f), 0.15f);
+        var dark = ArenaMaterials.Style("Cmd_PatchDark", ArenaMaterials.SurfaceStyle.Stone,
+            new Color(0.115f, 0.125f, 0.155f), new Color(0.06f, 0.07f, 0.09f), 2.8f, 0.97f);
+        var pale = ArenaMaterials.Style("Cmd_PatchPale", ArenaMaterials.SurfaceStyle.Stone,
+            new Color(0.20f, 0.21f, 0.24f), new Color(0.12f, 0.13f, 0.15f), 4.2f, 0.95f);
 
-        int pairs = (int)next(9f, 14f);
+        int pairs = (int)next(14f, 20f);
         for (int i = 0; i < pairs; i++)
         {
             var pos = new Vector3(next(-80f, 80f), 0f, next(-80f, 80f));
             if (NearBase(pos, 12f))
                 continue;   // the pad owns its own floor
-            var size = new Vector3(next(7f, 17f), 0.04f, next(7f, 17f));
+            var size = new Vector3(next(5f, 13f), 0.05f, next(5f, 13f));
             float yaw = next(0f, 360f);
             var mat = next(0f, 1f) > 0.45f ? dark : pale;
-            kit.Decor("Patch", new Vector3(pos.x, 0.02f, pos.z), size, mat, yaw);
-            kit.Decor("Patch", new Vector3(-pos.x, 0.02f, -pos.z), size, mat, yaw);
+            kit.Decor("Patch", new Vector3(pos.x, 0.025f, pos.z), size, mat, yaw);
+            kit.Decor("Patch", new Vector3(-pos.x, 0.025f, -pos.z), size, mat, yaw);
         }
+    }
+
+    /// <summary>
+    /// Dead war machines — the nine Meshy vehicle models, painted the colour
+    /// of ash, sunk to the axles and left where they died. The richest props
+    /// on the field, and they were already paid for. Each gets a box collider
+    /// sized to its hull, so wrecks are hard cover the bake routes around.
+    /// </summary>
+    static void BuildWrecks(Transform mapRoot, System.Func<float, float, float> next)
+    {
+        var roster = Object.FindFirstObjectByType<RobotRoster>();
+        if (roster == null || !roster.HasRobots)
+            return;
+        var prefabs = new List<GameObject>();
+        foreach (var entry in roster.robots)
+            if (entry.vehiclePrefab != null)
+                prefabs.Add(entry.vehiclePrefab);
+        if (prefabs.Count == 0)
+            return;
+
+        var ash = new Color(0.32f, 0.33f, 0.36f);
+        int pairs = (int)next(3f, 6f);
+        int placed = 0, attempts = 0;
+        while (placed < pairs && attempts++ < 60)
+        {
+            var pos = new Vector3(next(-74f, 74f), 0f, next(-74f, 74f));
+            if (Blocked(pos, baseKeepOut: 26f, fieldKeepOut: 11f, gapKeepOut: 9f))
+                continue;
+
+            var prefab = prefabs[Mathf.Min(prefabs.Count - 1, (int)next(0f, prefabs.Count))];
+            float yaw = next(0f, 360f);
+            float pitch = next(-7f, 7f);
+            float roll = next(-9f, 9f);
+            float length = next(3.2f, 4.6f);
+
+            BuildWreck(mapRoot, prefab, pos, yaw, pitch, roll, length, ash);
+            // The 180° twin: mirrored position, yaw spun half a turn.
+            BuildWreck(mapRoot, prefab, -pos, yaw + 180f, pitch, roll, length, ash);
+            placed++;
+        }
+    }
+
+    static void BuildWreck(Transform mapRoot, GameObject prefab, Vector3 pos,
+        float yaw, float pitch, float roll, float length, Color ash)
+    {
+        var holder = new GameObject("Wreck");
+        holder.transform.SetParent(mapRoot, false);
+        holder.transform.position = new Vector3(pos.x, GroundY, pos.z);
+
+        var instance = Object.Instantiate(prefab, holder.transform);
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return;
+        var bounds = renderers[0].bounds;
+        foreach (var renderer in renderers)
+            bounds.Encapsulate(renderer.bounds);
+
+        float scale = length / Mathf.Max(0.01f, Mathf.Max(bounds.size.x, bounds.size.z));
+        instance.transform.localScale *= scale;
+        Vector3 centre = holder.transform.InverseTransformPoint(bounds.center);
+        Vector3 bottom = holder.transform.InverseTransformPoint(
+            new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+        // Sunk 0.25 below grade: a wreck sits IN the dirt, not on it.
+        instance.transform.localPosition = new Vector3(
+            -centre.x * scale, -bottom.y * scale - 0.25f, -centre.z * scale);
+
+        // Dead-machine paint over whatever livery it wore.
+        TeamPaint.Apply(renderers, ash);
+
+        holder.transform.rotation = Quaternion.Euler(pitch, yaw, roll);
+
+        var hull = holder.AddComponent<BoxCollider>();
+        float height = Mathf.Max(0.8f, bounds.size.y * scale - 0.25f);
+        hull.center = new Vector3(0f, height * 0.5f, 0f);
+        hull.size = new Vector3(bounds.size.x * scale * 0.9f, height, bounds.size.z * scale * 0.9f);
     }
 
     /// <summary>
@@ -396,9 +475,9 @@ public static class CommanderMap
     {
         var scorch = ArenaMaterials.Lit("Cmd_Scorch", new Color(0.06f, 0.065f, 0.09f), 0.1f);
 
-        int pairs = (int)next(3f, 6f);
+        int pairs = (int)next(5f, 8f);
         int placed = 0, attempts = 0;
-        while (placed < pairs && attempts++ < 60)
+        while (placed < pairs && attempts++ < 90)
         {
             var pos = new Vector3(next(-72f, 72f), 0f, next(-72f, 72f));
             if (Blocked(pos, baseKeepOut: 24f, fieldKeepOut: 11f, gapKeepOut: 9f))
@@ -434,9 +513,9 @@ public static class CommanderMap
         var wall = ArenaMaterials.Style("Cmd_Ruin", ArenaMaterials.SurfaceStyle.Brick,
             new Color(0.17f, 0.16f, 0.19f), new Color(0.09f, 0.09f, 0.11f), 1.1f, 0.9f);
 
-        int pairs = (int)next(2f, 5f);
+        int pairs = (int)next(4f, 7f);
         int placed = 0, attempts = 0;
-        while (placed < pairs && attempts++ < 60)
+        while (placed < pairs && attempts++ < 90)
         {
             float band = _ridgeZ - 7f;
             var pos = new Vector3(next(-70f, 70f), 0f, next(-band, band));
@@ -477,9 +556,9 @@ public static class CommanderMap
             new Color(0.08f, 0.22f, 0.18f), new Color(0.04f, 0.12f, 0.10f), 0.6f, 0.4f,
             teal, 1.5f);
 
-        int pairs = (int)next(6f, 10f);
+        int pairs = (int)next(10f, 16f);
         int placed = 0, attempts = 0;
-        while (placed < pairs && attempts++ < 80)
+        while (placed < pairs && attempts++ < 120)
         {
             var pos = new Vector3(next(-78f, 78f), 0f, next(-78f, 78f));
             if (Blocked(pos, baseKeepOut: 18f, fieldKeepOut: 10f, gapKeepOut: 7f))
@@ -506,9 +585,9 @@ public static class CommanderMap
     /// </summary>
     static void ScatterRocks(ArenaKit kit, Material rock, System.Func<float, float, float> next)
     {
-        int target = (int)next(10f, 15f);
+        int target = (int)next(16f, 24f);
         int placed = 0, attempts = 0;
-        while (placed < target && attempts++ < 200)
+        while (placed < target && attempts++ < 300)
         {
             var pos = new Vector3(next(-80f, 80f), 0f, next(-80f, 80f));
             if (Blocked(pos, baseKeepOut: 22f, fieldKeepOut: 9f, gapKeepOut: 7f))
