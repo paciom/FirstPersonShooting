@@ -144,16 +144,25 @@ public class BuildPlacer : MonoBehaviour
 
     bool Judge(Vector3 center, RaycastHit under)
     {
-        var def = _pending;
+        // The cursor must be reading actual ground, not a ridge top or a roof.
+        if (under.point.y > CommanderMap.GroundY + 0.5f)
+            return false;
 
+        return IsValidPlacement(_pending, PlayerTeam, center)
+            && CommanderEconomy.Credits(PlayerTeam) >= _pending.cost;
+    }
+
+    /// <summary>
+    /// The placement law, shared verbatim by the ghost and the AI commander —
+    /// both sides build under the same rules, which is the plan's no-cheating
+    /// promise. Affordability is the caller's business.
+    /// </summary>
+    public static bool IsValidPlacement(BuildingDefinition def, int teamId, Vector3 center)
+    {
         // On the battlefield proper, clear of the border cliffs.
         float margin = Mathf.Max(def.footprint.x, def.footprint.y) * 0.5f + 2f;
         if (Mathf.Abs(center.x) > CommanderMap.HalfExtent - margin ||
             Mathf.Abs(center.z) > CommanderMap.HalfExtent - margin)
-            return false;
-
-        // The cursor must be reading actual ground, not a ridge top or a roof.
-        if (under.point.y > CommanderMap.GroundY + 0.5f)
             return false;
 
         // Nothing already standing in the footprint. The ground plane sits
@@ -166,23 +175,16 @@ public class BuildPlacer : MonoBehaviour
             return false;
 
         // The Red Alert adjacency rule: bases grow outward from what stands.
-        bool nearFriendly = false;
         foreach (var building in Building.All)
         {
-            if (building == null || building.TeamId != PlayerTeam || !building.IsAlive)
+            if (building == null || building.TeamId != teamId || !building.IsAlive)
                 continue;
             Vector3 flat = building.transform.position - center;
             flat.y = 0f;
             if (flat.magnitude <= AdjacencyRange + Mathf.Max(def.footprint.x, def.footprint.y) * 0.5f)
-            {
-                nearFriendly = true;
-                break;
-            }
+                return true;
         }
-        if (!nearFriendly)
-            return false;
-
-        return CommanderEconomy.Credits(PlayerTeam) >= def.cost;
+        return false;
     }
 
     /// <summary>Renderer-only copy of the building's block silhouette.</summary>

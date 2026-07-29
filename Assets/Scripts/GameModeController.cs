@@ -521,7 +521,12 @@ public class GameModeController : MonoBehaviour
     /// the battlefield is its own fixed map, and army composition is decided
     /// in-match by what you build, not on a select screen.
     /// </summary>
-    public void StartCommander()
+    public void StartCommander() => StartCommanderMode(playerCommands: true);
+
+    /// <summary>Commander's AI-v-AI: two machine commanders, a camera that hunts the fight.</summary>
+    public void StartCommanderWar() => StartCommanderMode(playerCommands: false);
+
+    void StartCommanderMode(bool playerCommands)
     {
         Mode = GameMode.Commander;
         DestroySpectatorRig();
@@ -530,12 +535,16 @@ public class GameModeController : MonoBehaviour
         // or fold would strand its coroutine — same order every mode uses.
         RestoreAllDeRez();
 
-        _commander = CommanderController.Begin(this);
+        _commander = CommanderController.Begin(this, playerCommands);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("Drag — Select   ·   RMB — Move / Attack   ·   A + Click — Attack-move   ·   " +
-            "WASD / Wheel — Camera   ·   ESC — Menu",
-            "COMMANDER — tap MENU to go back");
+        if (playerCommands)
+            ShowOverlay("Drag — Select   ·   RMB — Move / Attack   ·   A + Click — Attack-move   ·   " +
+                "WASD / Wheel — Camera   ·   ESC — Menu",
+                "COMMANDER — tap MENU to go back");
+        else
+            ShowOverlay("AI WAR — the camera follows the fighting; touch WASD / wheel to take it   ·   ESC — Menu",
+                "AI WAR — tap MENU to go back");
         LockCursor(false);
     }
 

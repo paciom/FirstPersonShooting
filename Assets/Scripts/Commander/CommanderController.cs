@@ -39,11 +39,15 @@ public class CommanderController : MonoBehaviour
     /// </summary>
     List<GameObject> _hiddenCharacters = new List<GameObject>();
 
-    public static CommanderController Begin(GameModeController owner)
+    /// <summary>True when a human holds the cyan seat; false is the AI-war spectator mode.</summary>
+    [SerializeField] bool _playerCommands = true;
+
+    public static CommanderController Begin(GameModeController owner, bool playerCommands)
     {
         var go = new GameObject("Commander");
         go.transform.SetParent(owner.transform, false);
         var controller = go.AddComponent<CommanderController>();
+        controller._playerCommands = playerCommands;
         controller.Setup();
         return controller;
     }
@@ -112,9 +116,25 @@ public class CommanderController : MonoBehaviour
                 CommanderMap.BaseSite(team) + Vector3.up * 0.12f);
 
         CommanderArmy.SpawnSkirmish(GetComponentInParent<RobotRoster>());
-        Selection = gameObject.AddComponent<CommanderSelection>();
-        Placer = gameObject.AddComponent<BuildPlacer>();
-        gameObject.AddComponent<CommanderHud>();
+
+        // The magenta seat is always an AI. The cyan seat is the player's
+        // UI — or a second AI plus the auto-director, and that is the whole
+        // difference between commanding the war and watching it.
+        var magenta = gameObject.AddComponent<CommanderAI>();
+        magenta.teamId = 1;
+        if (_playerCommands)
+        {
+            Selection = gameObject.AddComponent<CommanderSelection>();
+            Placer = gameObject.AddComponent<BuildPlacer>();
+            gameObject.AddComponent<CommanderHud>();
+        }
+        else
+        {
+            var cyan = gameObject.AddComponent<CommanderAI>();
+            cyan.teamId = 0;
+            _cameraRig.AddComponent<CommanderDirector>();
+        }
+        gameObject.AddComponent<CommanderMatch>();
     }
 
     /// <summary>

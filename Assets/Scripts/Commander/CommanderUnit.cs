@@ -72,6 +72,9 @@ public class CommanderUnit : MonoBehaviour
     public bool IsAlive => !_dying && _shield != null && !_shield.IsDown;
     public bool IsSelected => _selectRing != null && _selectRing.activeSelf;
 
+    /// <summary>Mid-fight right now — what the spectator camera hunts for.</summary>
+    public bool InCombat => _order == OrderKind.Attack && _target != null;
+
     // ------------------------------------------------------------- factory
 
     /// <summary>

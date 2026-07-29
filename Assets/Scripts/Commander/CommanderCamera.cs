@@ -28,6 +28,7 @@ public class CommanderCamera : MonoBehaviour
     float _height = 45f;
     Vector3 _focus;
     Vector3 _lastDragMouse;
+    float _lastManualAt = -999f;
 
     /// <summary>Jump the view so <paramref name="focus"/> is centre-screen.</summary>
     public void SnapTo(Vector3 focus)
@@ -98,6 +99,10 @@ public class CommanderCamera : MonoBehaviour
         if (scroll != 0f)
             _height = Mathf.Clamp(_height - scroll * ZoomStep, MinHeight, MaxHeight);
 
+        // Any hand on the controls pauses the auto-director for a while.
+        if (pan.sqrMagnitude > 0.001f || scroll != 0f || Input.GetMouseButton(2))
+            _lastManualAt = Time.unscaledTime;
+
         // Keep the focus on the map. The margin stops the view burying itself
         // in a border cliff at full pan. The southern limit is height-aware:
         // the camera stands `back` metres south of the focus, so a symmetric
@@ -109,6 +114,23 @@ public class CommanderCamera : MonoBehaviour
         _focus.z = Mathf.Clamp(_focus.z, back - (CommanderMap.HalfExtent + 4f), extent);
 
         Apply();
+    }
+
+    /// <summary>
+    /// The auto-director's hand: ease focus toward a point of interest and
+    /// height toward fitting <paramref name="spread"/> metres of fight on
+    /// screen. Yields to a human for a few seconds after any manual input —
+    /// the clamps in Update still apply, so the director can never show the
+    /// void the hard limits exist to hide.
+    /// </summary>
+    public void DriftTo(Vector3 target, float spread, float dt)
+    {
+        if (Time.unscaledTime - _lastManualAt < 4f)
+            return;
+        float ease = 1f - Mathf.Exp(-1.4f * dt);
+        _focus = Vector3.Lerp(_focus, new Vector3(target.x, 0f, target.z), ease);
+        float wantHeight = Mathf.Clamp(26f + spread * 1.15f, MinHeight, MaxHeight);
+        _height = Mathf.Lerp(_height, wantHeight, ease);
     }
 
     void Apply()
