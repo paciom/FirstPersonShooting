@@ -37,6 +37,15 @@ public static class CommanderArmy
                     forward * (11f + rank * 2.2f));
                 CommanderUnit.Build($"CmdUnit{team}_{i}", model, team, pos, yaw);
             }
+
+            // Two collectors, offset east and west so each picks the safe
+            // field on its own side rather than both queueing on one.
+            for (int side = 0; side < 2; side++)
+            {
+                var pos = site + new Vector3(side == 0 ? -7f : 7f, 0f, forward * 8f);
+                CommanderCollector.BuildCollector($"CmdCollector{team}_{side}",
+                    model, team, pos, yaw);
+            }
         }
     }
 

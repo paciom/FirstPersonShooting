@@ -19,6 +19,7 @@ public class FloatingShieldBar : MonoBehaviour
     Transform _holder;
     Transform _fill;
     Material _fillMaterial;
+    Material _backMaterial;
     Color _teamColor;
     float _visibleUntil = -1f;
 
@@ -75,6 +76,11 @@ public class FloatingShieldBar : MonoBehaviour
             _shield.OnDamaged -= HandleDamaged;
             _shield.OnDeRezzed -= HandleDeRezzed;
         }
+        // Runtime-minted materials don't die with their GameObjects. With a
+        // bar on every shielded character — including whole RTS armies —
+        // leaving these alive leaks two materials per unit per session.
+        if (_fillMaterial != null) Destroy(_fillMaterial);
+        if (_backMaterial != null) Destroy(_backMaterial);
     }
 
     void HandleDamaged(float damage, Vector3 hitPoint) => _visibleUntil = Time.time + VisibleSeconds;
@@ -92,8 +98,8 @@ public class FloatingShieldBar : MonoBehaviour
         back.name = "Back";
         back.transform.SetParent(_holder, false);
         back.transform.localScale = new Vector3(BarWidth, 0.13f, 1f);
-        back.GetComponent<MeshRenderer>().material =
-            VfxUtil.MakeGlowMaterial(new Color(0.03f, 0.04f, 0.06f), 1f);
+        _backMaterial = VfxUtil.MakeGlowMaterial(new Color(0.03f, 0.04f, 0.06f), 1f);
+        back.GetComponent<MeshRenderer>().material = _backMaterial;
 
         var fillGo = GameObject.CreatePrimitive(PrimitiveType.Quad);
         Destroy(fillGo.GetComponent<Collider>());

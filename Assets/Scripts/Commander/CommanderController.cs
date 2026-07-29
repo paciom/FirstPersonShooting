@@ -99,8 +99,10 @@ public class CommanderController : MonoBehaviour
         // Armies after the bake: units are NavMeshAgents and need the mesh
         // under their feet from frame one. The roster rides on the same
         // GameController object that owns this controller's parent.
+        CommanderEconomy.Reset();
         CommanderArmy.SpawnSkirmish(GetComponentInParent<RobotRoster>());
         Selection = gameObject.AddComponent<CommanderSelection>();
+        gameObject.AddComponent<CommanderHud>();
     }
 
     /// <summary>

@@ -79,7 +79,7 @@ public static class CommanderMap
         kit.Box("Cliff_N", new Vector3(0f, 3f, 92f), new Vector3(188f, 6f, 4f), rock);
 
         BuildRidges(kit, rock, Next);
-        BuildCrystalFields(kit, Next);
+        BuildCrystalFields(root.transform, kit, Next);
         BuildBasePads(kit);
         ScatterRocks(kit, rock, Next);
 
@@ -147,8 +147,13 @@ public static class CommanderMap
     /// teams own cyan and magenta, so the thing they fight over is neither.
     /// Shards keep their colliders — units pathing around a field they are not
     /// harvesting is correct, and the NavMesh bake handles it.
+    ///
+    /// Each field gets its own object carrying a CrystalField component, with
+    /// the shards reparented under it — that is what collectors harvest, and
+    /// what hides shards one by one as the field drains.
     /// </summary>
-    static void BuildCrystalFields(ArenaKit kit, System.Func<float, float, float> next)
+    static void BuildCrystalFields(Transform mapRoot, ArenaKit kit,
+        System.Func<float, float, float> next)
     {
         var amber = new Color(1f, 0.65f, 0.2f);
         // Emission stays under 1.8 — the crystals are matter, not an energy
@@ -159,6 +164,11 @@ public static class CommanderMap
 
         foreach (var field in CrystalFields)
         {
+            var fieldGo = new GameObject("CrystalField");
+            fieldGo.transform.SetParent(mapRoot, false);
+            fieldGo.transform.localPosition = new Vector3(field.x, GroundY, field.y);
+
+            var shards = new System.Collections.Generic.List<Transform>(12);
             for (int i = 0; i < 12; i++)
             {
                 float angle = next(0f, Mathf.PI * 2f);
@@ -174,12 +184,20 @@ public static class CommanderMap
                 var tip = basePoint + new Vector3(Mathf.Cos(leanDir) * lean * height, height,
                                                   Mathf.Sin(leanDir) * lean * height);
 
-                kit.Beam("Crystal", basePoint - Vector3.up * 0.3f, tip, next(0.5f, 0.9f), crystal);
+                var shard = kit.Beam("Crystal", basePoint - Vector3.up * 0.3f, tip,
+                    next(0.5f, 0.9f), crystal);
+                if (shard != null)
+                {
+                    shard.transform.SetParent(fieldGo.transform, true);
+                    shards.Add(shard.transform);
+                }
             }
 
             // One dim light per field so the amber reads on the ground around
             // it, which is what the camera mostly sees from 45 m up.
             kit.Point(new Vector3(field.x, 2.5f, field.y), amber, 1.8f, 10f);
+
+            fieldGo.AddComponent<CrystalField>().Init(shards, 3000f);
         }
     }
 

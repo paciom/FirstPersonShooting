@@ -39,6 +39,9 @@ public class CommanderUnit : MonoBehaviour
     public float sightRange = 26f;
     public float attackRange = 20f;
 
+    /// <summary>Seconds between slow-brain ticks (scans, arrivals, mining).</summary>
+    protected const float ThinkInterval = 0.4f;
+
     /// <summary>How far an auto-engaging idle unit will drift before walking home.</summary>
     const float LeashRange = 30f;
 
@@ -79,6 +82,18 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     public static CommanderUnit Build(string name, GameObject modelPrefab, int teamId,
         Vector3 position, float yaw)
+    {
+        return Build<CommanderUnit>(name, modelPrefab, teamId, position, yaw, armed: true);
+    }
+
+    /// <summary>
+    /// The generic body of <see cref="Build"/>: same rig, any CommanderUnit
+    /// subclass riding it. <paramref name="armed"/> is false for units whose
+    /// job is not shooting (the Collector) — they get no gun at all rather
+    /// than a gun they never fire.
+    /// </summary>
+    public static T Build<T>(string name, GameObject modelPrefab, int teamId,
+        Vector3 position, float yaw, bool armed) where T : CommanderUnit
     {
         Color tint = MatchAnnouncer.TeamColor(teamId);
 
@@ -136,11 +151,12 @@ public class CommanderUnit : MonoBehaviour
         agent.avoidancePriority = 40 + (int)(Mathf.Abs(position.x * 7f + position.z * 13f) % 20);
         agent.Warp(position);
 
-        BuildGun(root, body, tint);
+        if (armed)
+            BuildGun(root, body, tint);
 
         // Selection ring: white so it reads as "yours, selected" against both
         // team colours, flat on the ground like the team rings.
-        var unit = root.AddComponent<CommanderUnit>();
+        var unit = root.AddComponent<T>();
         unit._selectRing = GlowQuad(root.transform, "SelectRing", "VFX/ring",
             Color.white, 1.2f, 2.2f, 0.06f);
         unit._selectRing.SetActive(false);
@@ -183,7 +199,14 @@ public class CommanderUnit : MonoBehaviour
         gun.SetActive(true);
     }
 
-    static GameObject GlowQuad(Transform parent, string name, string texturePath,
+    /// <summary>
+    /// Every call site passes constants, so quads share cached materials —
+    /// a fresh Material per ring across hundreds of units and sessions would
+    /// pile up on the heap forever (materials do not die with GameObjects).
+    /// </summary>
+    static readonly Dictionary<string, Material> QuadMaterials = new Dictionary<string, Material>();
+
+    protected static GameObject GlowQuad(Transform parent, string name, string texturePath,
         Color color, float intensity, float size, float y)
     {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -193,10 +216,16 @@ public class CommanderUnit : MonoBehaviour
         quad.transform.localPosition = new Vector3(0f, y, 0f);
         quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
         quad.transform.localScale = Vector3.one * size;
-        var mat = new Material(Shader.Find("PhotonArena/Additive"));
-        mat.SetTexture("_MainTex", Resources.Load<Texture2D>(texturePath));
-        mat.SetColor("_Color", color);
-        mat.SetFloat("_Intensity", intensity);
+
+        string key = $"{texturePath}_{color}_{intensity}";
+        if (!QuadMaterials.TryGetValue(key, out var mat) || mat == null)
+        {
+            mat = new Material(Shader.Find("PhotonArena/Additive"));
+            mat.SetTexture("_MainTex", Resources.Load<Texture2D>(texturePath));
+            mat.SetColor("_Color", color);
+            mat.SetFloat("_Intensity", intensity);
+            QuadMaterials[key] = mat;
+        }
         quad.GetComponent<MeshRenderer>().sharedMaterial = mat;
         return quad;
     }
@@ -211,7 +240,7 @@ public class CommanderUnit : MonoBehaviour
         _body = transform.Find("Body");
         _leashOrigin = transform.position;
         // Stagger thinking so a hundred units don't all scan on the same frame.
-        _nextThink = Time.time + Random.value * 0.4f;
+        _nextThink = Time.time + Random.value * ThinkInterval;
     }
 
     /// <summary>
@@ -253,7 +282,7 @@ public class CommanderUnit : MonoBehaviour
             _selectRing.SetActive(selected);
     }
 
-    public void IssueMove(Vector3 destination)
+    public virtual void IssueMove(Vector3 destination)
     {
         _order = OrderKind.Move;
         _destination = destination;
@@ -263,7 +292,7 @@ public class CommanderUnit : MonoBehaviour
         SetAgentDestination(destination);
     }
 
-    public void IssueAttackMove(Vector3 destination)
+    public virtual void IssueAttackMove(Vector3 destination)
     {
         _order = OrderKind.AttackMove;
         _destination = destination;
@@ -274,7 +303,7 @@ public class CommanderUnit : MonoBehaviour
         SetAgentDestination(destination);
     }
 
-    public void IssueAttack(CommanderUnit target)
+    public virtual void IssueAttack(CommanderUnit target)
     {
         if (target == null || !target.IsAlive)
             return;
@@ -301,7 +330,7 @@ public class CommanderUnit : MonoBehaviour
 
         if (Time.time >= _nextThink)
         {
-            _nextThink = Time.time + 0.4f;
+            _nextThink = Time.time + ThinkInterval;
             Think();
         }
 
@@ -318,14 +347,7 @@ public class CommanderUnit : MonoBehaviour
         switch (_order)
         {
             case OrderKind.Idle:
-                var intruder = NearestEnemy(sightRange);
-                if (intruder != null)
-                {
-                    _leashOrigin = transform.position;
-                    _leashed = true;
-                    _order = OrderKind.Attack;
-                    _target = intruder;
-                }
+                ThinkIdle();
                 break;
 
             case OrderKind.Move:
@@ -361,6 +383,23 @@ public class CommanderUnit : MonoBehaviour
                     IssueMove(_leashOrigin);
                 }
                 break;
+        }
+    }
+
+    /// <summary>
+    /// What an unoccupied unit does with its slow tick. Fighters look for
+    /// trouble; the Collector overrides this with its harvest cycle. Runs
+    /// only while no order is active, so a player Move always wins.
+    /// </summary>
+    protected virtual void ThinkIdle()
+    {
+        var intruder = NearestEnemy(sightRange);
+        if (intruder != null)
+        {
+            _leashOrigin = transform.position;
+            _leashed = true;
+            _order = OrderKind.Attack;
+            _target = intruder;
         }
     }
 
@@ -445,14 +484,14 @@ public class CommanderUnit : MonoBehaviour
             || hit.transform.root == target.transform.root;
     }
 
-    bool Arrived()
+    protected bool Arrived()
     {
         if (!_agent.enabled || !_agent.isOnNavMesh)
             return true;
         return !_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance + 0.25f;
     }
 
-    void SetAgentDestination(Vector3 destination)
+    protected void SetAgentDestination(Vector3 destination)
     {
         if (!_agent.enabled || !_agent.isOnNavMesh)
             return;
