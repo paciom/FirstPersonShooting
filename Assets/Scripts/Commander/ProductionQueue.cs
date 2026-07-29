@@ -27,6 +27,9 @@ public class ProductionQueue : MonoBehaviour
 
     public int QueueLength => _queue.Count;
 
+    /// <summary>Unit key currently on the assembly line, or null when idle.</summary>
+    public string HeadKey => _queue.Count > 0 ? _queue[0] : null;
+
     /// <summary>0..1 on the unit currently building; 0 with an empty queue.</summary>
     public float HeadProgress
     {

@@ -43,8 +43,15 @@ public class CommanderAI : MonoBehaviour
     /// <summary>One-line self-narration of the army's posture, for the panels.</summary>
     public string CurrentOperation { get; private set; } = "ESTABLISHING BASE";
 
-    /// <summary>What the treasury is working toward, when it is short of it.</summary>
-    public string CurrentProject { get; private set; } = "";
+    /// <summary>
+    /// The structure the treasury is saving toward — as data, not prose, so
+    /// the panels can draw its actual model and a real progress bar.
+    /// Null whenever nothing is being saved for.
+    /// </summary>
+    public string ProjectKey { get; private set; }
+
+    /// <summary>0..1 of the project's price already banked.</summary>
+    public float ProjectProgress { get; private set; }
 
     void OnEnable()
     {
@@ -93,7 +100,7 @@ public class CommanderAI : MonoBehaviour
 
         if (want == null)
         {
-            CurrentProject = "";
+            ProjectKey = null;
             return;
         }
         var def = BuildingCatalog.Get(want);
@@ -101,14 +108,15 @@ public class CommanderAI : MonoBehaviour
             return;
         if (Credits() < def.cost)
         {
-            CurrentProject = $"SAVING FOR {def.displayName}   {Credits()}/{def.cost}";
+            ProjectKey = want;
+            ProjectProgress = Mathf.Clamp01(Credits() / (float)def.cost);
             return;
         }
 
         if (FindSpot(def, out Vector3 spot) && CommanderEconomy.Spend(teamId, def.cost))
         {
             Building.Construct(def, teamId, spot);
-            CurrentProject = "";
+            ProjectKey = null;
         }
     }
 
