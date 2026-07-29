@@ -107,6 +107,7 @@ public class CommanderController : MonoBehaviour
         // under their feet from frame one. The roster rides on the same
         // GameController object that owns this controller's parent.
         CommanderEconomy.Reset();
+        CommanderOps.Clear();
 
         // Each side opens with its Command Center standing on the pad — the
         // adjacency seed every other structure grows from, and the thing
@@ -133,6 +134,8 @@ public class CommanderController : MonoBehaviour
             var cyan = gameObject.AddComponent<CommanderAI>();
             cyan.teamId = 0;
             _cameraRig.AddComponent<CommanderDirector>();
+            // The broadcast graphics: per-side intel panels for the audience.
+            gameObject.AddComponent<CommanderWarPanels>();
         }
         gameObject.AddComponent<CommanderMatch>();
         gameObject.AddComponent<CommanderMinimap>();

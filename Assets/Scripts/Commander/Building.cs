@@ -90,6 +90,7 @@ public class Building : MonoBehaviour
         if (def.key == BuildingCatalog.Factory)
             root.AddComponent<ProductionQueue>();
 
+        CommanderOps.Log(teamId, $"+ {def.displayName}");
         return building;
     }
 
@@ -259,6 +260,7 @@ public class Building : MonoBehaviour
     {
         _dying = true;
         All.Remove(this);
+        CommanderOps.Log(_teamId, $"{Definition?.displayName ?? "STRUCTURE"} DESTROYED");
 
         var collider = GetComponent<BoxCollider>();
         if (collider != null)

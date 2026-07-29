@@ -22,10 +22,37 @@ public class CommanderAI : MonoBehaviour
     /// <summary>Credits kept in hand for structures while the army shops.</summary>
     const int ArmyReserve = 300;
 
+    /// <summary>
+    /// No assaults before this much of the match has passed. The opening act
+    /// belongs to the economy — collectors hauling, bases growing, factories
+    /// arming — which is both the strategy game and the show. Without the
+    /// gate, two 12-robot starting armies meet an 8-robot wave quorum on the
+    /// very first think tick, brawl mid-map, and the survivors end the match
+    /// against a base that never got to build its guns.
+    /// </summary>
+    const float BuildupSeconds = 150f;
+
     float _nextTick;
     float _nextStragglerPush;
     [SerializeField] bool _assaulting;
-    [SerializeField] int _waveSize = 8;
+    [SerializeField] float _assaultNotBefore;
+    // Above the 12-robot starting army on purpose: even after the build-up
+    // gate opens, the first wave must contain factory-built reinforcements.
+    [SerializeField] int _waveSize = 14;
+
+    /// <summary>One-line self-narration of the army's posture, for the panels.</summary>
+    public string CurrentOperation { get; private set; } = "ESTABLISHING BASE";
+
+    /// <summary>What the treasury is working toward, when it is short of it.</summary>
+    public string CurrentProject { get; private set; } = "";
+
+    void OnEnable()
+    {
+        // Time.time-anchored, so it survives a mid-play recompile as an
+        // absolute deadline rather than restarting the clock.
+        if (_assaultNotBefore <= 0f)
+            _assaultNotBefore = Time.time + BuildupSeconds;
+    }
 
     static readonly (string key, float weight)[] ArmyMix =
     {
@@ -65,13 +92,24 @@ public class CommanderAI : MonoBehaviour
         else if (Count(BuildingCatalog.Factory) < 2 && Credits() > 2600) want = BuildingCatalog.Factory;
 
         if (want == null)
+        {
+            CurrentProject = "";
             return;
+        }
         var def = BuildingCatalog.Get(want);
-        if (def == null || Credits() < def.cost)
+        if (def == null)
             return;
+        if (Credits() < def.cost)
+        {
+            CurrentProject = $"SAVING FOR {def.displayName}   {Credits()}/{def.cost}";
+            return;
+        }
 
         if (FindSpot(def, out Vector3 spot) && CommanderEconomy.Spend(teamId, def.cost))
+        {
             Building.Construct(def, teamId, spot);
+            CurrentProject = "";
+        }
     }
 
     /// <summary>
@@ -194,12 +232,20 @@ public class CommanderAI : MonoBehaviour
         {
             _assaulting = false;
             _waveSize = Mathf.Min(16, _waveSize + 2);
+            CommanderOps.Log(teamId, "wave spent — regrouping");
         }
-        else if (!_assaulting && fighters.Count >= _waveSize)
+        else if (!_assaulting && fighters.Count >= _waveSize && Time.time >= _assaultNotBefore)
         {
             _assaulting = true;
             _nextStragglerPush = 0f;   // push everyone immediately
+            CommanderOps.Log(teamId, $"WAVE LAUNCHED — {fighters.Count} robots");
         }
+
+        CurrentOperation = _assaulting
+            ? $"ASSAULT — {fighters.Count} ROBOTS"
+            : Time.time < _assaultNotBefore
+                ? $"BUILDING UP   {Mathf.CeilToInt(_assaultNotBefore - Time.time)}s"
+                : $"MASSING WAVE   {fighters.Count}/{_waveSize}";
 
         if (Time.time < _nextStragglerPush)
             return;

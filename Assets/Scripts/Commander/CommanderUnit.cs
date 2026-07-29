@@ -524,6 +524,10 @@ public class CommanderUnit : MonoBehaviour
         _dying = true;
         All.Remove(this);
         SetSelected(false);
+        // Losing a collector is a strategic event worth the feed; losing a
+        // soldier is a statistic the army count already tells.
+        if (this is CommanderCollector)
+            CommanderOps.Log(TeamId, "COLLECTOR LOST");
 
         var collider = GetComponent<CapsuleCollider>();
         if (collider != null)
