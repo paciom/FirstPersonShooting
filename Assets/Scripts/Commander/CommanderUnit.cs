@@ -52,13 +52,22 @@ public class CommanderUnit : MonoBehaviour
     Transform _body;
     GameObject _selectRing;
 
-    // Transformation state: robots fold into their roster vehicle form for
-    // long drives and unfold to fight, arena fiction kept.
+    // Transformation state: robots fold into their vehicle form for long
+    // drives and unfold to fight, arena fiction kept. Stages beat the
+    // stand-alone vehicle prefab where a robot has them: the ranger's own
+    // stop-motion sequence ends in its TANK, which is the transformation
+    // the arena made canon — the separately generated hovercraft is only
+    // the fallback for robots that never went through the video pipeline.
     [SerializeField] GameObject _modelPrefab;
     [SerializeField] GameObject _vehiclePrefab;
+    [SerializeField] GameObject[] _stages;
     [SerializeField] Color _tint;
     [SerializeField] bool _vehicleForm;
     [SerializeField] float _robotSpeed;
+    Coroutine _morphRoutine;
+
+    /// <summary>Seconds each stop-motion stage holds; below ~0.15 a still never registers.</summary>
+    const float StageSeconds = 0.11f;
 
     /// <summary>Travel further than this and the robot folds into its vehicle.</summary>
     const float TransformDistance = 32f;
@@ -136,12 +145,14 @@ public class CommanderUnit : MonoBehaviour
     }
 
     /// <summary>
-    /// Full form: <paramref name="vehiclePrefab"/> enables the travel
-    /// transformation, <paramref name="secondaryWeapon"/> ("plasma", "rail",
-    /// "beam") adds a second gun to swap to mid-fight.
+    /// Full form: <paramref name="vehiclePrefab"/> (or better,
+    /// <paramref name="transformStages"/>) enables the travel transformation,
+    /// <paramref name="secondaryWeapon"/> ("plasma", "rail", "beam") adds a
+    /// second gun to swap to mid-fight.
     /// </summary>
     public static T Build<T>(string name, GameObject modelPrefab, GameObject vehiclePrefab,
-        int teamId, Vector3 position, float yaw, bool armed, string secondaryWeapon)
+        int teamId, Vector3 position, float yaw, bool armed, string secondaryWeapon,
+        GameObject[] transformStages = null)
         where T : CommanderUnit
     {
         Color tint = MatchAnnouncer.TeamColor(teamId);
@@ -216,6 +227,7 @@ public class CommanderUnit : MonoBehaviour
         unit._selectRing.SetActive(false);
         unit._modelPrefab = modelPrefab;
         unit._vehiclePrefab = vehiclePrefab;
+        unit._stages = transformStages;
         unit._tint = tint;
 
         return unit;
@@ -583,9 +595,13 @@ public class CommanderUnit : MonoBehaviour
     /// the arena modes made this fiction's signature. Combat is always
     /// fought unfolded; a robot that closes to fighting range stands up.
     /// </summary>
+    bool HasStages => _stages != null && _stages.Length > 1;
+
     void ConsiderForm()
     {
-        if (_vehiclePrefab == null || _modelPrefab == null || _body == null)
+        if (_modelPrefab == null || _body == null)
+            return;
+        if (_vehiclePrefab == null && !HasStages)
             return;
 
         bool wantVehicle = false;
@@ -606,34 +622,85 @@ public class CommanderUnit : MonoBehaviour
     {
         _vehicleForm = toVehicle;
 
+        // Speed switches at the decision, not the animation's end — the
+        // fold happens on the move, which is also what sells the pops.
+        if (toVehicle)
+        {
+            _robotSpeed = _agent.speed;
+            _agent.speed = _robotSpeed * VehicleSpeedFactor;
+        }
+        else if (_robotSpeed > 0f)
+        {
+            _agent.speed = _robotSpeed;
+        }
+
+        if (_morphRoutine != null)
+            StopCoroutine(_morphRoutine);
+        _morphRoutine = StartCoroutine(MorphRoutine(toVehicle));
+    }
+
+    /// <summary>
+    /// The transformation, as stop motion: one whole mesh swapped for the
+    /// next through the stage sequence, robot at one end and the TANK at the
+    /// other. Nothing interpolates — consecutive stages share no topology —
+    /// so each swap pops; a burst covers every pop and the unit keeps
+    /// driving straight through, which is the same recipe the select-screen
+    /// cards use. Robots without stages get a single flash-swap to their
+    /// legacy vehicle prefab.
+    /// </summary>
+    IEnumerator MorphRoutine(bool toVehicle)
+    {
         var old = _body.Find("Model");
         if (old != null)
             Destroy(old.gameObject);
 
-        if (toVehicle)
+        if (HasStages)
         {
-            SwapToVehicleModel();
-            _robotSpeed = _agent.speed;
-            _agent.speed = _robotSpeed * VehicleSpeedFactor;
+            // Walk the sequence toward the target form, ends included; each
+            // step is a fresh normalized instance of that stage's mesh.
+            int from = toVehicle ? 0 : _stages.Length - 1;
+            int step = toVehicle ? 1 : -1;
+            for (int i = from; toVehicle ? i < _stages.Length : i >= 0; i += step)
+            {
+                var current = _body.Find("Model");
+                if (current != null)
+                    Destroy(current.gameObject);
+                if (_stages[i] != null)
+                    GroundAlignedInstance(_stages[i], 2.0f);
+                VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
+                yield return new WaitForSeconds(StageSeconds);
+            }
+
+            // Unfolding ends on the REAL robot — animated rig, not a still.
+            if (!toVehicle)
+            {
+                var last = _body.Find("Model");
+                if (last != null)
+                    Destroy(last.gameObject);
+                RobotFactory.InstantiateNormalized(_modelPrefab, _body, _tint);
+            }
         }
         else
         {
-            RobotFactory.InstantiateNormalized(_modelPrefab, _body, _tint);
-            if (_robotSpeed > 0f)
-                _agent.speed = _robotSpeed;
+            if (toVehicle)
+                GroundAlignedInstance(_vehiclePrefab, 2.2f);
+            else
+                RobotFactory.InstantiateNormalized(_modelPrefab, _body, _tint);
+            VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.55f);
         }
-
-        VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.55f);
+        _morphRoutine = null;
     }
 
     /// <summary>
-    /// Vehicle models carry no RobotLocomotion, so the factory's normalizer
-    /// would centre them mid-air; ground them by bounds instead, nose along
-    /// +Z with the unit's facing.
+    /// Stage and vehicle models carry no RobotLocomotion, so the factory's
+    /// normalizer would centre them mid-air; ground them by bounds instead,
+    /// nose along +Z with the unit's facing.
     /// </summary>
-    void SwapToVehicleModel()
+    void GroundAlignedInstance(GameObject prefab, float targetSize)
     {
-        var instance = Instantiate(_vehiclePrefab, _body);
+        if (prefab == null)
+            return;
+        var instance = Instantiate(prefab, _body);
         instance.name = "Model";
         var renderers = instance.GetComponentsInChildren<Renderer>();
         if (renderers.Length == 0)
@@ -642,7 +709,8 @@ public class CommanderUnit : MonoBehaviour
         foreach (var renderer in renderers)
             bounds.Encapsulate(renderer.bounds);
 
-        float scale = 2.2f / Mathf.Max(0.01f, Mathf.Max(bounds.size.x, bounds.size.z));
+        float scale = targetSize / Mathf.Max(0.01f,
+            Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)));
         instance.transform.localScale *= scale;
         Vector3 centre = _body.InverseTransformPoint(bounds.center);
         Vector3 bottom = _body.InverseTransformPoint(
@@ -741,6 +809,13 @@ public class CommanderUnit : MonoBehaviour
         _dying = true;
         All.Remove(this);
         SetSelected(false);
+        // A death mid-transformation stops the transformation; the shrink
+        // takes whatever form was showing.
+        if (_morphRoutine != null)
+        {
+            StopCoroutine(_morphRoutine);
+            _morphRoutine = null;
+        }
         // Losing a collector is a strategic event worth the feed; losing a
         // soldier is a statistic the army count already tells.
         if (this is CommanderCollector)
