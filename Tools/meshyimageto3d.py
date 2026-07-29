@@ -1,21 +1,28 @@
 """Turns transformation-video frames into 3D models via Meshy Image to 3D.
 
-The experiment: the in-game robot->vehicle fold reads as a magic trick because
-the folded robot is nowhere near the vehicle silhouette. So instead of folding a
-rig, generate an actual Transformers-style transformation as VIDEO, sample it,
-and rebuild each sampled pose as its own 3D model. Played back in sequence those
-models are a stop-motion transformation -- crude, but it answers whether the
-intermediate silhouettes are believable before anyone rigs anything.
+The in-game fold could only ever crouch a humanoid, because a humanoid mesh
+contains no tracks, no hull and no turret to unfold. So the transformation is
+generated as VIDEO instead, sampled at chosen frames, and each frame rebuilt as
+its own 3D model. Played in sequence those models are a stop-motion
+transformation — robot at one end, the real vehicle at the other.
 
-Frames come from Tools/... no, from ffmpeg (see TransformerTest/02_frames). This
-module only handles the Meshy side: submit, poll, download.
+Frames are cropped free of the generator's UI overlay before submission; a
+watermark or a "DRAG TO ROTATE" caption is geometry as far as image-to-3D is
+concerned. See the frame-extraction commands in the commit that added each robot.
 
-30 credits per image. Frames are uploaded as base64 data URIs, so nothing needs
-to be publicly hosted.
+30 credits per image. Frames upload as base64 data URIs, so nothing needs
+public hosting.
 
-  python meshyimageto3d.py submit  TransformerTest/02_frames/spread/*.png
-  python meshyimageto3d.py status
-  python meshyimageto3d.py download
+`download` writes straight to Assets/Models/Stages/<robot>/stageN.glb in frame
+order, which is where ArenaBuilder.LoadTransformStages expects them — so
+zero-pad frame numbers in the filenames and a plain sort is the right order.
+
+  python meshyimageto3d.py bolt submit TransformerTest/02_frames/bolt/*.png
+  python meshyimageto3d.py bolt status
+  python meshyimageto3d.py bolt download
+
+Ranger predates this being robot-aware; its run state is the legacy
+TransformerTest/tasks.json rather than a per-robot file.
 """
 import base64
 import glob
@@ -28,31 +35,45 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from meshyvehicles import balance, call  # noqa: E402
 
 ROOT = "D:/Claude/FirstPersongShooting"
-STATE_PATH = f"{ROOT}/TransformerTest/tasks.json"
-OUT_DIR = f"{ROOT}/TransformerTest/03_models"
+STAGES = f"{ROOT}/Assets/Models/Stages"
 
-# Kept deliberately plain. The frame already shows the pose, the silhouette and
-# the palette; over-describing it invites the generator to reinterpret rather
-# than reproduce, and reproduction is the whole point of the test.
-TEXTURE_PROMPT = ("white and light grey armour panels with bright cyan light "
-                  "strips, clean flat panels, stylised toy finish")
+# Kept deliberately plain, and per robot. The frame already shows the pose, the
+# silhouette and the palette; over-describing it invites the generator to
+# reinterpret rather than reproduce, and reproduction is the whole point.
+TEXTURE_PROMPTS = {
+    "ranger": ("white and light grey armour panels with bright cyan light "
+               "strips, clean flat panels, stylised toy finish"),
+    "bolt": ("navy blue armour panels with bright yellow accents and white "
+             "trim, cyan light strips, clean flat panels, stylised toy finish"),
+}
+
+LEGACY_STATE = {"ranger": f"{ROOT}/TransformerTest/tasks.json"}
 
 
-def state():
-    if not os.path.exists(STATE_PATH):
+def state_path(robot):
+    return LEGACY_STATE.get(robot, f"{ROOT}/TransformerTest/{robot}/tasks.json")
+
+
+def state(robot):
+    path = state_path(robot)
+    if not os.path.exists(path):
         return {}
-    with open(STATE_PATH) as handle:
+    with open(path) as handle:
         return json.load(handle)
 
 
-def save(data):
-    os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
-    with open(STATE_PATH, "w") as handle:
+def save(robot, data):
+    path = state_path(robot)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
         json.dump(data, handle, indent=2)
 
 
-def submit(paths):
-    data = state()
+def submit(robot, paths):
+    if robot not in TEXTURE_PROMPTS:
+        raise SystemExit(f"No texture prompt for '{robot}' — add one to TEXTURE_PROMPTS "
+                         "so the stages come back in that robot's own colours.")
+    data = state(robot)
     print(f"balance before: {balance()}")
     for path in paths:
         name = os.path.splitext(os.path.basename(path))[0]
@@ -62,7 +83,7 @@ def submit(paths):
             "image_url": f"data:image/png;base64,{encoded}",
             "ai_model": "meshy-6",
             "should_texture": True,
-            "texture_prompt": TEXTURE_PROMPT[:600],
+            "texture_prompt": TEXTURE_PROMPTS[robot][:600],
             "should_remesh": True,
             "topology": "triangle",
             "target_polycount": 30000,
@@ -70,12 +91,12 @@ def submit(paths):
         task = result.get("result") or result.get("id")
         data.setdefault(name, {})["task"] = task
         print(f"{name:16s} {os.path.getsize(path)/1024:6.0f} KB -> {task}")
-    save(data)
+    save(robot, data)
     print(f"balance after:  {balance()}")
 
 
-def status():
-    data = state()
+def status(robot):
+    data = state(robot)
     for name, entry in sorted(data.items()):
         info = call("GET", f"/v1/image-to-3d/{entry['task']}")
         line = f"{name:16s} {info['status']:10s} {info.get('progress', 0):3d}%"
@@ -86,30 +107,39 @@ def status():
         if error:
             line += "  ERROR " + error
         print(line)
-    save(data)
+    save(robot, data)
 
 
-def download():
-    data = state()
-    os.makedirs(OUT_DIR, exist_ok=True)
-    for name, entry in sorted(data.items()):
-        url = (entry.get("models") or {}).get("glb")
-        if not url:
-            print(f"{name:16s} not ready -- run status")
-            continue
-        path = f"{OUT_DIR}/{name}.glb"
-        urllib.request.urlretrieve(url, path)
-        print(f"{name:16s} {os.path.getsize(path)/1024:8.0f} KB  {path}")
+def download(robot):
+    """Writes stage1..stageN in frame order, ready for the roster scan."""
+    data = state(robot)
+    out_dir = f"{STAGES}/{robot}"
+    os.makedirs(out_dir, exist_ok=True)
+
+    ready = [(name, entry) for name, entry in sorted(data.items())
+             if (entry.get("models") or {}).get("glb")]
+    missing = len(data) - len(ready)
+    if missing:
+        print(f"{missing} stage(s) not ready — run status first; "
+              "numbering now would leave gaps in the sequence.")
+        return
+
+    for index, (name, entry) in enumerate(ready, start=1):
+        path = f"{out_dir}/stage{index}.glb"
+        urllib.request.urlretrieve(entry["models"]["glb"], path)
+        print(f"stage{index:<2d} <- {name:16s} {os.path.getsize(path)/1024:8.0f} KB  {path}")
 
 
 if __name__ == "__main__":
-    command = sys.argv[1] if len(sys.argv) > 1 else "status"
-    rest = [p for arg in sys.argv[2:] for p in (glob.glob(arg) or [arg])]
+    if len(sys.argv) < 3:
+        raise SystemExit(__doc__)
+    robot, command = sys.argv[1], sys.argv[2]
+    rest = [p for arg in sys.argv[3:] for p in (glob.glob(arg) or [arg])]
     if command == "submit":
-        submit(rest)
+        submit(robot, rest)
     elif command == "status":
-        status()
+        status(robot)
     elif command == "download":
-        download()
+        download(robot)
     else:
         raise SystemExit(__doc__)

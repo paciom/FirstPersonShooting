@@ -63,7 +63,12 @@ def main(names):
         else:
             print(f"{robot}: reversing {os.path.basename(src)}")
             reverse(src, dst)
-        shutil.copyfile(dst, os.path.join(STREAMING, os.path.basename(dst)))
+
+        # BOTH directions, not just the reversed one. TransformCast streams
+        # every clip by URL, so a forward clip missing from StreamingAssets is
+        # a 404 in the browser and a silent no-play in the editor.
+        for path in (src, dst):
+            shutil.copyfile(path, os.path.join(STREAMING, os.path.basename(path)))
 
     if not found:
         print(f"No *{SUFFIX} clips in {VIDEO}")
