@@ -87,8 +87,6 @@ public static class CommanderMap
         BuildRidges(kit, rock, Next);
         BuildCrystalFields(root.transform, kit, Next);
         BuildBasePads(kit);
-        BuildGroundPatches(kit, Next);
-        BuildCraters(kit, rock, Next);
         BuildRuins(kit, Next);
         BuildVents(kit, Next);
         BuildWrecks(root.transform, Next);
@@ -365,33 +363,6 @@ public static class CommanderMap
     // ------------------------------------------------------------- dressing
 
     /// <summary>
-    /// Tonal patches on the floor — scorch and sediment. The material is the
-    /// SAME triplanar stone family as the ground, just shifted in tone: a
-    /// plain flat-colour quad up here reads as a missing texture, not as
-    /// terrain (found out the hard way on the first playtest).
-    /// </summary>
-    static void BuildGroundPatches(ArenaKit kit, System.Func<float, float, float> next)
-    {
-        var dark = ArenaMaterials.Style("Cmd_PatchDark", ArenaMaterials.SurfaceStyle.Stone,
-            new Color(0.115f, 0.125f, 0.155f), new Color(0.06f, 0.07f, 0.09f), 2.8f, 0.97f);
-        var pale = ArenaMaterials.Style("Cmd_PatchPale", ArenaMaterials.SurfaceStyle.Stone,
-            new Color(0.20f, 0.21f, 0.24f), new Color(0.12f, 0.13f, 0.15f), 4.2f, 0.95f);
-
-        int pairs = (int)next(14f, 20f);
-        for (int i = 0; i < pairs; i++)
-        {
-            var pos = new Vector3(next(-80f, 80f), 0f, next(-80f, 80f));
-            if (NearBase(pos, 12f))
-                continue;   // the pad owns its own floor
-            var size = new Vector3(next(5f, 13f), 0.05f, next(5f, 13f));
-            float yaw = next(0f, 360f);
-            var mat = next(0f, 1f) > 0.45f ? dark : pale;
-            kit.Decor("Patch", new Vector3(pos.x, 0.025f, pos.z), size, mat, yaw);
-            kit.Decor("Patch", new Vector3(-pos.x, 0.025f, -pos.z), size, mat, yaw);
-        }
-    }
-
-    /// <summary>
     /// Dead war machines — the nine Meshy vehicle models, painted the colour
     /// of ash, sunk to the axles and left where they died. The richest props
     /// on the field, and they were already paid for. Each gets a box collider
@@ -464,43 +435,6 @@ public static class CommanderMap
         float height = Mathf.Max(0.8f, bounds.size.y * scale - 0.25f);
         hull.center = new Vector3(0f, height * 0.5f, 0f);
         hull.size = new Vector3(bounds.size.x * scale * 0.9f, height, bounds.size.z * scale * 0.9f);
-    }
-
-    /// <summary>
-    /// Old impact craters: a dark floor disc with a rim of low broken rock.
-    /// The rim stones collide — a crater is soft cover, which is more
-    /// interesting than decoration.
-    /// </summary>
-    static void BuildCraters(ArenaKit kit, Material rock, System.Func<float, float, float> next)
-    {
-        var scorch = ArenaMaterials.Lit("Cmd_Scorch", new Color(0.06f, 0.065f, 0.09f), 0.1f);
-
-        int pairs = (int)next(5f, 8f);
-        int placed = 0, attempts = 0;
-        while (placed < pairs && attempts++ < 90)
-        {
-            var pos = new Vector3(next(-72f, 72f), 0f, next(-72f, 72f));
-            if (Blocked(pos, baseKeepOut: 24f, fieldKeepOut: 11f, gapKeepOut: 9f))
-                continue;
-
-            float radius = next(2.2f, 3.6f);
-            kit.Cylinder("Crater", new Vector3(pos.x, 0.005f, pos.z), radius, 0.03f, scorch, collide: false);
-            kit.Cylinder("Crater", new Vector3(-pos.x, 0.005f, -pos.z), radius, 0.03f, scorch, collide: false);
-
-            int stones = (int)next(4f, 7f);
-            for (int s = 0; s < stones; s++)
-            {
-                float angle = next(0f, Mathf.PI * 2f);
-                float size = next(0.6f, 1.2f);
-                var stone = new Vector3(pos.x + Mathf.Cos(angle) * radius,
-                    size * 0.3f, pos.z + Mathf.Sin(angle) * radius);
-                var scale = new Vector3(size, size * 0.6f, size * next(0.7f, 1.1f));
-                float yaw = next(0f, 360f);
-                kit.Box("CraterRim", stone, scale, rock, yaw);
-                kit.Box("CraterRim", new Vector3(-stone.x, stone.y, -stone.z), scale, rock, yaw);
-            }
-            placed++;
-        }
     }
 
     /// <summary>
@@ -582,10 +516,14 @@ public static class CommanderMap
 
     /// <summary>
     /// Loose rocks for texture, in 180°-rotated pairs like everything else.
+    /// A third of placements are CLUSTERS — a big stone with broken pieces
+    /// around its feet — which is what flat scorch decals wanted to be and
+    /// couldn't: on this renderer only real geometry reads as terrain, so
+    /// the ground story is told entirely in stone.
     /// </summary>
     static void ScatterRocks(ArenaKit kit, Material rock, System.Func<float, float, float> next)
     {
-        int target = (int)next(16f, 24f);
+        int target = (int)next(18f, 26f);
         int placed = 0, attempts = 0;
         while (placed < target && attempts++ < 300)
         {
@@ -594,12 +532,33 @@ public static class CommanderMap
                 continue;
 
             float size = next(1.6f, 3.4f);
-            var scale = new Vector3(size, size * 0.7f, size * next(0.7f, 1.1f));
-            float yaw = next(0f, 360f);
-            kit.Box("Rock", new Vector3(pos.x, size * 0.35f, pos.z), scale, rock, yaw);
-            kit.Box("Rock", new Vector3(-pos.x, size * 0.35f, -pos.z), scale, rock, yaw);
+            RockPair(kit, rock, pos, size, next);
+
+            // Rubble around the boulder's feet, a stride out in random
+            // directions — a cluster reads as a place, a lone cube as a prop.
+            if (next(0f, 1f) < 0.35f)
+            {
+                int pieces = (int)next(2f, 5f);
+                for (int p = 0; p < pieces; p++)
+                {
+                    float angle = next(0f, Mathf.PI * 2f);
+                    float dist = size * next(0.8f, 1.6f);
+                    var piecePos = pos + new Vector3(Mathf.Cos(angle) * dist, 0f,
+                        Mathf.Sin(angle) * dist);
+                    RockPair(kit, rock, piecePos, next(0.5f, 1.2f), next);
+                }
+            }
             placed++;
         }
+    }
+
+    static void RockPair(ArenaKit kit, Material rock, Vector3 pos, float size,
+        System.Func<float, float, float> next)
+    {
+        var scale = new Vector3(size, size * 0.7f, size * next(0.7f, 1.1f));
+        float yaw = next(0f, 360f);
+        kit.Box("Rock", new Vector3(pos.x, size * 0.35f, pos.z), scale, rock, yaw);
+        kit.Box("Rock", new Vector3(-pos.x, size * 0.35f, -pos.z), scale, rock, yaw);
     }
 
     // ------------------------------------------------------------- keep-outs
