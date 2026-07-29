@@ -1,0 +1,20 @@
+{
+  "command": {
+    "preview": "019fac3a-6d9b-7f56-a72a-d3104ab26871"
+  },
+  "power": {
+    "preview": "019fac3a-788b-7db4-bb5d-c5360af6f682"
+  },
+  "refinery": {
+    "preview": "019fac3a-7f5a-7db7-a8d5-390a4cf74e45"
+  },
+  "factory": {
+    "preview": "019fac3a-8759-7db9-8dc3-420f4febf0b2"
+  },
+  "turret": {
+    "preview": "019fac3a-8e91-7dbc-b696-b06a6a470f18"
+  },
+  "tech": {
+    "preview": "019fac3a-96f8-7f59-97b2-775cbe037c4c"
+  }
+}
