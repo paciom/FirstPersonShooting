@@ -46,6 +46,14 @@ public class CommanderCamera : MonoBehaviour
         // --- keyboard + screen-edge pan ---
         var pan = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
+        // A doubles as the attack-move key. While an army is selected,
+        // pressing it is an order, not a pan — cancel its −1 contribution to
+        // the axis, unless the Left arrow (which only ever means pan) is
+        // down too.
+        if (pan.x < 0f && CommanderSelection.AttackKeyReserved
+            && Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.LeftArrow))
+            pan.x = Mathf.Min(pan.x + 1f, 0f);
+
         // Edge scroll is desktop-mouse-only, three ways:
         //  - not while touch drives input: the simulated mouse position parks
         //    wherever the last finger lifted (or at (0,0) before any touch),

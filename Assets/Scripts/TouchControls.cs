@@ -162,6 +162,24 @@ public class TouchControls : MonoBehaviour
         public bool Visible => rect != null && rect.gameObject.activeInHierarchy;
     }
 
+    /// <summary>
+    /// Whether a screen point sits on one of our visible buttons. The buttons
+    /// are hand-hit-tested, not uGUI Buttons, so the EventSystem's
+    /// IsPointerOverGameObject can't see them — anything that treats clicks
+    /// as world input (Commander's selection) must ask here too, or a tap on
+    /// MENU also lands in the world underneath it.
+    /// </summary>
+    public static bool PointOver(Vector2 screenPoint)
+    {
+        if (Instance == null || !Active)
+            return false;
+        foreach (var button in Instance._buttons)
+            if (button.Visible &&
+                RectTransformUtility.RectangleContainsScreenPoint(button.rect, screenPoint, null))
+                return true;
+        return false;
+    }
+
     /// <summary>Create the controls if they don't exist yet. Safe to call repeatedly.</summary>
     public static TouchControls Ensure()
     {

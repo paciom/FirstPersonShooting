@@ -92,6 +92,12 @@ public class GameModeController : MonoBehaviour
     {
         if (Mode != GameMode.Menu && Input.GetKeyDown(KeyCode.Escape))
         {
+            // In Commander, Escape cancels a pending targeting order before
+            // it exits the mode — asked through here rather than read in two
+            // Updates, where execution order would decide which one wins.
+            if (Mode == GameMode.Commander && _commander != null
+                && _commander.Selection != null && _commander.Selection.CancelPendingOrder())
+                return;
             EnterMenu();
             return;
         }
@@ -522,7 +528,8 @@ public class GameModeController : MonoBehaviour
         _commander = CommanderController.Begin(this);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("WASD / edge — Pan   ·   Wheel — Zoom   ·   Middle-drag — Pan   ·   ESC — Menu",
+        ShowOverlay("Drag — Select   ·   RMB — Move / Attack   ·   A + Click — Attack-move   ·   " +
+            "WASD / Wheel — Camera   ·   ESC — Menu",
             "COMMANDER — tap MENU to go back");
         LockCursor(false);
     }

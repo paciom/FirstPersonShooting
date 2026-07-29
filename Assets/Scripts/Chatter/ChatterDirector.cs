@@ -180,6 +180,15 @@ public class ChatterDirector : MonoBehaviour
     bool TryStart(string cue, Transform speaker, Transform enemy, int teamId,
                   float shieldNormalized)
     {
+        // Same gate Update applies: chatter is an FPS-match feature. Without
+        // it here, reactive cues from other modes' shield events (Commander
+        // fights, most of all) start-and-discard conversations fast enough to
+        // flush the recency brakes that keep the radio from repeating itself.
+        if (GameModeController.Instance == null
+            || (GameModeController.Instance.Mode != GameMode.PlayerVsAI
+                && GameModeController.Instance.Mode != GameMode.AIvAI))
+            return false;
+
         if (speaker == null || ConversationBank.IsEmpty)
             return false;
         if (!Priority.TryGetValue(cue, out int priority))

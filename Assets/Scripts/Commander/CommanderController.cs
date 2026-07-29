@@ -21,6 +21,9 @@ public class CommanderController : MonoBehaviour
 {
     public static CommanderController Instance { get; private set; }
 
+    /// <summary>The player's input surface — GameModeController's Escape handling asks it first.</summary>
+    public CommanderSelection Selection { get; private set; }
+
     GameObject _mapRoot;
     GameObject _cameraRig;
     ArenaBlockManager _blockManager;
@@ -92,6 +95,12 @@ public class CommanderController : MonoBehaviour
         CommanderMap.BuildSkirt(_mapRoot.transform);
 
         _cameraRig = BuildCameraRig();
+
+        // Armies after the bake: units are NavMeshAgents and need the mesh
+        // under their feet from frame one. The roster rides on the same
+        // GameController object that owns this controller's parent.
+        CommanderArmy.SpawnSkirmish(GetComponentInParent<RobotRoster>());
+        Selection = gameObject.AddComponent<CommanderSelection>();
     }
 
     /// <summary>
@@ -113,6 +122,10 @@ public class CommanderController : MonoBehaviour
             DestroyImmediate(_mapRoot);
             _mapRoot = null;
         }
+
+        // Units go with the map, and just as immediately — they are agents
+        // standing on the mesh the arena bake below is about to replace.
+        CommanderArmy.DespawnAll();
 
         // Belt and braces for the recompile-during-Play landmine: the list
         // survives a reload as a serialized field, but if it is empty anyway,
