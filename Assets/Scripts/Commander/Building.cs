@@ -87,6 +87,8 @@ public class Building : MonoBehaviour
         // the placer and the AI commander build through this one door.
         if (def.key == BuildingCatalog.Turret)
             root.AddComponent<BuildingTurret>();
+        if (def.key == BuildingCatalog.Factory)
+            root.AddComponent<ProductionQueue>();
 
         return building;
     }

@@ -149,7 +149,12 @@ public class CommanderUnit : MonoBehaviour
         // Staggered priorities: identical priorities make a crowd of agents
         // shove symmetrically and deadlock in doorways — i.e. in chokepoints.
         agent.avoidancePriority = 40 + (int)(Mathf.Abs(position.x * 7f + position.z * 13f) % 20);
-        agent.Warp(position);
+        // A factory door can open onto carved or occupied ground; a failed
+        // Warp leaves the agent off-mesh and the unit a statue. Snap to the
+        // nearest mesh point within a few strides instead.
+        if (!agent.Warp(position)
+            && NavMesh.SamplePosition(position, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
+            agent.Warp(navHit.position);
 
         if (armed)
             BuildGun(root, body, tint);

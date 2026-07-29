@@ -23,6 +23,8 @@ public class CommanderHud : MonoBehaviour
 
     readonly System.Collections.Generic.List<(BuildingDefinition def, Button button, Text label)>
         _buildButtons = new System.Collections.Generic.List<(BuildingDefinition, Button, Text)>();
+    readonly System.Collections.Generic.List<(UnitDefinition def, Button button, Text label)>
+        _unitButtons = new System.Collections.Generic.List<(UnitDefinition, Button, Text)>();
     float _nextButtonRefresh;
 
     void Awake()
@@ -71,66 +73,101 @@ public class CommanderHud : MonoBehaviour
 
     /// <summary>
     /// The construction column, right edge, vertically centred — where a
-    /// Red Alert hand expects it. One button per catalog entry; the Command
-    /// Center is skipped (each side owns exactly one, pre-placed).
+    /// Red Alert hand expects it. Structures on top (Command Center skipped:
+    /// each side owns exactly one, pre-placed), a gap, then the factory's
+    /// unit orders below.
     /// </summary>
     void BuildBar(Transform parent)
     {
-        var defs = new System.Collections.Generic.List<BuildingDefinition>();
+        var buildingDefs = new System.Collections.Generic.List<BuildingDefinition>();
         foreach (var def in BuildingCatalog.All)
             if (!def.isHeadquarters)
-                defs.Add(def);
+                buildingDefs.Add(def);
+        var unitDefs = UnitCatalog.All;
 
-        float rowHeight = 64f;
-        float top = (defs.Count - 1) * rowHeight * 0.5f;
-        for (int i = 0; i < defs.Count; i++)
+        const float rowHeight = 64f;
+        const float sectionGap = 26f;
+        int rows = buildingDefs.Count + unitDefs.Length;
+        float top = ((rows - 1) * rowHeight + sectionGap) * 0.5f;
+
+        for (int i = 0; i < buildingDefs.Count; i++)
         {
-            var def = defs[i];
-
-            var buttonGo = new GameObject($"Build_{def.key}");
-            buttonGo.transform.SetParent(parent, false);
-            var image = buttonGo.AddComponent<Image>();
-            image.color = ButtonFace;
-            var rect = image.rectTransform;
-            rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
-            rect.pivot = new Vector2(1f, 0.5f);
-            rect.anchoredPosition = new Vector2(-14f, top - i * rowHeight);
-            rect.sizeDelta = new Vector2(250f, 56f);
-
-            var button = buttonGo.AddComponent<Button>();
-            button.targetGraphic = image;
-            var captured = def;
-            button.onClick.AddListener(() =>
-                CommanderController.Instance?.Placer?.Arm(captured));
-
-            // Accent edge on the left, the building's own colour.
-            var edgeGo = new GameObject("Edge");
-            edgeGo.transform.SetParent(buttonGo.transform, false);
-            var edge = edgeGo.AddComponent<Image>();
-            edge.color = def.accent;
-            edge.raycastTarget = false;
-            var edgeRect = edge.rectTransform;
-            edgeRect.anchorMin = new Vector2(0f, 0f);
-            edgeRect.anchorMax = new Vector2(0f, 1f);
-            edgeRect.pivot = new Vector2(0f, 0.5f);
-            edgeRect.anchoredPosition = Vector2.zero;
-            edgeRect.sizeDelta = new Vector2(5f, 0f);
-
-            var labelGo = new GameObject("Label");
-            labelGo.transform.SetParent(buttonGo.transform, false);
-            var label = labelGo.AddComponent<Text>();
-            label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            label.fontSize = 17;
-            label.alignment = TextAnchor.MiddleLeft;
-            label.raycastTarget = false;
-            var labelRect = label.rectTransform;
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = new Vector2(14f, 2f);
-            labelRect.offsetMax = new Vector2(-8f, -2f);
-
+            var def = buildingDefs[i];
+            var (button, label) = BarButton(parent, $"Build_{def.key}", def.accent,
+                top - i * rowHeight,
+                () => CommanderController.Instance?.Placer?.Arm(def));
             _buildButtons.Add((def, button, label));
         }
+
+        float unitTop = top - buildingDefs.Count * rowHeight - sectionGap;
+        for (int i = 0; i < unitDefs.Length; i++)
+        {
+            var def = unitDefs[i];
+            var (button, label) = BarButton(parent, $"Train_{def.key}", CreditAmber,
+                unitTop - i * rowHeight,
+                () => TryTrain(def));
+            _unitButtons.Add((def, button, label));
+        }
+    }
+
+    /// <summary>
+    /// Pay first, then queue on the least-loaded factory. Refund on the one
+    /// race that can lose the order — every factory filling up between the
+    /// button refresh and the click.
+    /// </summary>
+    void TryTrain(UnitDefinition def)
+    {
+        if (!CommanderEconomy.Spend(_shownTeam, def.cost))
+            return;
+        var queue = ProductionQueue.LeastBusy(_shownTeam);
+        if (queue == null || !queue.Enqueue(def.key))
+            CommanderEconomy.Grant(_shownTeam, def.cost);
+    }
+
+    (Button, Text) BarButton(Transform parent, string name, Color accent, float y,
+        UnityEngine.Events.UnityAction onClick)
+    {
+        var buttonGo = new GameObject(name);
+        buttonGo.transform.SetParent(parent, false);
+        var image = buttonGo.AddComponent<Image>();
+        image.color = ButtonFace;
+        var rect = image.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.pivot = new Vector2(1f, 0.5f);
+        rect.anchoredPosition = new Vector2(-14f, y);
+        rect.sizeDelta = new Vector2(250f, 56f);
+
+        var button = buttonGo.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(onClick);
+
+        // Accent edge on the left — the building's own colour, amber for units.
+        var edgeGo = new GameObject("Edge");
+        edgeGo.transform.SetParent(buttonGo.transform, false);
+        var edge = edgeGo.AddComponent<Image>();
+        edge.color = accent;
+        edge.raycastTarget = false;
+        var edgeRect = edge.rectTransform;
+        edgeRect.anchorMin = new Vector2(0f, 0f);
+        edgeRect.anchorMax = new Vector2(0f, 1f);
+        edgeRect.pivot = new Vector2(0f, 0.5f);
+        edgeRect.anchoredPosition = Vector2.zero;
+        edgeRect.sizeDelta = new Vector2(5f, 0f);
+
+        var labelGo = new GameObject("Label");
+        labelGo.transform.SetParent(buttonGo.transform, false);
+        var label = labelGo.AddComponent<Text>();
+        label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        label.fontSize = 17;
+        label.alignment = TextAnchor.MiddleLeft;
+        label.raycastTarget = false;
+        var labelRect = label.rectTransform;
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = new Vector2(14f, 2f);
+        labelRect.offsetMax = new Vector2(-8f, -2f);
+
+        return (button, label);
     }
 
     void OnEnable()
@@ -160,6 +197,7 @@ public class CommanderHud : MonoBehaviour
         _nextButtonRefresh = Time.time + 0.4f;
         RefreshPower();
         RefreshButtons();
+        RefreshUnitButtons();
     }
 
     void Refresh()
@@ -189,6 +227,39 @@ public class CommanderHud : MonoBehaviour
                 ? $"{def.displayName}\n{def.cost} cr   ·   {power} pw"
                 : $"{def.displayName}\nneeds {BuildingCatalog.Get(def.prerequisite)?.displayName}";
             label.color = unlocked && affordable
+                ? Color.white
+                : new Color(1f, 1f, 1f, 0.35f);
+        }
+    }
+
+    void RefreshUnitButtons()
+    {
+        bool hasFactory = HasBuilding(BuildingCatalog.Factory);
+        bool hasRoom = ProductionQueue.LeastBusy(_shownTeam) != null;
+
+        foreach (var (def, button, label) in _unitButtons)
+        {
+            bool unlocked = hasFactory
+                && (def.prerequisite == null || HasBuilding(def.prerequisite));
+            bool affordable = CommanderEconomy.Credits(_shownTeam) >= def.cost;
+            button.interactable = unlocked && affordable && hasRoom;
+
+            if (!hasFactory)
+            {
+                label.text = $"{def.displayName}\nneeds ROBOT FACTORY";
+            }
+            else if (!unlocked)
+            {
+                label.text = $"{def.displayName}\nneeds {BuildingCatalog.Get(def.prerequisite)?.displayName}";
+            }
+            else
+            {
+                int queued = ProductionQueue.TotalQueued(_shownTeam, def.key);
+                label.text = queued > 0
+                    ? $"{def.displayName}\n{def.cost} cr   ·   {queued} in build"
+                    : $"{def.displayName}\n{def.cost} cr";
+            }
+            label.color = unlocked && affordable && hasRoom
                 ? Color.white
                 : new Color(1f, 1f, 1f, 0.35f);
         }
