@@ -135,6 +135,29 @@ public class CommanderController : MonoBehaviour
             _cameraRig.AddComponent<CommanderDirector>();
         }
         gameObject.AddComponent<CommanderMatch>();
+        gameObject.AddComponent<CommanderMinimap>();
+        gameObject.AddComponent<CommanderTouch>()
+            .Bind(_cameraRig.GetComponent<CommanderCamera>(), Selection);
+    }
+
+    void Update()
+    {
+        // H — home: snap the view back to your Command Center (cyan's, in
+        // either mode — it is the bottom-of-screen base).
+        if (!Input.GetKeyDown(KeyCode.H))
+            return;
+        var camera = _cameraRig != null ? _cameraRig.GetComponent<CommanderCamera>() : null;
+        if (camera == null)
+            return;
+        foreach (var building in Building.All)
+        {
+            if (building != null && building.TeamId == 0 && building.IsAlive
+                && building.Definition != null && building.Definition.isHeadquarters)
+            {
+                camera.SnapTo(building.transform.position + new Vector3(0f, 0f, 6f));
+                return;
+            }
+        }
     }
 
     /// <summary>

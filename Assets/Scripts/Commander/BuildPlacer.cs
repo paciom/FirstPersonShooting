@@ -33,6 +33,7 @@ public class BuildPlacer : MonoBehaviour
     Material _invalidMat;
     bool _valid;
     Camera _camera;
+    Vector2 _touchDownAt;
 
     void Awake()
     {
@@ -115,7 +116,26 @@ public class BuildPlacer : MonoBehaviour
         bool onUi = UnityEngine.EventSystems.EventSystem.current != null
             && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
-        var ray = _camera.ScreenPointToRay(Input.mousePosition);
+        // On touch the simulated mouse is dead: the finger is the cursor
+        // (ghost follows it while down), and a lift that hasn't wandered —
+        // a tap — is the placement click.
+        Vector3 pointer = Input.mousePosition;
+        bool placeClick = Input.GetMouseButtonDown(0) && !onUi;
+        if (TouchControls.Active && Input.touchCount > 0)
+        {
+            var touch = Input.GetTouch(0);
+            pointer = touch.position;
+            if (touch.phase == TouchPhase.Began)
+                _touchDownAt = touch.position;
+            placeClick = touch.phase == TouchPhase.Ended
+                && (touch.position - _touchDownAt).magnitude < 24f
+                && !TouchControls.PointOver(touch.position)
+                && !(UnityEngine.EventSystems.EventSystem.current != null
+                     && UnityEngine.EventSystems.EventSystem.current
+                         .IsPointerOverGameObject(touch.fingerId));
+        }
+
+        var ray = _camera.ScreenPointToRay(pointer);
         if (!Physics.Raycast(ray, out RaycastHit hit, 600f))
             return;
 
@@ -130,7 +150,7 @@ public class BuildPlacer : MonoBehaviour
         foreach (var renderer in _ghost.GetComponentsInChildren<MeshRenderer>())
             renderer.sharedMaterial = mat;
 
-        if (Input.GetMouseButtonDown(0) && _valid && !onUi)
+        if (placeClick && _valid)
         {
             if (CommanderEconomy.Spend(PlayerTeam, _pending.cost))
             {

@@ -48,6 +48,28 @@ public class CommanderSelection : MonoBehaviour
     RectTransform _rect;
 
     /// <summary>
+    /// Touch entry point — one tap, resolved by what's under it: an own
+    /// robot re-selects, anything else is an order for the current selection
+    /// (enemy = attack, ground = move), or a pick when nothing is selected.
+    /// The grammar every mobile RTS settled on.
+    /// </summary>
+    public void Tap(Vector2 screenPoint)
+    {
+        if (_camera == null)
+            _camera = Camera.main;
+        if (_camera == null)
+            return;
+
+        var unit = UnitUnder(screenPoint);
+        if (unit != null && unit.TeamId == PlayerTeam && unit.IsAlive)
+            ClickSelect(screenPoint, additive: false);
+        else if (_selected.Count > 0)
+            RightClickOrder(screenPoint);
+        else
+            ClickSelect(screenPoint, additive: false);
+    }
+
+    /// <summary>
     /// Disarm a pending attack-move, reporting whether there was one. Called
     /// by GameModeController's Escape handling — exactly one component reads
     /// that key, so "cancel the order" can never race "leave the mode".

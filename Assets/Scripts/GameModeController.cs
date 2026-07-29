@@ -540,8 +540,8 @@ public class GameModeController : MonoBehaviour
         _menuCanvas.SetActive(false);
         if (playerCommands)
             ShowOverlay("Drag — Select   ·   RMB — Move / Attack   ·   A + Click — Attack-move   ·   " +
-                "WASD / Wheel — Camera   ·   ESC — Menu",
-                "COMMANDER — tap MENU to go back");
+                "WASD / Wheel — Camera   ·   H — Home   ·   ESC — Menu",
+                "tap robot — select   ·   tap ground — move   ·   drag — pan   ·   pinch — zoom");
         else
             ShowOverlay("AI WAR — the camera follows the fighting; touch WASD / wheel to take it   ·   ESC — Menu",
                 "AI WAR — tap MENU to go back");

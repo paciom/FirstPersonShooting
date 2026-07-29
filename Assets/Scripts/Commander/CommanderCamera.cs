@@ -30,11 +30,35 @@ public class CommanderCamera : MonoBehaviour
     Vector3 _lastDragMouse;
     float _lastManualAt = -999f;
 
+    /// <summary>Where the camera is looking, on the ground — the minimap's view marker.</summary>
+    public Vector3 Focus => _focus;
+
     /// <summary>Jump the view so <paramref name="focus"/> is centre-screen.</summary>
     public void SnapTo(Vector3 focus)
     {
         _focus = focus;
+        _lastManualAt = Time.unscaledTime;   // a jump is a human act — director yields
         Apply();
+    }
+
+    /// <summary>
+    /// Drag-pan by a screen-pixel delta — the touch scheme's finger-drag,
+    /// sharing the same metres-per-pixel math as the middle-mouse grab.
+    /// </summary>
+    public void PanBy(Vector2 screenDelta)
+    {
+        float dist = _height / Mathf.Sin(Pitch * Mathf.Deg2Rad);
+        float perPixel = 2f * dist * Mathf.Tan(Fov * 0.5f * Mathf.Deg2Rad) / Screen.height;
+        _focus -= new Vector3(screenDelta.x * perPixel, 0f,
+                              screenDelta.y * perPixel / Mathf.Sin(Pitch * Mathf.Deg2Rad));
+        _lastManualAt = Time.unscaledTime;
+    }
+
+    /// <summary>Pinch zoom: positive pixels of finger-spread = zoom in.</summary>
+    public void ZoomBy(float spreadPixels)
+    {
+        _height = Mathf.Clamp(_height - spreadPixels * 0.08f, MinHeight, MaxHeight);
+        _lastManualAt = Time.unscaledTime;
     }
 
     void Update()
