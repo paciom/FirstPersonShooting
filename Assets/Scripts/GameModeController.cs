@@ -715,7 +715,8 @@ public class GameModeController : MonoBehaviour
         ResetMatchState();
         RestoreAllDeRez();
 
-        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot, playerControls);
+        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot, playerControls,
+            BrawlDifficulty.For(Mode));
 
         _menuCanvas.SetActive(false);
         if (playerControls)

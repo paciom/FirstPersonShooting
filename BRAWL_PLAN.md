@@ -214,7 +214,32 @@ no code change.
 
 ---
 
-## 5. Phases (one commit each)
+## 5. Difficulty (added 2026-07-31)
+
+Five CPU levels, picked on the robot-select screen (chips beside START,
+remembered per mode via PlayerPrefs): **1 ROOKIE · 2 CADET · 3 CONTENDER ·
+4 CHAMPION · 5 LEGEND**. Player v AI defaults to CADET; Brawl: AI v AI
+defaults to CONTENDER — the watchable middle, because two LEGENDs guarding
+perfectly is a staring contest, and the audience came for hits.
+
+A level is a row of dials in `BrawlDifficulty`, applied to `BrawlBrain`:
+
+| Dial | What it does | ROOKIE → LEGEND |
+| --- | --- | --- |
+| think cadence | the reaction delay — how often the CPU re-decides | 0.35–0.55 s → 0.10–0.16 s |
+| guardChance | blocks on seeing your startup | 0.10 → 0.85 |
+| aggression | attack rolls, approach pressure | 0.45 → 0.85 |
+| spacingError | attack-range judgment (>1 swings from too far = whiffs) | 1.25 → 0.85 |
+| blastChance | remembers the PHOTON BLAST meter exists | 0.10 → 0.85 |
+| punishChance | presses openings (your hit-stun and whiff recovery) | 0.05 → 0.85 |
+
+Rookies feel human-beginner: slow to notice, swing early, forget to guard.
+LEGEND reads startups nearly every tick and punishes recovery — but 0.85
+guard is deliberately not 1.0; mixups still land. Both AI-war corners run
+the same chosen level (personality jitter keeps them from mirroring); the
+CPU's level shows beside its name on the health bar.
+
+## 6. Phases (one commit each)
 
 0. **This plan.**
 1. **meshyfight.py + ranger probe kicked off** — tasks cook server-side while

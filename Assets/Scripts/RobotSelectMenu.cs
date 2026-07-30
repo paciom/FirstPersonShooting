@@ -132,6 +132,9 @@ public static class RobotSelectMenu
         MakeButton(canvasGo.transform, "BACK", new Vector2(-560, -350), new Vector2(200, 78), 28,
             controller.CancelRobotSelect);
 
+        if (pendingMode == GameMode.Brawl || pendingMode == GameMode.BrawlWar)
+            BuildLevelPicker(canvasGo.transform, pendingMode);
+
         inspector.BuildUI(canvasGo.transform);
 
         return root;
@@ -446,6 +449,61 @@ public static class RobotSelectMenu
         instance.transform.localScale *= scale;
         Vector3 localCenter = holder.InverseTransformPoint(bounds.center);
         instance.transform.localPosition = -localCenter * scale;
+    }
+
+    /// <summary>
+    /// The CPU level chips, to the right of START: 1–5 with the chosen
+    /// level's name above them. Remembered per mode (PlayerPrefs) — Player
+    /// v AI opens on CADET, the AI war on CONTENDER, so exhibition bouts
+    /// stay watchable instead of two perfect guards staring.
+    /// </summary>
+    static void BuildLevelPicker(Transform parent, GameMode mode)
+    {
+        var title = MakeText(parent, "LevelTitle", "", 18,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(385f, -312f), new Vector2(360f, 24f));
+
+        var chips = new Image[BrawlDifficulty.Levels.Length];
+        var labels = new Text[chips.Length];
+
+        void Refresh()
+        {
+            int selected = BrawlDifficulty.For(mode);
+            title.text = (mode == GameMode.BrawlWar ? "AI  LEVEL  —  " : "CPU  LEVEL  —  ")
+                         + BrawlDifficulty.NameOf(selected);
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = i + 1 == selected;
+                chips[i].color = on
+                    ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                    : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            int level = i + 1;
+            var chip = MakeImage(parent, $"Level_{level}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(385f + (level - 3) * 68f, -352f);
+            rect.sizeDelta = new Vector2(60f, 52f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                BrawlDifficulty.Set(mode, level);
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", level.ToString(), 26,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
+        }
+        Refresh();
     }
 
     // ---------- uGUI helpers (same idiom as MainMenu) ----------

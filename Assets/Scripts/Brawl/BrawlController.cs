@@ -40,8 +40,11 @@ public class BrawlController : MonoBehaviour
     /// <summary>True when a human holds P1; false is the exhibition bout.</summary>
     [SerializeField] bool _playerControls = true;
 
+    /// <summary>The chosen BrawlDifficulty level (1-based) for every CPU corner.</summary>
+    [SerializeField] int _difficulty = 3;
+
     public static BrawlController Begin(GameModeController owner, RobotRoster roster,
-        int cyanRobot, int magentaRobot, bool playerControls)
+        int cyanRobot, int magentaRobot, bool playerControls, int difficulty)
     {
         var go = new GameObject("Brawl");
         go.transform.SetParent(owner.transform, false);
@@ -49,6 +52,7 @@ public class BrawlController : MonoBehaviour
         controller._cyanRobot = cyanRobot;
         controller._magentaRobot = magentaRobot;
         controller._playerControls = playerControls;
+        controller._difficulty = difficulty;
         controller.Setup(roster);
         return controller;
     }
@@ -101,7 +105,9 @@ public class BrawlController : MonoBehaviour
         Magenta.Opponent = Cyan;
 
         // P1 is a human's hands or a second brain — the fighter can't tell.
-        // Touch pads only exist when someone is actually driving.
+        // Touch pads only exist when someone is actually driving. Every CPU
+        // corner runs the chosen difficulty level; per-spawn jitter keeps
+        // two same-level brains from mirroring.
         if (_playerControls)
         {
             gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
@@ -111,20 +117,23 @@ public class BrawlController : MonoBehaviour
         {
             var cyanBrain = gameObject.AddComponent<BrawlBrain>();
             cyanBrain.Fighter = Cyan;
-            // Contrast makes the exhibition readable: one corner presses,
-            // the other counters. Start()'s jitter keeps reruns fresh.
-            cyanBrain.aggression = 0.8f;
-            cyanBrain.caution = 0.35f;
+            cyanBrain.ApplyDifficulty(_difficulty);
         }
-        gameObject.AddComponent<BrawlBrain>().Fighter = Magenta;
+        var magentaBrain = gameObject.AddComponent<BrawlBrain>();
+        magentaBrain.Fighter = Magenta;
+        magentaBrain.ApplyDifficulty(_difficulty);
 
         BrawlDebug.Attach(gameObject, Cyan, Magenta);
 
         Camera.SetTargets(Cyan.transform, Magenta.transform);
 
+        // The CPU wears its level on the health bar.
+        string levelTag = "  ·  " + BrawlDifficulty.NameOf(_difficulty);
         string cyanName = DisplayName(roster, _cyanRobot, _playerControls ? "PLAYER" : "CYAN");
         string magentaName = DisplayName(roster, _magentaRobot, _playerControls ? "CPU" : "MAGENTA");
-        var hud = BrawlHud.Build(transform, cyanName, magentaName);
+        var hud = BrawlHud.Build(transform,
+            _playerControls ? cyanName : cyanName + levelTag,
+            magentaName + levelTag);
         gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud,
             _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
             _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");
