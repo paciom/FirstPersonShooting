@@ -14,6 +14,8 @@ public class BrawlMatch : MonoBehaviour
 
     BrawlFighter _cyan, _magenta;
     BrawlHud _hud;
+    string _cyanWinLabel = "PLAYER  WINS";
+    string _magentaWinLabel = "CPU  WINS";
 
     Stage _stage = Stage.Intro;
     float _stageTime;
@@ -23,11 +25,14 @@ public class BrawlMatch : MonoBehaviour
     // Who fell this round: 0 cyan, 1 magenta, -1 timeout/draw pending judge.
     int _fallen = -1;
 
-    public void Bind(BrawlFighter cyan, BrawlFighter magenta, BrawlHud hud)
+    public void Bind(BrawlFighter cyan, BrawlFighter magenta, BrawlHud hud,
+        string cyanWinLabel, string magentaWinLabel)
     {
         _cyan = cyan;
         _magenta = magenta;
         _hud = hud;
+        _cyanWinLabel = cyanWinLabel;
+        _magentaWinLabel = magentaWinLabel;
         _cyan.OnKnockedOut += OnKnockedOut;
         _magenta.OnKnockedOut += OnKnockedOut;
         BeginRound();
@@ -115,9 +120,9 @@ public class BrawlMatch : MonoBehaviour
                 if (_cyanPips >= PipsToWin && _magentaPips >= PipsToWin)
                     FinishMatch("DOUBLE  K.O.");
                 else if (_cyanPips >= PipsToWin)
-                    FinishMatch("PLAYER  WINS");
+                    FinishMatch(_cyanWinLabel);
                 else if (_magentaPips >= PipsToWin)
-                    FinishMatch("CPU  WINS");
+                    FinishMatch(_magentaWinLabel);
                 else
                 {
                     _round++;

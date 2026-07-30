@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -271,6 +271,7 @@ public class GameModeController : MonoBehaviour
         {
             if (mode == GameMode.AIvAI) StartAIvAI();
             else if (mode == GameMode.Brawl) StartBrawl();
+            else if (mode == GameMode.BrawlWar) StartBrawlWar();
             else StartPlayerVsAI();
             return;
         }
@@ -299,9 +300,9 @@ public class GameModeController : MonoBehaviour
         // Brawl skips both the arena screen and the FPS-cast reskin: the
         // stage is its own set, and the fighters are spawned fresh from the
         // roster rather than dressed onto the hidden bots.
-        if (_pendingMode == GameMode.Brawl)
+        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar)
         {
-            StartBrawl();
+            if (_pendingMode == GameMode.Brawl) StartBrawl(); else StartBrawlWar();
             return;
         }
         ApplyRobotSelection();
@@ -659,31 +660,41 @@ public class GameModeController : MonoBehaviour
         LockCursor(false);
     }
 
+    /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the same select.</summary>
+    public void RestartBrawlSelect()
+    {
+        var variant = Mode == GameMode.BrawlWar ? GameMode.BrawlWar : GameMode.Brawl;
+        EnterMenu();
+        OpenRobotSelect(variant);
+    }
+
     /// <summary>
     /// The versus mode: the two picked robots duel on the Brawl stage, best
     /// of three. No arena select in front of it — the stage is its own set,
     /// exactly as Commander's battlefield is.
     /// </summary>
-    /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the Brawl select.</summary>
-    public void RestartBrawlSelect()
-    {
-        EnterMenu();
-        OpenRobotSelect(GameMode.Brawl);
-    }
+    public void StartBrawl() => StartBrawlMode(playerControls: true);
 
-    public void StartBrawl()
+    /// <summary>Brawl's exhibition bout: two CPU corners, the couch watches.</summary>
+    public void StartBrawlWar() => StartBrawlMode(playerControls: false);
+
+    void StartBrawlMode(bool playerControls)
     {
-        Mode = GameMode.Brawl;
+        Mode = playerControls ? GameMode.Brawl : GameMode.BrawlWar;
         DestroySpectatorRig();
         ResetMatchState();
         RestoreAllDeRez();
 
-        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot);
+        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot, playerControls);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("A / D — Move   ·   SPACE — Jump   ·   J — Punch   ·   K — Kick   ·   " +
-                    "S — Block   ·   L — Blast   ·   ESC — Menu",
-                    "BRAWL   ·   tap MENU to go back");
+        if (playerControls)
+            ShowOverlay("A / D — Move   ·   SPACE — Jump   ·   J — Punch   ·   K — Kick   ·   " +
+                        "S — Block   ·   L — Blast   ·   ESC — Menu",
+                        "BRAWL   ·   tap MENU to go back");
+        else
+            ShowOverlay("BRAWL: AI v AI — ESC for Menu",
+                        "BRAWL: AI v AI — tap MENU to go back");
         LockCursor(false);
     }
 

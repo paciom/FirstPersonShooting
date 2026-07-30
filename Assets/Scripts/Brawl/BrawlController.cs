@@ -37,14 +37,18 @@ public class BrawlController : MonoBehaviour
     [SerializeField] int _cyanRobot;
     [SerializeField] int _magentaRobot;
 
+    /// <summary>True when a human holds P1; false is the exhibition bout.</summary>
+    [SerializeField] bool _playerControls = true;
+
     public static BrawlController Begin(GameModeController owner, RobotRoster roster,
-        int cyanRobot, int magentaRobot)
+        int cyanRobot, int magentaRobot, bool playerControls)
     {
         var go = new GameObject("Brawl");
         go.transform.SetParent(owner.transform, false);
         var controller = go.AddComponent<BrawlController>();
         controller._cyanRobot = cyanRobot;
         controller._magentaRobot = magentaRobot;
+        controller._playerControls = playerControls;
         controller.Setup(roster);
         return controller;
     }
@@ -96,16 +100,32 @@ public class BrawlController : MonoBehaviour
         Cyan.Opponent = Magenta;
         Magenta.Opponent = Cyan;
 
-        gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
+        // P1 is a human's hands or a second brain — the fighter can't tell.
+        // Touch pads only exist when someone is actually driving.
+        if (_playerControls)
+        {
+            gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
+            gameObject.AddComponent<BrawlTouch>();
+        }
+        else
+        {
+            var cyanBrain = gameObject.AddComponent<BrawlBrain>();
+            cyanBrain.Fighter = Cyan;
+            // Contrast makes the exhibition readable: one corner presses,
+            // the other counters. Start()'s jitter keeps reruns fresh.
+            cyanBrain.aggression = 0.8f;
+            cyanBrain.caution = 0.35f;
+        }
         gameObject.AddComponent<BrawlBrain>().Fighter = Magenta;
-        gameObject.AddComponent<BrawlTouch>();
 
         Camera.SetTargets(Cyan.transform, Magenta.transform);
 
-        var hud = BrawlHud.Build(transform,
-            DisplayName(roster, _cyanRobot, "PLAYER"),
-            DisplayName(roster, _magentaRobot, "CPU"));
-        gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud);
+        string cyanName = DisplayName(roster, _cyanRobot, _playerControls ? "PLAYER" : "CYAN");
+        string magentaName = DisplayName(roster, _magentaRobot, _playerControls ? "CPU" : "MAGENTA");
+        var hud = BrawlHud.Build(transform, cyanName, magentaName);
+        gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud,
+            _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
+            _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");
 
         // Every landed hit thumps the camera and freezes the world for a
         // few hundredths — the hit-stop that makes contact feel like contact.

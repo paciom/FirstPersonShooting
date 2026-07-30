@@ -42,9 +42,10 @@ public static class MainMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
-        // Seven buttons still bottom out at y=-400 (the pitch tightened to
-        // 100 px when BRAWL arrived): on ultrawide screens match-width
-        // scaling would shrink the reference height and clip the bottom row.
+        // Eight buttons on a 90 px pitch run 240 down to -390 — bottom edge
+        // -434, inside the -444 extent the old six-button layout proved safe
+        // on ultrawide, where match-width scaling shrinks the reference
+        // height and clips anything lower.
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
@@ -60,14 +61,15 @@ public static class MainMenu
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -225), new Vector2(800, 40));
 
-        // The AI modes and Brawl all route through the robot select screen.
-        MakeButton(canvasGo.transform, "AI  v  AI", 200, () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeButton(canvasGo.transform, "PLAYER  v  AI", 100, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeButton(canvasGo.transform, "BRAWL", 0, () => controller.OpenRobotSelect(GameMode.Brawl));
-        MakeButton(canvasGo.transform, "ONLINE  PVP", -100, () => OnlineMenu.Open(controller, canvasGo));
-        MakeButton(canvasGo.transform, "COMMANDER", -200, controller.StartCommander);
+        // The AI modes and both Brawls all route through the robot select.
+        MakeButton(canvasGo.transform, "AI  v  AI", 240, () => controller.OpenRobotSelect(GameMode.AIvAI));
+        MakeButton(canvasGo.transform, "PLAYER  v  AI", 150, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
+        MakeButton(canvasGo.transform, "BRAWL", 60, () => controller.OpenRobotSelect(GameMode.Brawl));
+        MakeButton(canvasGo.transform, "BRAWL:  AI  v  AI", -30, () => controller.OpenRobotSelect(GameMode.BrawlWar));
+        MakeButton(canvasGo.transform, "ONLINE  PVP", -120, () => OnlineMenu.Open(controller, canvasGo));
+        MakeButton(canvasGo.transform, "COMMANDER", -210, controller.StartCommander);
         MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -300, controller.StartCommanderWar);
-        MakeButton(canvasGo.transform, "ARENA  BUILDER", -400, controller.StartArenaPreview);
+        MakeButton(canvasGo.transform, "ARENA  BUILDER", -390, controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
             20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
@@ -135,8 +137,8 @@ public static class MainMenu
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0, y);
-        // 88 tall on the 100 px pitch: seven rows breathe where 92 felt packed.
-        rect.sizeDelta = new Vector2(460, 88);
+        // 82 tall on the 90 px pitch: eight rows keep an 8 px breath apart.
+        rect.sizeDelta = new Vector2(460, 82);
 
         var button = image.gameObject.AddComponent<Button>();
         button.targetGraphic = image;

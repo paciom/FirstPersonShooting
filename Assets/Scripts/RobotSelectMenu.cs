@@ -108,7 +108,8 @@ public static class RobotSelectMenu
             new Vector2(0.5f, 1f), new Vector2(0, -85), new Vector2(1200, 80));
         MakeText(canvasGo.transform, "Subtitle",
             pendingMode == GameMode.AIvAI ? "AI  v  AI"
-                : pendingMode == GameMode.Brawl ? "BRAWL" : "PLAYER  v  AI", 26,
+                : pendingMode == GameMode.Brawl ? "BRAWL"
+                : pendingMode == GameMode.BrawlWar ? "BRAWL  —  AI  v  AI" : "PLAYER  v  AI", 26,
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -145), new Vector2(800, 40));
 
