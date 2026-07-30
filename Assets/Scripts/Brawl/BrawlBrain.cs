@@ -124,7 +124,9 @@ public class BrawlBrain : MonoBehaviour
             return;
         }
 
-        if (gap <= punchRange * 0.95f)
+        // Tighter than the raw range: contact needs the fist to REACH, so
+        // the CPU steps in close enough for its arm to actually arrive.
+        if (gap <= punchRange * 0.85f)
         {
             float roll = Random.value;
             if (roll < 0.40f + 0.22f * aggression) { _punchOnce = true; _moveHeld = toFoe * 0.2f; }

@@ -71,10 +71,19 @@ public class BrawlBolt : MonoBehaviour
             || _target.Phase == BrawlFighter.State.Knockdown)
             return;   // sails over a downed robot — no wake-up lasers
 
-        float gap = Mathf.Abs(_target.transform.position.x - transform.position.x);
-        bool inHeight = _target.transform.position.y < 1.3f;
-        if (gap > 0.55f || !inHeight)
-            return;
+        if (_target.HasHurtboxes)
+        {
+            var part = BrawlHurtboxes.Query(transform.position, 0.30f, _target);
+            if (part == null || !part.Vital)
+                return;
+        }
+        else
+        {
+            float gap = Mathf.Abs(_target.transform.position.x - transform.position.x);
+            bool inHeight = _target.transform.position.y < 1.3f;
+            if (gap > 0.55f || !inHeight)
+                return;
+        }
 
         _spent = true;
         _target.TakeHit(BrawlMoveSet.Table[BrawlMoveSet.Move.Blast], _shooter);

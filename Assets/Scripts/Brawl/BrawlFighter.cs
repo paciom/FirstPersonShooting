@@ -77,6 +77,12 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>Raised when a strike's window closed without touching anyone.</summary>
     public System.Action<BrawlMoveSet.Move> OnWhiffed;
 
+    /// <summary>Raised when a strike found a limb, not the body: "arm"/"leg".</summary>
+    public System.Action<string> OnGrazed;
+
+    /// <summary>True when this fighter carries a per-bone hurtbox rig.</summary>
+    public bool HasHurtboxes { get; private set; }
+
     Transform _body;
     Animator _animator;
     Transform _handR;
@@ -95,6 +101,7 @@ public class BrawlFighter : MonoBehaviour
     float _moveTime;
     bool _moveHasHit;
     bool _boltFired;
+    bool _grazedThisMove;
 
     // ---- timers ----
     float _stunTime;
@@ -144,6 +151,10 @@ public class BrawlFighter : MonoBehaviour
             // the effector bones (all Meshy rigs share the names).
             fighter._handR = FindDeep(model.transform, "RightHand");
             fighter._footR = FindDeep(model.transform, "RightFoot");
+
+            // Hurtboxes ride the bones, so a crumpled or kicking body is
+            // hittable exactly where it visibly is.
+            fighter.HasHurtboxes = BrawlHurtboxes.Build(fighter, model);
 
             var controller = Resources.Load<RuntimeAnimatorController>($"Brawl/{robot}");
             if (controller != null && fighter._animator != null)
@@ -299,6 +310,7 @@ public class BrawlFighter : MonoBehaviour
             _move = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
             _moveTime = 0f;
             _moveHasHit = false;
+            _grazedThisMove = false;
             // The lunge: committing adds forward speed toward the opponent.
             _airVelocityX += Facing * 2.2f;
             Trigger(BrawlAnim.FlyKick);
@@ -408,6 +420,7 @@ public class BrawlFighter : MonoBehaviour
         _moveTime = 0f;
         _moveHasHit = false;
         _boltFired = false;
+        _grazedThisMove = false;
         Trigger(trigger);
     }
 
@@ -433,47 +446,51 @@ public class BrawlFighter : MonoBehaviour
         && _moveTime >= _move.startup
         && _moveTime <= _move.startup + _move.active;
 
+    /// <summary>
+    /// A hit is contact against the body the animation is actually showing:
+    /// the striking bone (plus the fist's own radius) is tested against the
+    /// defender's per-bone hurtboxes. Torso and head are damage; a limb is
+    /// a graze — sparks, no health — and the strike stays live in case the
+    /// fist finds the body deeper in the window.
+    /// </summary>
     void TryHit()
     {
         var target = Opponent;
-        if (target == null || !InRange(target))
+        if (target == null)
             return;
-        _moveHasHit = true;
-        target.TakeHit(_move, this);
-    }
-
-    /// <summary>
-    /// A hit is contact, not proximity: the striking limb's bone must be
-    /// inside the defender's body column (±BodyHalfWidth around its centre,
-    /// over its height) while the window is open. The old centre-distance
-    /// check let a punch land across a metre of visible air; now what you
-    /// see reach is what hits. Range stays as a cheap outer gate and the
-    /// no-bone fallback.
-    /// </summary>
-    bool InRange(BrawlFighter target)
-    {
         float gap = Mathf.Abs(target.transform.position.x - transform.position.x);
-        if (gap > _move.range + BrawlMoveSet.BodyHalfWidth)
-            return false;
+        if (gap > _move.range + 1f)
+            return;
 
         var effector = ActiveEffector;
-        if (effector == null)
+        if (effector == null || !target.HasHurtboxes)
         {
-            // Capsule-less rig (or the blast): the tuned centre range.
+            // Capsule-fallback robots: the old tuned column check.
             float dy = Mathf.Abs(target.transform.position.y - transform.position.y);
             float band = _move.move == BrawlMoveSet.Move.FlyKick ? 1.8f : 1.2f;
-            return gap <= _move.range && dy <= band;
+            if (gap <= _move.range && dy <= band)
+            {
+                _moveHasHit = true;
+                target.TakeHit(_move, this);
+            }
+            return;
         }
 
-        // Bone-to-column plus the strike's own radius: the wrist bone sits
-        // behind the fist's surface, and without the pad a visibly touching
-        // glove still whiffs.
-        Vector3 strike = effector.position;
-        Vector3 root = target.transform.position;
-        float reach = BrawlMoveSet.BodyHalfWidth + BrawlMoveSet.StrikeRadius;
-        return Mathf.Abs(strike.x - root.x) <= reach
-               && strike.y >= root.y - BrawlMoveSet.StrikeRadius
-               && strike.y <= root.y + BrawlMoveSet.BodyHeight + BrawlMoveSet.StrikeRadius;
+        var part = BrawlHurtboxes.Query(effector.position,
+            BrawlMoveSet.StrikeRadius + 0.04f, target);
+        if (part == null)
+            return;
+        if (part.Vital)
+        {
+            _moveHasHit = true;
+            target.TakeHit(_move, this);
+        }
+        else if (!_grazedThisMove)
+        {
+            _grazedThisMove = true;
+            VfxUtil.SpawnBurst(effector.position, new Color(0.8f, 0.95f, 1f), 5, 2.5f, 0.08f);
+            OnGrazed?.Invoke(part.Label);
+        }
     }
 
     public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker)
