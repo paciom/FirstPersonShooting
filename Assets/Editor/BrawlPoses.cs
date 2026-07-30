@@ -1,101 +1,204 @@
 using UnityEngine;
 
 /// <summary>
-/// The move templates: each is a pose over normalized time u ∈ [0,1],
-/// applied through BrawlPoseRig against whichever robot is on the bench.
-/// Character space: +Z toward the opponent, +Y up, +X the robot's right.
+/// The move templates: full-body kung fu choreography over normalized time
+/// u ∈ [0,1], applied through BrawlPoseRig against whichever robot is on the
+/// bench. Character space: +Z toward the opponent, +Y up, +X the robot's
+/// right.
 ///
-/// Weights come from a shared envelope — negative during windup (the same
-/// aim, swung the other way, is the anticipation), rising through the
-/// strike, easing home in the recovery. Snappy on purpose: 0.3–0.7 s of
-/// robot karate suits the toy fiction better than mocap realism would.
+/// The rule every strike follows is the KINETIC CHAIN: hips fire first,
+/// torso multiplies the twist, the shoulder rides it, the limb arrives
+/// last — while the off arm counter-pulls (the karate hikite), the weight
+/// sinks then drives forward, and the head counter-rotates to keep the eyes
+/// on the opponent. A punch that only lifts an arm reads as a mannequin;
+/// these read as intent.
+///
+/// Every move also sits on <see cref="StanceBase"/> — the bladed guard that
+/// is the Brawl idle — so clips begin and end in the stance the idle loop
+/// holds, and transitions land instead of snapping.
+///
+/// Timing runs chamber → strike → recover through <see cref="Pulse"/>
+/// windows rather than one peak: the coil is what sells the explosion.
 /// </summary>
 public static class BrawlPoses
 {
-    /// <summary>
-    /// -0.35 → 1 → 0: windup ends at <paramref name="windup"/>, the strike
-    /// peaks at <paramref name="strike"/>, the hold releases at
-    /// <paramref name="hold"/>.
-    /// </summary>
-    static float Envelope(float u, float windup, float strike, float hold)
+    /// <summary>0 → 1 across [rise0,rise1], hold 1, 1 → 0 across [fall0,fall1].</summary>
+    static float Pulse(float u, float rise0, float rise1, float fall0, float fall1)
     {
-        if (u < windup)
-            return -0.35f * Mathf.SmoothStep(0f, 1f, u / windup);
-        if (u < strike)
-            return Mathf.SmoothStep(-0.35f, 1f, (u - windup) / (strike - windup));
-        if (u < hold)
-            return 1f;
-        return Mathf.SmoothStep(1f, 0f, (u - hold) / (1f - hold));
+        if (u < rise0) return 0f;
+        if (u < rise1) return Mathf.SmoothStep(0f, 1f, (u - rise0) / (rise1 - rise0));
+        if (u < fall0) return 1f;
+        if (u < fall1) return Mathf.SmoothStep(1f, 0f, (u - fall0) / (fall1 - fall0));
+        return 0f;
+    }
+
+    /// <summary>
+    /// The fighting stance everything grows from: hips quarter-bladed with
+    /// the chest a touch more, eyes still front, sitting into staggered
+    /// legs (right leads), fists up at chin height. Weight 1 = full guard.
+    /// </summary>
+    public static void StanceBase(BrawlPoseRig rig, float w)
+    {
+        if (w <= 0f)
+            return;
+        rig.Rotate(rig.Hips, Vector3.up, 14f, w);
+        rig.Rotate(rig.Chest, Vector3.up, 10f, w);
+        rig.Rotate(rig.Head, Vector3.up, -18f, w);   // eyes stay on the foe
+
+        rig.Shift(rig.Hips, new Vector3(0f, -0.07f, 0f), w);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.06f, -0.85f, 0.42f), w);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -1f, -0.12f), w);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.06f, -0.85f, -0.30f), w);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -1f, 0.18f), w);
+
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.30f, -0.55f, 0.55f), w);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.05f, 0.60f, 0.75f), w);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.30f, -0.55f, 0.55f), w);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.05f, 0.60f, 0.75f), w);
+    }
+
+    /// <summary>The idle loop: the guard, breathing. First and last frames match.</summary>
+    public static void Stance(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        float breathe = Mathf.Sin(u * 2f * Mathf.PI);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.014f * breathe, 0.010f * Mathf.Sin(u * 4f * Mathf.PI)), 1f);
+        rig.Rotate(rig.Chest, Vector3.up, 2.5f * breathe, 1f);
+        // The guard hands never sit dead still.
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.05f, 0.62f, 0.75f), 0.25f + 0.15f * breathe);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.05f, 0.62f, 0.75f), 0.25f - 0.15f * breathe);
     }
 
     public static void Punch(BrawlPoseRig rig, float u)
     {
-        float w = Envelope(u, 0.25f, 0.45f, 0.62f);
-        // Torso leads, right shoulder toward the opponent.
-        rig.Rotate(rig.Chest, Vector3.up, -28f, w);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.10f, 0.05f, 1f), w);
-        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.05f, 0.02f, 1f), w);
-        // Off hand stays home as a guard.
-        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.25f, 0.55f, 0.6f), Mathf.Abs(w) * 0.5f);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0.06f), Mathf.Max(0f, w));
+        StanceBase(rig, 1f);
+        float chamber = Pulse(u, 0.00f, 0.16f, 0.20f, 0.42f);
+        float strike = Pulse(u, 0.20f, 0.38f, 0.58f, 1.00f);
+
+        // Chamber: the right side loads — hips and chest coil away, the
+        // fist draws back to the hip, weight sinks onto the rear leg.
+        rig.Rotate(rig.Hips, Vector3.up, 12f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, 16f, chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.45f, -0.75f, -0.45f), chamber);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.25f, -0.20f, -0.90f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, -0.05f), chamber);
+
+        // Strike: the chain fires — hips whip through, chest doubles the
+        // twist, the fist arrives; the left hand snaps back to the hip
+        // (hikite) and the rear leg drives the lunge.
+        rig.Rotate(rig.Hips, Vector3.up, -22f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, -34f, strike);
+        rig.Rotate(rig.Head, Vector3.up, 30f, strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.06f, 0.02f, 1f), strike);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.02f, 0f, 1f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.40f, -0.70f, -0.50f), strike);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.15f, -0.25f, -0.85f), strike);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.05f, -0.80f, -0.55f), strike * 0.7f);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.02f, 0.14f), strike);
     }
 
     public static void Kick(BrawlPoseRig rig, float u)
     {
-        float w = Envelope(u, 0.30f, 0.52f, 0.66f);
-        float lift = Mathf.Max(0f, w);
-        // Lean away as the leg rises — the counterweight is the read.
-        rig.Rotate(rig.Hips, Vector3.right, -12f, lift);
-        rig.Rotate(rig.Chest, Vector3.up, 16f, w);
-        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0f, 0.45f, 0.9f), w);
-        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, 0.12f, 1f), w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, 0f), lift);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.6f, -0.1f, -0.35f), lift * 0.6f);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.5f, 0.15f, 0.3f), lift * 0.6f);
+        StanceBase(rig, 1f);
+        float chamber = Pulse(u, 0.00f, 0.22f, 0.28f, 0.50f);
+        float strike = Pulse(u, 0.26f, 0.46f, 0.60f, 1.00f);
+
+        // Chamber: the knee spears up across the body, hips pre-load the
+        // twist, arms flare wide for balance, the support leg sits deeper.
+        rig.Rotate(rig.Hips, Vector3.up, 16f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, 12f, chamber);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(-0.15f, 0.55f, 0.55f), chamber);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.85f, -0.50f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.06f, 0f), chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.70f, 0.10f, -0.30f), chamber * 0.8f);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.60f, 0.25f, 0.30f), chamber * 0.8f);
+
+        // Strike: the roundhouse — hips whip through the other way, torso
+        // counter-twists and tips off the kick, the shin snaps out high,
+        // the arms sweep against the leg, eyes never leave the target.
+        rig.Rotate(rig.Hips, Vector3.up, -30f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, -22f, strike);
+        rig.Rotate(rig.Head, Vector3.up, 34f, strike);
+        rig.Rotate(rig.Chest, Vector3.forward, 10f, strike);
+        rig.Rotate(rig.Hips, Vector3.right, -10f, strike);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.05f, 0.50f, 0.88f), strike);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, 0.18f, 1f), strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, -0.35f, -0.65f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.35f, 0.45f, 0.55f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0.06f), strike);
     }
 
     public static void FlyKick(BrawlPoseRig rig, float u)
     {
-        // One-way: the pose holds while airborne, the exit blend unwinds it.
-        float w = Mathf.SmoothStep(0f, 1f, u / 0.3f);
-        rig.Rotate(rig.Hips, Vector3.right, -22f, w);
-        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0f, 0.25f, 1f), w);
-        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, 0.18f, 1f), w);
-        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(0f, -0.35f, -0.8f), w);
-        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -1f, -0.35f), w);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.65f, 0.5f, -0.4f), w);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.65f, 0.5f, -0.4f), w);
+        // The stance dissolves as the ground does.
+        StanceBase(rig, Mathf.Clamp01(1f - u * 3f));
+        float coil = Pulse(u, 0.00f, 0.16f, 0.20f, 0.42f);
+        float extend = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((u - 0.20f) / 0.22f));
+
+        // Coil: both knees tuck, arms cross over the chest, body curls.
+        rig.Rotate(rig.Chest, Vector3.right, 10f, coil);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0f, 0.55f, 0.55f), coil);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(0f, 0.45f, 0.35f), coil);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.55f, 0.60f, 0.30f), coil);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.55f, 0.60f, 0.30f), coil);
+
+        // Extension: the spear — lead leg locks out, trail leg folds back,
+        // torso sails back and twists, arms fling opposite corners. Held
+        // until landing; the exit blend unwinds it.
+        rig.Rotate(rig.Hips, Vector3.right, -22f, extend);
+        rig.Rotate(rig.Hips, Vector3.up, -14f, extend);
+        rig.Rotate(rig.Chest, Vector3.up, -20f, extend);
+        rig.Rotate(rig.Head, Vector3.up, 26f, extend);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0f, 0.25f, 1f), extend);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, 0.18f, 1f), extend);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(0f, -0.35f, -0.80f), extend);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -1f, -0.35f), extend);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, 0.65f, -0.45f), extend);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.70f, -0.15f, 0.35f), extend);
     }
 
     public static void Block(BrawlPoseRig rig, float u)
     {
-        float w = Mathf.SmoothStep(0f, 1f, u / 0.4f);
-        // A touch of held-breath bob keeps the loop alive.
+        StanceBase(rig, 1f);
+        float w = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.35f));
         float bob = 0.012f * Mathf.Sin(u * 2f * Mathf.PI);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.15f, 0.25f, 0.75f), w);
+
+        // The guard turns INTO the pressure: lead shoulder blades in, the
+        // forearms cross the centreline, the whole frame sits down on it.
+        rig.Rotate(rig.Hips, Vector3.up, 8f, w);
+        rig.Rotate(rig.Chest, Vector3.up, -20f, w);
+        rig.Rotate(rig.Head, Vector3.up, 12f, w);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.10f, 0.20f, 0.75f), w);
         rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.30f, 0.85f, 0.35f), w);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(0.15f, 0.25f, 0.75f), w);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(0.10f, 0.20f, 0.75f), w);
         rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.30f, 0.85f, 0.35f), w);
         rig.Rotate(rig.Chest, Vector3.right, 7f, w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.07f + bob, 0f), w);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f + bob, 0f), w);
     }
 
     public static void Hit(BrawlPoseRig rig, float u)
     {
+        StanceBase(rig, 1f);
         float w = u < 0.2f
             ? Mathf.SmoothStep(0f, 1f, u / 0.2f)
             : Mathf.SmoothStep(1f, 0f, (u - 0.2f) / 0.8f);
-        // The head snaps first, the torso follows, the hips give ground.
+
+        // The head snaps first, the torso wrenches around after it, the
+        // hips give ground and the arms fly loose of the guard.
         rig.Rotate(rig.Chest, Vector3.right, -14f, w);
-        rig.Rotate(rig.Chest, Vector3.up, 10f, w);
+        rig.Rotate(rig.Chest, Vector3.up, 18f, w);
+        rig.Rotate(rig.Hips, Vector3.up, 10f, w);
         rig.Rotate(rig.Head, Vector3.right, -11f, w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.02f, -0.10f), w);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, -0.35f, -0.30f), w * 0.5f);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.60f, -0.20f, 0.15f), w * 0.5f);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, -0.10f), w);
     }
 
     public static void Knockdown(BrawlPoseRig rig, float u)
     {
         // One-way fall; the KO state simply never leaves the last frame.
         float w = Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, u / 0.85f));
+        StanceBase(rig, 1f - w);
         rig.Rotate(rig.Hips, Vector3.right, -75f, w);
         rig.Shift(rig.Hips, new Vector3(0f, -0.72f, -0.28f), w);
         rig.Rotate(rig.UpLegR, Vector3.right, 28f, w);
@@ -120,14 +223,28 @@ public static class BrawlPoses
 
     public static void Blast(BrawlPoseRig rig, float u)
     {
-        float w = Envelope(u, 0.35f, 0.55f, 0.75f);
-        // Both palms thrust the bolt out — the Charged Spell Cast of the
-        // template world.
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.18f, 0.08f, 1f), w);
-        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.10f, 0.05f, 1f), w);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.18f, 0.08f, 1f), w);
-        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.10f, 0.05f, 1f), w);
-        rig.Rotate(rig.Chest, Vector3.right, 5f, w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.06f, 0.03f), Mathf.Abs(w));
+        StanceBase(rig, 1f);
+        float gather = Pulse(u, 0.00f, 0.24f, 0.30f, 0.52f);
+        float thrust = Pulse(u, 0.30f, 0.46f, 0.68f, 1.00f);
+
+        // Gather: arms sweep wide and back, the frame sinks deep and the
+        // chest coils away — the energy visibly collects before it leaves.
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.75f, -0.20f, -0.50f), gather);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.55f, -0.10f, -0.70f), gather);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.75f, -0.20f, -0.50f), gather);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.55f, -0.10f, -0.70f), gather);
+        rig.Rotate(rig.Chest, Vector3.right, -10f, gather);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.12f, -0.08f), gather);
+
+        // Thrust: both palms drive the bolt out, the hips ride forward and
+        // up behind it, shoulders square to the target.
+        rig.Rotate(rig.Hips, Vector3.up, -12f, thrust);
+        rig.Rotate(rig.Chest, Vector3.up, -8f, thrust);
+        rig.Rotate(rig.Chest, Vector3.right, 8f, thrust);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.18f, 0.08f, 1f), thrust);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.10f, 0.05f, 1f), thrust);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.18f, 0.08f, 1f), thrust);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.10f, 0.05f, 1f), thrust);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.04f, 0.16f), thrust);
     }
 }

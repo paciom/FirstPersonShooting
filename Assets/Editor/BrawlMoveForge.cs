@@ -45,6 +45,22 @@ public static class BrawlMoveForge
 
     const float Fps = 30f;
 
+    /// <summary>
+    /// Bumped whenever the pose templates change shape. BrawlPoses edits
+    /// leave no source-file timestamp IsStale can see, so this version —
+    /// written beside the controllers — is how a stale bake gets caught on
+    /// the next Play. v2: full-body kung fu chains + the stance idle.
+    /// </summary>
+    const int TemplateVersion = 2;
+
+    static string VersionPath => $"{OutDir}/forge_version.txt";
+
+    static void WriteVersion()
+    {
+        File.WriteAllText(VersionPath, TemplateVersion.ToString());
+        AssetDatabase.ImportAsset(VersionPath);
+    }
+
     [MenuItem("Photon Arena/Forge Brawl Moves")]
     public static void ForgeAll()
     {
@@ -59,6 +75,8 @@ public static class BrawlMoveForge
             if (ForgeOne(robot, prefabPath))
                 forged++;
         }
+        if (forged > 0)
+            WriteVersion();
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log($"[BrawlMoveForge] Forged {forged} robot(s).");
@@ -92,6 +110,7 @@ public static class BrawlMoveForge
         }
         if (forged > 0)
         {
+            WriteVersion();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
@@ -99,6 +118,12 @@ public static class BrawlMoveForge
 
     static bool IsStale(string robot)
     {
+        // A template-version mismatch outranks every per-file check: the
+        // clips on disk were baked by poses that no longer exist.
+        if (!File.Exists(VersionPath)
+            || File.ReadAllText(VersionPath).Trim() != TemplateVersion.ToString())
+            return true;
+
         string controllerPath = $"{OutDir}/{robot}.controller";
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) == null)
             return true;
@@ -140,20 +165,11 @@ public static class BrawlMoveForge
             return false;
         }
 
-        AnimationClip idle, walk;
-        if (meshyTrack)
-        {
-            walk = CloneClip(FindClip(meshyWalk), $"{AnimDir}/Brawl_{title}_Walk.anim", true);
-            idle = CloneClip(FindClip($"{FightDir}/{robot}-rigged.glb"),
-                $"{AnimDir}/Brawl_{title}_Idle.anim", true);
-        }
-        else
-        {
-            // The FPS walker's forged clips are already standalone assets on
-            // this exact skeleton — reference them, don't re-clone.
-            walk = AssetDatabase.LoadAssetAtPath<AnimationClip>($"{AnimDir}/{title}_Walk.anim");
-            idle = AssetDatabase.LoadAssetAtPath<AnimationClip>($"{AnimDir}/{title}_Idle.anim");
-        }
+        // The walk is the one clip not baked from templates: Meshy's natural
+        // loop on the re-rigged track, the FPS walker's forged cycle otherwise.
+        AnimationClip walk = meshyTrack
+            ? CloneClip(FindClip(meshyWalk), $"{AnimDir}/Brawl_{title}_Walk.anim", true)
+            : AssetDatabase.LoadAssetAtPath<AnimationClip>($"{AnimDir}/{title}_Walk.anim");
         if (walk == null)
         {
             Debug.LogWarning($"[BrawlMoveForge] {robot}: no walk clip (import settled?) — skipping.");
@@ -161,8 +177,13 @@ public static class BrawlMoveForge
         }
 
         // ---- template bake against this robot's own rig ----
+        // The stance is baked here too and becomes the blend-tree idle: a
+        // fighter at rest holds a bladed guard, not the rig's mannequin rest
+        // pose — and every move clip starts and ends in that same stance, so
+        // transitions land instead of snapping.
         var instance = Object.Instantiate(source);
         Dictionary<string, AnimationClip> moves;
+        AnimationClip stance;
         try
         {
             instance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
@@ -172,6 +193,7 @@ public static class BrawlMoveForge
                 Debug.LogWarning($"[BrawlMoveForge] {robot}: rig joints not found — skipping.");
                 return false;
             }
+            stance = Bake(rig, $"Brawl_{title}_Stance", 1.6f, true, BrawlPoses.Stance);
             moves = BakeMoves(rig, title);
         }
         finally
@@ -188,7 +210,7 @@ public static class BrawlMoveForge
                 moves[MoveStateName(pair.Key)] = clip;
         }
 
-        var controller = BuildController($"{OutDir}/{robot}.controller", idle, walk, moves);
+        var controller = BuildController($"{OutDir}/{robot}.controller", stance, walk, moves);
 
         if (meshyTrack)
             SaveFighterPrefab(robot, source, controller);
