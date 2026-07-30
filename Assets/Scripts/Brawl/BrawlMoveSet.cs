@@ -96,6 +96,14 @@ public static class BrawlMoveSet
     public const float BodyHalfWidth = 0.45f;
     public const float BodyHeight = 1.85f;
 
+    /// <summary>
+    /// The strike's own volume around its bone: the wrist joint sits ~this
+    /// far behind the fist's surface, so contact is bone-to-column plus
+    /// this pad — without it, a glove visibly touching the chest can still
+    /// read as a miss.
+    /// </summary>
+    public const float StrikeRadius = 0.18f;
+
     // Template clip lengths for the states gameplay doesn't time-box.
     public const float HitClipTime = 0.30f;
     public const float KnockdownClipTime = 0.90f;

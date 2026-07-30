@@ -71,6 +71,12 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>Raised for every landed (non-blocked) hit: victim, damage, wasKnockdown.</summary>
     public System.Action<BrawlFighter, int, bool> OnHitLanded;
 
+    /// <summary>Raised on the ATTACKER when the defender's guard ate the hit.</summary>
+    public System.Action<BrawlFighter, BrawlMoveSet.Move> OnHitBlocked;
+
+    /// <summary>Raised when a strike's window closed without touching anyone.</summary>
+    public System.Action<BrawlMoveSet.Move> OnWhiffed;
+
     Transform _body;
     Animator _animator;
     Transform _handR;
@@ -351,7 +357,11 @@ public class BrawlFighter : MonoBehaviour
         }
 
         if (_moveTime >= _move.Duration)
+        {
+            if (!_moveHasHit && _move.move != BrawlMoveSet.Move.Blast)
+                OnWhiffed?.Invoke(_move.move);
             Phase = State.Neutral;
+        }
     }
 
     void TickBlocking()
@@ -455,11 +465,15 @@ public class BrawlFighter : MonoBehaviour
             return gap <= _move.range && dy <= band;
         }
 
+        // Bone-to-column plus the strike's own radius: the wrist bone sits
+        // behind the fist's surface, and without the pad a visibly touching
+        // glove still whiffs.
         Vector3 strike = effector.position;
         Vector3 root = target.transform.position;
-        return Mathf.Abs(strike.x - root.x) <= BrawlMoveSet.BodyHalfWidth
-               && strike.y >= root.y
-               && strike.y <= root.y + BrawlMoveSet.BodyHeight;
+        float reach = BrawlMoveSet.BodyHalfWidth + BrawlMoveSet.StrikeRadius;
+        return Mathf.Abs(strike.x - root.x) <= reach
+               && strike.y >= root.y - BrawlMoveSet.StrikeRadius
+               && strike.y <= root.y + BrawlMoveSet.BodyHeight + BrawlMoveSet.StrikeRadius;
     }
 
     public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker)
@@ -481,6 +495,7 @@ public class BrawlFighter : MonoBehaviour
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
             VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
+            attacker.OnHitBlocked?.Invoke(this, hit.move);
             return;
         }
 

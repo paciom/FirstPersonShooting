@@ -94,6 +94,9 @@ public class BrawlShow : MonoBehaviour
         _cameraRig.GetComponent<BrawlCamera>()
             .SetTargets(_fighter.transform, _fighter.transform);
 
+        // F3 works here too — the show is where volumes get inspected.
+        BrawlDebug.Attach(gameObject, _fighter);
+
         BuildCaptions();
         _acts = BuildActs();
         NextAct(+1);
