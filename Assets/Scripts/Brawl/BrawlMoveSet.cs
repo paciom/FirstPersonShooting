@@ -32,13 +32,16 @@ public static class BrawlMoveSet
         // outer gate); actual contact needs the striking limb inside the
         // defender's body column — see BrawlFighter.TryHit. Tuned to what
         // an extended arm/leg visually covers from the 0.9 m separation.
+        // Actives sized so the animation's contact moment sits mid-window
+        // (the analyzer aligns Meshy trims to the same fractions — see
+        // PEAK_FRACTION in meshyfight.py; drift there cost every hit).
         [Move.Punch] = new Data
         {
             move = Move.Punch,
             damage = 8,
             range = 1.2f,
             startup = 0.12f,
-            active = 0.10f,
+            active = 0.14f,
             recover = 0.20f,
         },
         [Move.Kick] = new Data
@@ -47,7 +50,7 @@ public static class BrawlMoveSet
             damage = 12,
             range = 1.45f,
             startup = 0.20f,
-            active = 0.12f,
+            active = 0.16f,
             recover = 0.28f,
         },
         // FlyKick's active window really ends at landing; `active` here is

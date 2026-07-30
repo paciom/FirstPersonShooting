@@ -278,6 +278,20 @@ EFFECTOR = {
     "flykick": "RightFoot", "blast": "RightHand",
 }
 
+# Where the CONTACT MOMENT must sit inside the trimmed clip, as a fraction:
+# the centre of each move's active window per BrawlMoveSet (startup +
+# active/2, over the move duration). The first symmetric trims put the
+# velocity peak at ~54% while the punch window closed at 52% — the fist
+# arrived just after the window shut, every time, and both AIs fought to
+# timeout on whiffs.
+PEAK_FRACTION = {
+    "punch": 0.42,     # (0.12 + 0.14/2) / 0.46
+    "kick": 0.44,      # (0.20 + 0.16/2) / 0.64
+    "highkick": 0.44,
+    "flykick": 0.39,   # early in the long airborne window
+    "blast": 0.50,
+}
+
 
 def _mat_mul(a, b):
     return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
@@ -381,8 +395,9 @@ def effector_track(path, effector_name, hz=60):
     return times_out, positions
 
 
-def strike_window(times, positions):
-    """[start, end] around the effector's peak speed — the strike itself."""
+def strike_window(times, positions, peak_fraction):
+    """[start, end] cut so the effector's speed peak — the contact moment —
+    sits at `peak_fraction` of the clip, where the gameplay window is."""
     speeds = [0.0]
     for i in range(1, len(positions)):
         a, b = positions[i - 1], positions[i]
@@ -393,22 +408,15 @@ def strike_window(times, positions):
               for i in range(len(speeds))]
 
     peak = max(range(len(smooth)), key=lambda i: smooth[i])
-    threshold = smooth[peak] * 0.30
-    lo = peak
-    while lo > 0 and smooth[lo] > threshold:
-        lo -= 1
-    hi = peak
-    while hi < len(smooth) - 1 and smooth[hi] > threshold:
-        hi += 1
-
-    start, end = times[lo] - 0.10, times[hi] + 0.12
-    # A window that swallowed the whole routine is a combo, not a strike:
-    # keep the tight band around the peak instead.
-    if end - start > 0.90:
-        start, end = times[peak] - 0.28, times[peak] + 0.24
-    if end - start < 0.35:
-        pad = (0.35 - (end - start)) / 2
-        start, end = start - pad, end + pad
+    length = 0.55
+    start = times[peak] - peak_fraction * length
+    end = start + length
+    # Clamp INSIDE the clip while keeping the peak at its fraction: shift,
+    # never shrink from one side only.
+    if start < 0.0:
+        start, end = 0.0, length
+    if end > times[-1]:
+        start, end = times[-1] - length, times[-1]
     return max(0.0, start), min(times[-1], end), times[peak], smooth[peak]
 
 
@@ -429,11 +437,13 @@ def analyze(names):
             if not os.path.exists(path):
                 continue
             times, positions = effector_track(path, effector)
-            start, end, peak, speed = strike_window(times, positions)
+            start, end, peak, speed = strike_window(
+                times, positions, PEAK_FRACTION.get(move, 0.45))
             existing[(name, move)] = f"{name} {move} {start:.2f} {end:.2f}"
+            frac = (peak - start) / max(1e-6, end - start)
             print(f"{name:9s} {move:9s} clip {times[-1]:5.2f}s  "
                   f"peak {peak:5.2f}s ({speed:4.1f} m/s {effector})  "
-                  f"-> trim [{start:.2f}, {end:.2f}]")
+                  f"-> trim [{start:.2f}, {end:.2f}] (peak at {frac:.0%})")
 
     with open(trim_path, "w") as handle:
         handle.write("# robot move start end — strike windows cut from Meshy\n"
