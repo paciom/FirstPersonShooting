@@ -140,7 +140,8 @@ public class ProductionQueue : MonoBehaviour
             ? CommanderCollector.BuildCollector(name, entry.modelPrefab, team, door, yaw)
             : CommanderUnit.Build<CommanderUnit>(name, entry.modelPrefab, entry.vehiclePrefab,
                 team, door, yaw, armed: true, secondaryWeapon: def.secondaryWeapon,
-                transformStages: entry.transformStages);
+                transformStages: entry.transformStages,
+                paintAnchorHue: entry.paintAnchorHue);
         def.ApplyTo(unit);
 
         VfxUtil.Explosion(door + Vector3.up * 1f, MatchAnnouncer.TeamColor(team), 0.8f);

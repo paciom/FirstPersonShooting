@@ -18,12 +18,14 @@ public static class CommanderArmy
     {
         GameObject model = null, vehicle = null;
         GameObject[] stages = null;
+        float anchorHue = -1f;
         if (roster != null && roster.HasRobots)
         {
             var entry = roster.Get(0);
             model = entry.modelPrefab;
             vehicle = entry.vehiclePrefab;
             stages = entry.transformStages;
+            anchorHue = entry.paintAnchorHue;
         }
 
         for (int team = 0; team < 2; team++)
@@ -43,7 +45,7 @@ public static class CommanderArmy
                     forward * (11f + rank * 2.2f));
                 CommanderUnit.Build<CommanderUnit>($"CmdUnit{team}_{i}", model, vehicle,
                     team, pos, yaw, armed: true, secondaryWeapon: "plasma",
-                    transformStages: stages);
+                    transformStages: stages, paintAnchorHue: anchorHue);
             }
 
             // Two collectors, offset east and west so each picks the safe

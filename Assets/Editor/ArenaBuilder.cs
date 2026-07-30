@@ -230,6 +230,92 @@ public static class ArenaBuilder
             ?? LoadModel($"{name}-robot");
     }
 
+    /// <summary>
+    /// A robot's dominant hue (0–1), for TeamPaint's away-team repaint, or 0 if
+    /// it cannot be measured.
+    ///
+    /// Measured here rather than hand-tabled so a robot added later is handled
+    /// without anyone remembering to write a number down. Build time is the right
+    /// place: the glTF albedo is not CPU-readable in a player, so this reads it
+    /// through a RenderTexture — a stall that would matter at runtime and is
+    /// irrelevant during a scene build.
+    ///
+    /// Histogrammed by hue over saturated pixels, and the MODE is taken rather
+    /// than the mean. A circular mean of a blue-and-yellow robot lands in green,
+    /// which is a colour it does not contain; the mode lands on whichever of the
+    /// two actually covers more of the model.
+    /// </summary>
+    static float DominantHue(GameObject prefab)
+    {
+        var albedo = FindAlbedo(prefab);
+        if (albedo == null)
+            return 0f;
+
+        const int Sample = 96;
+        var rt = RenderTexture.GetTemporary(Sample, Sample, 0, RenderTextureFormat.ARGB32,
+            RenderTextureReadWrite.sRGB);
+        var readable = new Texture2D(Sample, Sample, TextureFormat.RGBA32, false, false);
+        var previous = RenderTexture.active;
+        try
+        {
+            Graphics.Blit(albedo, rt);
+            RenderTexture.active = rt;
+            readable.ReadPixels(new Rect(0, 0, Sample, Sample), 0, 0);
+            readable.Apply(false);
+        }
+        finally
+        {
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(rt);
+        }
+
+        const int Buckets = 36;
+        var histogram = new int[Buckets];
+        foreach (var pixel in readable.GetPixels())
+        {
+            Color.RGBToHSV(pixel, out float hue, out float saturation, out float value);
+            if (saturation < 0.35f || value < 0.15f)
+                continue;   // plating and shadow carry no hue worth counting
+            histogram[Mathf.Clamp((int)(hue * Buckets), 0, Buckets - 1)]++;
+        }
+        UnityEngine.Object.DestroyImmediate(readable);
+
+        int best = -1, bestCount = 0;
+        for (int i = 0; i < Buckets; i++)
+            if (histogram[i] > bestCount)
+            {
+                bestCount = histogram[i];
+                best = i;
+            }
+        if (best < 0)
+            return 0f;   // greyscale robot: nothing to pivot on
+
+        return (best + 0.5f) / Buckets;
+    }
+
+    /// <summary>First albedo texture on any renderer under a prefab.</summary>
+    static Texture FindAlbedo(GameObject prefab)
+    {
+        string[] properties = { "baseColorTexture", "_BaseMap", "_MainTex" };
+        foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+        {
+            foreach (var material in renderer.sharedMaterials)
+            {
+                if (material == null)
+                    continue;
+                foreach (string property in properties)
+                {
+                    if (!material.HasProperty(property))
+                        continue;
+                    var texture = material.GetTexture(property);
+                    if (texture != null)
+                        return texture;
+                }
+            }
+        }
+        return null;
+    }
+
     /// <summary>Ground-vehicle form for a roster robot, or null if it has none.</summary>
     static GameObject LoadVehicleModel(string name)
     {
@@ -981,6 +1067,7 @@ public static class ArenaBuilder
                 transformStages = LoadTransformStages(robot),
                 transformVideo = AssetDatabase.LoadAssetAtPath<UnityEngine.Video.VideoClip>(
                     $"Assets/Video/{robot}-transform.mp4"),
+                paintAnchorHue = DominantHue(prefab),
             };
             if (file == $"{DefaultRobot}-robot")
                 entries.Insert(0, entry);

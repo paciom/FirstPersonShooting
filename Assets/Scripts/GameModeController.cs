@@ -408,7 +408,7 @@ public class GameModeController : MonoBehaviour
 
         if (hasModel)
         {
-            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+            RobotFactory.Reskin(body, entry.modelPrefab, tint, entry.paintAnchorHue);
         }
         else
         {
@@ -416,7 +416,7 @@ public class GameModeController : MonoBehaviour
             var placeholder = body.GetComponent<MeshRenderer>();
             if (placeholder != null)
                 placeholder.enabled = false;
-            RobotFactory.InstantiateNormalized(entry.modelPrefab, body, tint);
+            RobotFactory.InstantiateNormalized(entry.modelPrefab, body, tint, entry.paintAnchorHue);
         }
 
         var skin = body.GetComponent<VehicleSkin>();
@@ -425,6 +425,9 @@ public class GameModeController : MonoBehaviour
             skin = body.gameObject.AddComponent<VehicleSkin>();
             skin.holder = body;
         }
+        // Set before either branch: both configure calls rebuild the models,
+        // and each one repaints as it goes.
+        skin.paintAnchorHue = entry.paintAnchorHue;
         if (entry.HasStages)
             skin.SetStages(entry.transformStages, tint);
         else
@@ -463,7 +466,7 @@ public class GameModeController : MonoBehaviour
             if (body == null)
                 continue;
             Color tint = MatchAnnouncer.TeamColor(team);
-            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+            RobotFactory.Reskin(body, entry.modelPrefab, tint, entry.paintAnchorHue);
 
             // A different robot transforms into a different vehicle. Rebuilt
             // after the reskin so it measures against the new robot's height.
@@ -474,6 +477,7 @@ public class GameModeController : MonoBehaviour
             var skin = body.GetComponent<VehicleSkin>();
             if (skin != null)
             {
+                skin.paintAnchorHue = entry.paintAnchorHue;
                 if (entry.HasStages)
                     skin.SetStages(entry.transformStages, tint);
                 else

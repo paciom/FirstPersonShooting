@@ -62,6 +62,14 @@ public class CommanderUnit : MonoBehaviour
     [SerializeField] GameObject _vehiclePrefab;
     [SerializeField] GameObject[] _stages;
     [SerializeField] Color _tint;
+
+    /// <summary>
+    /// Dominant hue of this unit's robot, for the away-team repaint. Serialized
+    /// alongside the tint it travels with, so a unit cloned as a reinforcement
+    /// repaints the same way its template did. Negative falls back to the home
+    /// team's own hue, which barely moves a warm-dominant robot — see TeamPaint.
+    /// </summary>
+    [SerializeField] float _paintAnchorHue = -1f;
     [SerializeField] bool _vehicleForm;
     [SerializeField] float _robotSpeed;
     Coroutine _morphRoutine;
@@ -152,7 +160,7 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     public static T Build<T>(string name, GameObject modelPrefab, GameObject vehiclePrefab,
         int teamId, Vector3 position, float yaw, bool armed, string secondaryWeapon,
-        GameObject[] transformStages = null)
+        GameObject[] transformStages = null, float paintAnchorHue = -1f)
         where T : CommanderUnit
     {
         Color tint = MatchAnnouncer.TeamColor(teamId);
@@ -229,6 +237,7 @@ public class CommanderUnit : MonoBehaviour
         unit._vehiclePrefab = vehiclePrefab;
         unit._stages = transformStages;
         unit._tint = tint;
+        unit._paintAnchorHue = paintAnchorHue;
 
         return unit;
     }
@@ -780,7 +789,7 @@ public class CommanderUnit : MonoBehaviour
             -centre.x * scale,
             -bottom.y * scale - _body.localPosition.y,
             -centre.z * scale);
-        TeamPaint.Apply(renderers, _tint);
+        TeamPaint.Apply(renderers, _tint, TeamPaint.DefaultSize, false, _paintAnchorHue);
     }
 
     /// <summary>

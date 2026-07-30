@@ -39,6 +39,14 @@ public class VehicleSkin : MonoBehaviour
              "screen's card previews drop it to TeamPaint.CardSize.")]
     public int paintSize;
 
+    /// <summary>
+    /// Dominant hue of the robot these forms belong to, for the away-team
+    /// repaint — see TeamPaint. Negative falls back to the home team's hue,
+    /// which under-paints a warm-dominant robot. Set alongside
+    /// <see cref="paintSize"/> from the roster entry.
+    /// </summary>
+    public float paintAnchorHue = -1f;
+
     [Tooltip("Vehicle height as a fraction of the standing robot's height.")]
     [Range(0.2f, 1.5f)] public float heightFraction = 0.62f;
 
@@ -377,6 +385,6 @@ public class VehicleSkin : MonoBehaviour
     /// </summary>
     void Tint(Renderer[] renderers, int size)
     {
-        TeamPaint.Apply(renderers, tint, size);
+        TeamPaint.Apply(renderers, tint, size, false, paintAnchorHue);
     }
 }

@@ -272,7 +272,8 @@ public static class RobotSelectMenu
                 {
                     var model = Object.Instantiate(roster.robots[i].modelPrefab, spin.transform);
                     NormalizeToCenter(model, spin.transform);
-                    TeamPaint.Apply(model, teamColor, TeamPaint.CardSize);
+                    TeamPaint.Apply(model, teamColor, TeamPaint.CardSize, false,
+                        roster.robots[i].paintAnchorHue);
                 }
 
                 // Added after the model, so VehicleSkin's Start finds it to measure against.
@@ -282,6 +283,7 @@ public static class RobotSelectMenu
                 skin.heightFraction = PreviewVehicleHeight;
                 skin.tint = teamColor;
                 skin.paintSize = TeamPaint.CardSize;
+                skin.paintAnchorHue = roster.robots[i].paintAnchorHue;
             }
 
             var camGo = new GameObject("PreviewCam");
@@ -376,7 +378,7 @@ public static class RobotSelectMenu
                 s == 0 ? 0f : StageYawOffset);
             // Every stage, not just the robot: a fold that starts cyan and ends
             // in the other team's tank would be worse than no paint at all.
-            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize);
+            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize, false, entry.paintAnchorHue);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();

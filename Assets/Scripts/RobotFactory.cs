@@ -49,13 +49,14 @@ public static class RobotFactory
     /// subtle team tint, and adds a glowing team ring underneath. Same rig
     /// contract as Build(), so DeRezEffect/HoverBob/ShieldBubble work unchanged.
     /// </summary>
-    public static Transform BuildFromModel(GameObject root, GameObject modelPrefab, Color teamTint, Material ringGlow)
+    public static Transform BuildFromModel(GameObject root, GameObject modelPrefab, Color teamTint,
+        Material ringGlow, float paintAnchorHue = -1f)
     {
         var body = new GameObject("Body").transform;
         body.SetParent(root.transform, false);
         body.localPosition = new Vector3(0f, 1.0f, 0f);
 
-        InstantiateNormalized(modelPrefab, body, teamTint);
+        InstantiateNormalized(modelPrefab, body, teamTint, paintAnchorHue);
 
         // Team marker under the robot for instant team readability on camera:
         // a crisp team-colored donut ring plus a faint wider glow wash — flat
@@ -100,7 +101,8 @@ public static class RobotFactory
     /// HoverBob / ShieldBubble reference is the Body transform itself, so the
     /// swap is invisible to them.
     /// </summary>
-    public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint)
+    public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint,
+        float paintAnchorHue = -1f)
     {
         for (int i = body.childCount - 1; i >= 0; i--)
         {
@@ -113,7 +115,7 @@ public static class RobotFactory
                 continue;
             Object.Destroy(child.gameObject);
         }
-        InstantiateNormalized(modelPrefab, body, teamTint);
+        InstantiateNormalized(modelPrefab, body, teamTint, paintAnchorHue);
     }
 
     /// <summary>
@@ -122,7 +124,8 @@ public static class RobotFactory
     /// glTF unit-conversion scale), recenters it, and repaints copies of its
     /// materials into the team's colors.
     /// </summary>
-    public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body, Color teamTint)
+    public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body,
+        Color teamTint, float paintAnchorHue = -1f)
     {
         var instance = Object.Instantiate(modelPrefab, body);
         instance.name = "Model";
@@ -161,7 +164,7 @@ public static class RobotFactory
             // Repaint copies of the imported materials into the team's colours —
             // never the shared import assets. See TeamPaint for why this is a
             // hue replacement rather than the colour multiply it grew out of.
-            TeamPaint.Apply(renderers, teamTint);
+            TeamPaint.Apply(renderers, teamTint, TeamPaint.DefaultSize, false, paintAnchorHue);
         }
         return instance;
     }
