@@ -186,13 +186,16 @@ Kung Fu Punch 96, Roundhouse Kick 207, Flying Fist Kick 94, High Kick 215,
 Block 138, Face Punch Reaction 174, Knock Down 187, Charged Spell Cast 125
 (the PHOTON BLAST cast), Victory Cheer 59.
 
-**Skeleton consistency rule:** fight clips must drive the *existing* forged
-prefabs' skeletons. The re-rig may not reproduce them exactly — so the probe
-(ranger: rig + punch + roundhouse + fly kick, ~14 credits) is downloaded and
-its joint paths diffed against the current rig before any fleet spend. If the
-new skeleton disagrees, the fallback is wholesale: refresh that robot's
-`-rig/-walk/-run` from the new rig output too, re-run the material fix and
-the walker forge, and everything shares one skeleton again.
+**Skeleton consistency rule — probe verdict (2026-07-30):** the re-rig
+reproduces the joint *paths* exactly (26 joints, identical names) but not the
+joint *placement*: ranger's Hips moved ~10 cm and some joint frames ~20°, so
+new clips would visibly distort the old mesh. Resolution: the Brawl fighter
+prefab is forged **entirely from the new rig's own outputs** — the rig task
+returns the rigged character *and* basic walking on the new skeleton, and
+every fight clip embeds the same textured model — so fighter mesh, walk and
+moves are self-consistent by construction, and the FPS prefabs are never
+touched. `download` fetches `-rigged` and `-walking` alongside the moves;
+`fixmeshymaterials.py` runs on all of them (same three defects as ever).
 
 `BrawlMoveForge` prefers `Fight/{robot}-{move}.glb` when present and falls
 back to the template bake — Meshy clips slot in per robot as they land, with

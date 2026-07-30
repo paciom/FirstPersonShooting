@@ -216,10 +216,16 @@ def status():
 
 # ------------------------------------------------------------------- download
 
-def pick_glb(urls):
-    """The animated/rigged GLB out of a harvested URL map — .glb keys first."""
+def pick_glb(urls, want=""):
+    """The animated GLB out of a harvested URL map.
+
+    `want` narrows by key substring — needed on rig tasks, where a plain
+    "first glb" match lands on running_armature_glb_url (armature-only, no
+    mesh: the 59 KB mistake this parameter exists to prevent).
+    """
     for key, url in sorted(urls.items()):
-        if "glb" in key.lower():
+        key = key.lower()
+        if "glb" in key and "armature" not in key and want in key:
             return url
     return None
 
@@ -231,11 +237,17 @@ def download(names):
     import urllib.request
     for name in names:
         entry = data.get(name, {})
-        rigged = pick_glb(entry.get("rig_urls", {}))
-        if rigged:
-            path = f"{OUT_DIR}/{name}-rigged.glb"
-            urllib.request.urlretrieve(rigged, path)
-            print(f"{name:9s} rigged    {os.path.getsize(path) / 1024:7.0f} KB")
+        rig_urls = entry.get("rig_urls", {})
+        # The rigged character and its basic walk both ride the new skeleton;
+        # the Brawl fighter prefab is forged from these, so the fight clips
+        # never have to agree with the ORIGINAL rig (they provably don't:
+        # ranger's re-rig moved Hips 10 cm and some joint frames 20°).
+        for suffix, want in (("rigged", "rigged_character"), ("walking", "walking_glb")):
+            url = pick_glb(rig_urls, want)
+            if url:
+                path = f"{OUT_DIR}/{name}-{suffix}.glb"
+                urllib.request.urlretrieve(url, path)
+                print(f"{name:9s} {suffix:9s} {os.path.getsize(path) / 1024:7.0f} KB")
         for move, record in sorted(entry.get("moves", {}).items()):
             url = pick_glb(record.get("urls", {}))
             if not url:
