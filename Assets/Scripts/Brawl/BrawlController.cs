@@ -1,0 +1,179 @@
+using System.Collections.Generic;
+using Unity.AI.Navigation;
+using UnityEngine;
+using UnityEngine.Rendering.Universal;
+
+/// <summary>
+/// Owns a Brawl session: swaps the arena world for the fight stage, spawns
+/// the two fighters, and hands the world back exactly as the menu expects it.
+///
+/// The world swap is CommanderController's, minus the NavMesh: deactivate
+/// every child of Environment, parent the stage there, and teardown destroys
+/// the stage and calls ArenaRuntime.Load(CurrentIndex) — one authority for
+/// world state. No bake in either direction: fighters move on a lane, not a
+/// mesh, and the arena reload at teardown does its own bake.
+/// </summary>
+public class BrawlController : MonoBehaviour
+{
+    public static BrawlController Instance { get; private set; }
+
+    public BrawlFighter Cyan { get; private set; }
+    public BrawlFighter Magenta { get; private set; }
+    public BrawlCamera Camera { get; private set; }
+
+    GameObject _stageRoot;
+    GameObject _cameraRig;
+    ArenaBlockManager _blockManager;
+
+    /// <summary>
+    /// FPS characters hidden for the duration — restored at teardown. NOT
+    /// readonly: a script recompile during Play serializes plain private
+    /// fields across the assembly reload but silently resets readonly ones,
+    /// and this list is the only record of a cast nothing else can bring
+    /// back (the same landmine Commander documents).
+    /// </summary>
+    List<GameObject> _hiddenCharacters = new List<GameObject>();
+
+    [SerializeField] int _cyanRobot;
+    [SerializeField] int _magentaRobot;
+
+    public static BrawlController Begin(GameModeController owner, RobotRoster roster,
+        int cyanRobot, int magentaRobot)
+    {
+        var go = new GameObject("Brawl");
+        go.transform.SetParent(owner.transform, false);
+        var controller = go.AddComponent<BrawlController>();
+        controller._cyanRobot = cyanRobot;
+        controller._magentaRobot = magentaRobot;
+        controller.Setup(roster);
+        return controller;
+    }
+
+    void Awake()
+    {
+        Instance = this;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
+    void Setup(RobotRoster roster)
+    {
+        // The FPS cast has no part in a duel. Caller (StartBrawl) has already
+        // run RestoreAllDeRez, so deactivating cannot strand a coroutine
+        // mid-de-rez or mid-fold.
+        var player = FindFirstObjectByType<PlayerBrain>();
+        if (player != null)
+            Hide(player.gameObject);
+        foreach (var bot in FindObjectsByType<AIBrain>(FindObjectsSortMode.None))
+            Hide(bot.gameObject);
+
+        // RegrowStrays would march a hidden HANGAR block back into the middle
+        // of the stage — same reason Commander switches it off.
+        _blockManager = FindFirstObjectByType<ArenaBlockManager>();
+        if (_blockManager != null)
+            _blockManager.enabled = false;
+
+        var surface = FindFirstObjectByType<NavMeshSurface>(FindObjectsInactive.Include);
+        Transform environment = surface != null ? surface.transform : null;
+        if (environment != null)
+        {
+            // Deactivate BEFORE building, so the stage itself is never on the
+            // list of things we turned off.
+            foreach (Transform child in environment)
+                child.gameObject.SetActive(false);
+        }
+
+        _stageRoot = BrawlStage.Build(environment);
+
+        _cameraRig = BuildCameraRig();
+        Camera = _cameraRig.GetComponent<BrawlCamera>();
+
+        Cyan = BrawlFighter.Spawn(_stageRoot.transform, roster, _cyanRobot, 0);
+        Magenta = BrawlFighter.Spawn(_stageRoot.transform, roster, _magentaRobot, 1);
+        Cyan.Opponent = Magenta;
+        Magenta.Opponent = Cyan;
+
+        Camera.SetTargets(Cyan.transform, Magenta.transform);
+    }
+
+    /// <summary>
+    /// Hand the world back. Called by GameModeController on the way to the
+    /// menu; destroys this object too, so a session is strictly one-shot.
+    /// </summary>
+    public void Teardown()
+    {
+        if (_cameraRig != null)
+            Destroy(_cameraRig);
+
+        // DestroyImmediate, not Destroy: ArenaRuntime.Load below re-bakes and
+        // (on a first-ever load) captures Environment's children as
+        // scene-authored geometry this same frame. A deferred destroy would
+        // leave the stage baked into the arena's mesh and captured as
+        // geometry to re-activate forever after. The fighters are children of
+        // the stage root, so they go with it.
+        if (_stageRoot != null)
+        {
+            DestroyImmediate(_stageRoot);
+            _stageRoot = null;
+        }
+
+        // Belt and braces for the recompile-during-Play landmine: the list
+        // survives a reload as a serialized field, but if it is empty anyway,
+        // re-derive it. Brawl is only ever entered from the menu, where the
+        // whole cast is active — so any inactive character at teardown is one
+        // this session hid.
+        if (_hiddenCharacters.Count == 0)
+        {
+            var player = FindFirstObjectByType<PlayerBrain>(FindObjectsInactive.Include);
+            if (player != null && !player.gameObject.activeSelf)
+                _hiddenCharacters.Add(player.gameObject);
+            foreach (var bot in FindObjectsByType<AIBrain>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (!bot.gameObject.activeSelf)
+                    _hiddenCharacters.Add(bot.gameObject);
+        }
+
+        foreach (var go in _hiddenCharacters)
+            if (go != null)
+                go.SetActive(true);
+        _hiddenCharacters.Clear();
+
+        if (_blockManager != null)
+            _blockManager.enabled = true;
+
+        // One call restores everything else: arena geometry, NavMesh,
+        // character placement, atmosphere, and the block manager's rescan.
+        ArenaRuntime.Load(ArenaRuntime.CurrentIndex);
+
+        Destroy(gameObject);
+    }
+
+    void Hide(GameObject character)
+    {
+        if (character == null || !character.activeSelf)
+            return;
+        character.SetActive(false);
+        _hiddenCharacters.Add(character);
+    }
+
+    GameObject BuildCameraRig()
+    {
+        var rig = new GameObject("BrawlCamera");
+        // Tagged so Camera.main keeps working while the player camera is
+        // inactive — FlashQuad billboarding and every screen helper read it.
+        rig.tag = "MainCamera";
+        var cam = rig.AddComponent<Camera>();
+        cam.fieldOfView = BrawlCamera.Fov;
+        // The frustum sees past the stage edges into nothing; clear to the
+        // same colour the backdrop resolves to so "nothing" reads as depth.
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = BrawlStage.VoidColor;
+        rig.AddComponent<AudioListener>();
+        var data = rig.AddComponent<UniversalAdditionalCameraData>();
+        data.renderPostProcessing = true;
+        rig.AddComponent<BrawlCamera>();
+        return rig;
+    }
+}

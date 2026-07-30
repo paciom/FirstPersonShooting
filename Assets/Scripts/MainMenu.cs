@@ -42,7 +42,8 @@ public static class MainMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
-        // Six buttons now reach y=-400: on ultrawide screens match-width
+        // Seven buttons still bottom out at y=-400 (the pitch tightened to
+        // 100 px when BRAWL arrived): on ultrawide screens match-width
         // scaling would shrink the reference height and clip the bottom row.
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
@@ -59,12 +60,13 @@ public static class MainMenu
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -225), new Vector2(800, 40));
 
-        // Both AI modes route through the robot select screen first.
+        // The AI modes and Brawl all route through the robot select screen.
         MakeButton(canvasGo.transform, "AI  v  AI", 200, () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeButton(canvasGo.transform, "PLAYER  v  AI", 80, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeButton(canvasGo.transform, "ONLINE  PVP", -40, () => OnlineMenu.Open(controller, canvasGo));
-        MakeButton(canvasGo.transform, "COMMANDER", -160, controller.StartCommander);
-        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -280, controller.StartCommanderWar);
+        MakeButton(canvasGo.transform, "PLAYER  v  AI", 100, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
+        MakeButton(canvasGo.transform, "BRAWL", 0, () => controller.OpenRobotSelect(GameMode.Brawl));
+        MakeButton(canvasGo.transform, "ONLINE  PVP", -100, () => OnlineMenu.Open(controller, canvasGo));
+        MakeButton(canvasGo.transform, "COMMANDER", -200, controller.StartCommander);
+        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -300, controller.StartCommanderWar);
         MakeButton(canvasGo.transform, "ARENA  BUILDER", -400, controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
@@ -133,7 +135,8 @@ public static class MainMenu
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0, y);
-        rect.sizeDelta = new Vector2(460, 92);
+        // 88 tall on the 100 px pitch: seven rows breathe where 92 felt packed.
+        rect.sizeDelta = new Vector2(460, 88);
 
         var button = image.gameObject.AddComponent<Button>();
         button.targetGraphic = image;

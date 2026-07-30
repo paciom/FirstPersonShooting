@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -51,6 +51,7 @@ public class GameModeController : MonoBehaviour
     TreasureSpawner _treasureSpawner;
     GameObject _spectatorRig;
     CommanderController _commander;
+    BrawlController _brawl;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -227,6 +228,13 @@ public class GameModeController : MonoBehaviour
             _commander.Teardown();
             _commander = null;
         }
+        // Same contract as Commander: Teardown swaps the arena world back in
+        // before anything touches the characters.
+        if (_brawl != null)
+        {
+            _brawl.Teardown();
+            _brawl = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -261,7 +269,9 @@ public class GameModeController : MonoBehaviour
     {
         if (_roster == null || !_roster.HasRobots)
         {
-            if (mode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+            if (mode == GameMode.AIvAI) StartAIvAI();
+            else if (mode == GameMode.Brawl) StartBrawl();
+            else StartPlayerVsAI();
             return;
         }
 
@@ -286,6 +296,14 @@ public class GameModeController : MonoBehaviour
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
         CloseRobotSelect();
+        // Brawl skips both the arena screen and the FPS-cast reskin: the
+        // stage is its own set, and the fighters are spawned fresh from the
+        // roster rather than dressed onto the hidden bots.
+        if (_pendingMode == GameMode.Brawl)
+        {
+            StartBrawl();
+            return;
+        }
         ApplyRobotSelection();
         OpenArenaSelect();
     }
@@ -638,6 +656,27 @@ public class GameModeController : MonoBehaviour
             ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting — " +
                 "drag / WASD / wheel to take it   ·   ESC — Menu",
                 $"AI WAR — MAP #{seed}   ·   drag — pan   ·   pinch — zoom   ·   MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The versus mode: the two picked robots duel on the Brawl stage, best
+    /// of three. No arena select in front of it — the stage is its own set,
+    /// exactly as Commander's battlefield is.
+    /// </summary>
+    public void StartBrawl()
+    {
+        Mode = GameMode.Brawl;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("A / D — Move   ·   SPACE — Jump   ·   J — Punch   ·   K — Kick   ·   " +
+                    "S — Block   ·   ESC — Menu",
+                    "BRAWL   ·   tap MENU to go back");
         LockCursor(false);
     }
 
