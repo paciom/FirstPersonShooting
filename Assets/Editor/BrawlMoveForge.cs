@@ -54,8 +54,10 @@ public static class BrawlMoveForge
     /// v4: reaction knockdown + crouch-through get-up + whole adoption.
     /// v5: reactions play in place — the root owns all knockdown travel.
     /// v6: the in-place pin is the shared REST pose, not per-clip frame 0.
+    /// v7: the pin happens DURING the clone — post-CreateAsset curve edits
+    ///     were silently lost on save, so v5/v6 shipped unpinned clips.
     /// </summary>
-    const int TemplateVersion = 6;
+    const int TemplateVersion = 7;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -222,14 +224,23 @@ public static class BrawlMoveForge
             stance = meshyStance;
 
         // Trim entries win over whole adoption: they exist because a human
-        // (or the velocity analyzer) chose better.
+        // (or the velocity analyzer) chose better. Reaction states stay
+        // pinned in place no matter which path adopted them.
         foreach (var pair in Trims(robot))
         {
+            string state = MoveStateName(pair.Key);
             var clip = CloneTrimmed($"{FightDir}/{robot}-{pair.Key}.glb",
-                $"{AnimDir}/Brawl_{title}_{pair.Key}_meshy.anim", pair.Value);
+                $"{AnimDir}/Brawl_{title}_{pair.Key}_meshy.anim", pair.Value,
+                NeedsPin(state) ? restHips : (Vector3?)null);
             if (clip != null)
-                moves[MoveStateName(pair.Key)] = clip;
+                moves[state] = clip;
         }
+
+        // What actually plays comes off the DISK, so verify the saved
+        // assets: a drifting "in-place" reaction means teleporting robots.
+        foreach (var state in new[] { BrawlAnim.Knockdown, BrawlAnim.GetUp, BrawlAnim.Hit })
+            if (moves.TryGetValue(state, out var reaction))
+                WarnIfDrifting(robot, state, reaction);
 
         var controller = BuildController($"{OutDir}/{robot}.controller", stance, walk, moves);
 
@@ -302,11 +313,8 @@ public static class BrawlMoveForge
     static AnimationClip AdoptClip(string robot, string title, string key, bool loop,
         Vector3? pinHips = null)
     {
-        var clip = CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
-            $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop);
-        if (clip != null && pinHips.HasValue)
-            FlattenHorizontalHips(clip, pinHips.Value);
-        return clip;
+        return CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
+            $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop, pinHips);
     }
 
     static void AdoptWhole(string robot, string title, Dictionary<string, AnimationClip> moves,
@@ -323,35 +331,6 @@ public static class BrawlMoveForge
         }
     }
 
-    /// <summary>
-    /// Pins the Hips' horizontal channels to the SKELETON REST values,
-    /// keeping Y animated.
-    ///
-    /// WHY: Meshy reaction clips carry their travel IN the curves —
-    /// ranger's Shot_and_Blown_Back moves the hips 5.2 m backward, and
-    /// Stand_Up1 STARTS 0.85 m behind its own origin. The fighter's ROOT
-    /// never goes with either, so any per-clip constant becomes a visible
-    /// snap at the next transition (pinning to each clip's FIRST FRAME was
-    /// exactly that bug: the rise held the body 0.85 m off the root, then
-    /// leapt to the stance). One shared pin — the rest pose — means every
-    /// clip agrees horizontally at every seam, and BrawlFighter's knockback
-    /// slide owns all real travel, the same clips-in-place/motor-moves rule
-    /// as everywhere else (see MeshyWalkerForge).
-    /// </summary>
-    static void FlattenHorizontalHips(AnimationClip clip, Vector3 restHips)
-    {
-        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
-        {
-            if (!binding.path.EndsWith("Hips"))
-                continue;
-            float pin;
-            if (binding.propertyName == "m_LocalPosition.x") pin = restHips.x;
-            else if (binding.propertyName == "m_LocalPosition.z") pin = restHips.z;
-            else continue;
-            AnimationUtility.SetEditorCurve(clip, binding,
-                AnimationCurve.Constant(0f, Mathf.Max(clip.length, 0.01f), pin));
-        }
-    }
 
     static AnimationClip FindClip(string modelPath)
     {
@@ -368,7 +347,20 @@ public static class BrawlMoveForge
         return null;
     }
 
-    static AnimationClip CloneClip(AnimationClip source, string path, bool loop)
+    /// <summary>
+    /// Copies a clip; with <paramref name="pinHips"/> set, the Hips'
+    /// horizontal position channels are replaced by constants at the rest
+    /// values DURING the copy — the in-place conversion for Meshy reaction
+    /// clips, whose travel lives in the curves (blown-back: 5.2 m).
+    ///
+    /// Pinned here, at authoring time, and not afterwards: curve edits made
+    /// AFTER SaveClip's CreateAsset were silently lost on save, which
+    /// shipped clips that still travelled — the robots teleporting back to
+    /// where they were hit, twice. The constant must be part of the first
+    /// serialization.
+    /// </summary>
+    static AnimationClip CloneClip(AnimationClip source, string path, bool loop,
+        Vector3? pinHips = null)
     {
         if (source == null)
             return null;
@@ -378,11 +370,64 @@ public static class BrawlMoveForge
             frameRate = source.frameRate,
         };
         foreach (var binding in AnimationUtility.GetCurveBindings(source))
-            AnimationUtility.SetEditorCurve(clip, binding, AnimationUtility.GetEditorCurve(source, binding));
+        {
+            AnimationCurve curve;
+            if (pinHips.HasValue && PinValue(binding, pinHips.Value, out float pin))
+                curve = AnimationCurve.Constant(0f, Mathf.Max(source.length, 0.01f), pin);
+            else
+                curve = AnimationUtility.GetEditorCurve(source, binding);
+            AnimationUtility.SetEditorCurve(clip, binding, curve);
+        }
         var settings = AnimationUtility.GetAnimationClipSettings(clip);
         settings.loopTime = loop;
         AnimationUtility.SetAnimationClipSettings(clip, settings);
         return SaveClip(clip, path);
+    }
+
+    /// <summary>True when this binding is a Hips horizontal position channel.</summary>
+    static bool PinValue(EditorCurveBinding binding, Vector3 restHips, out float pin)
+    {
+        pin = 0f;
+        if (!binding.path.EndsWith("Hips"))
+            return false;
+        if (binding.propertyName == "m_LocalPosition.x") { pin = restHips.x; return true; }
+        if (binding.propertyName == "m_LocalPosition.z") { pin = restHips.z; return true; }
+        return false;
+    }
+
+    /// <summary>
+    /// The loud self-check: an "in-place" clip whose hips still drift is
+    /// exactly the silent failure that shipped teleporting robots. Reads
+    /// the saved ASSET back from disk, so it verifies what will actually
+    /// play, not the in-memory object.
+    /// </summary>
+    static void WarnIfDrifting(string robot, string state, AnimationClip clip)
+    {
+        if (clip == null)
+            return;
+        var saved = AssetDatabase.LoadAssetAtPath<AnimationClip>(AssetDatabase.GetAssetPath(clip));
+        if (saved == null)
+            return;
+        foreach (var binding in AnimationUtility.GetCurveBindings(saved))
+        {
+            if (!binding.path.EndsWith("Hips"))
+                continue;
+            if (binding.propertyName != "m_LocalPosition.x"
+                && binding.propertyName != "m_LocalPosition.z")
+                continue;
+            var curve = AnimationUtility.GetEditorCurve(saved, binding);
+            if (curve == null || curve.keys.Length == 0)
+                continue;
+            float lo = float.MaxValue, hi = float.MinValue;
+            foreach (var key in curve.keys)
+            {
+                lo = Mathf.Min(lo, key.value);
+                hi = Mathf.Max(hi, key.value);
+            }
+            if (hi - lo > 0.5f)   // rig units are centimetres
+                Debug.LogWarning($"[BrawlMoveForge] {robot} {state}: {binding.propertyName} " +
+                                 $"still drifts {hi - lo:0.0} cm — the in-place pin failed to stick!");
+        }
     }
 
     /// <summary>
@@ -391,7 +436,8 @@ public static class BrawlMoveForge
     /// (AnimationClipSettings start/stop is an importer concept; on a
     /// standalone generic .anim it does not reliably trim playback.)
     /// </summary>
-    static AnimationClip CloneTrimmed(string modelPath, string path, Vector2 range)
+    static AnimationClip CloneTrimmed(string modelPath, string path, Vector2 range,
+        Vector3? pinHips = null)
     {
         var source = FindClip(modelPath);
         if (source == null)
@@ -408,6 +454,12 @@ public static class BrawlMoveForge
         };
         foreach (var binding in AnimationUtility.GetCurveBindings(source))
         {
+            if (pinHips.HasValue && PinValue(binding, pinHips.Value, out float pin))
+            {
+                AnimationUtility.SetEditorCurve(clip, binding,
+                    AnimationCurve.Constant(0f, end - start, pin));
+                continue;
+            }
             var curve = AnimationUtility.GetEditorCurve(source, binding);
             var trimmed = new AnimationCurve();
             trimmed.AddKey(new Keyframe(0f, curve.Evaluate(start)));
@@ -488,6 +540,12 @@ public static class BrawlMoveForge
             default:
                 return 0f;
         }
+    }
+
+    /// <summary>States whose clips must play in place (the root owns travel).</summary>
+    static bool NeedsPin(string state)
+    {
+        return state == BrawlAnim.Knockdown || state == BrawlAnim.GetUp || state == BrawlAnim.Hit;
     }
 
     static string MoveStateName(string trimKey)
