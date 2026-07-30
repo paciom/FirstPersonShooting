@@ -73,6 +73,8 @@ public class BrawlFighter : MonoBehaviour
 
     Transform _body;
     Animator _animator;
+    Transform _handR;
+    Transform _footR;
     float _spawnX;
     Color _tint;
 
@@ -131,6 +133,12 @@ public class BrawlFighter : MonoBehaviour
                 fighterPrefab != null ? fighterPrefab : entry.modelPrefab, body, tint);
             fighter._animator = model.GetComponentInChildren<Animator>(true);
 
+            // Contact is judged where the fist and foot ACTUALLY are, so a
+            // hit can only land when the strike visually reaches — cache
+            // the effector bones (all Meshy rigs share the names).
+            fighter._handR = FindDeep(model.transform, "RightHand");
+            fighter._footR = FindDeep(model.transform, "RightFoot");
+
             var controller = Resources.Load<RuntimeAnimatorController>($"Brawl/{robot}");
             if (controller != null && fighter._animator != null)
                 fighter._animator.runtimeAnimatorController = controller;
@@ -156,6 +164,19 @@ public class BrawlFighter : MonoBehaviour
         }
 
         return fighter;
+    }
+
+    static Transform FindDeep(Transform root, string name)
+    {
+        if (root.name == name)
+            return root;
+        foreach (Transform child in root)
+        {
+            var hit = FindDeep(child, name);
+            if (hit != null)
+                return hit;
+        }
+        return null;
     }
 
     /// <summary>
@@ -380,6 +401,28 @@ public class BrawlFighter : MonoBehaviour
         Trigger(trigger);
     }
 
+    /// <summary>
+    /// The striking limb this move hits with, live — null outside a strike
+    /// (or when a rig is missing the bone). The F3 debug overlay draws it.
+    /// </summary>
+    public Transform ActiveEffector
+    {
+        get
+        {
+            if (Phase != State.Attacking && Phase != State.AirAttack)
+                return null;
+            if (_move.move == BrawlMoveSet.Move.Blast)
+                return null;   // the bolt is the effector
+            return _move.move == BrawlMoveSet.Move.Punch ? _handR : _footR;
+        }
+    }
+
+    /// <summary>True while the current move's hit window is open.</summary>
+    public bool AttackWindowOpen =>
+        (Phase == State.Attacking || Phase == State.AirAttack)
+        && _moveTime >= _move.startup
+        && _moveTime <= _move.startup + _move.active;
+
     void TryHit()
     {
         var target = Opponent;
@@ -389,18 +432,34 @@ public class BrawlFighter : MonoBehaviour
         target.TakeHit(_move, this);
     }
 
+    /// <summary>
+    /// A hit is contact, not proximity: the striking limb's bone must be
+    /// inside the defender's body column (±BodyHalfWidth around its centre,
+    /// over its height) while the window is open. The old centre-distance
+    /// check let a punch land across a metre of visible air; now what you
+    /// see reach is what hits. Range stays as a cheap outer gate and the
+    /// no-bone fallback.
+    /// </summary>
     bool InRange(BrawlFighter target)
     {
         float gap = Mathf.Abs(target.transform.position.x - transform.position.x);
-        if (gap > _move.range)
+        if (gap > _move.range + BrawlMoveSet.BodyHalfWidth)
             return false;
-        // Height band: a grounded punch can clip a low jumper (the anti-air),
-        // a grounded kick cannot; an airborne fly kick reaches anyone.
-        float dy = Mathf.Abs(target.transform.position.y - transform.position.y);
-        float band = _move.move == BrawlMoveSet.Move.Punch ? 1.4f
-                   : _move.move == BrawlMoveSet.Move.FlyKick ? 1.8f
-                   : 0.9f;
-        return dy <= band;
+
+        var effector = ActiveEffector;
+        if (effector == null)
+        {
+            // Capsule-less rig (or the blast): the tuned centre range.
+            float dy = Mathf.Abs(target.transform.position.y - transform.position.y);
+            float band = _move.move == BrawlMoveSet.Move.FlyKick ? 1.8f : 1.2f;
+            return gap <= _move.range && dy <= band;
+        }
+
+        Vector3 strike = effector.position;
+        Vector3 root = target.transform.position;
+        return Mathf.Abs(strike.x - root.x) <= BrawlMoveSet.BodyHalfWidth
+               && strike.y >= root.y
+               && strike.y <= root.y + BrawlMoveSet.BodyHeight;
     }
 
     public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker)

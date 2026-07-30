@@ -28,11 +28,15 @@ public static class BrawlMoveSet
 
     public static readonly Dictionary<Move, Data> Table = new Dictionary<Move, Data>
     {
+        // Ranges are the DECISION reach (what the AI closes to and the
+        // outer gate); actual contact needs the striking limb inside the
+        // defender's body column — see BrawlFighter.TryHit. Tuned to what
+        // an extended arm/leg visually covers from the 0.9 m separation.
         [Move.Punch] = new Data
         {
             move = Move.Punch,
             damage = 8,
-            range = 1.6f,
+            range = 1.2f,
             startup = 0.12f,
             active = 0.10f,
             recover = 0.20f,
@@ -41,7 +45,7 @@ public static class BrawlMoveSet
         {
             move = Move.Kick,
             damage = 12,
-            range = 2.0f,
+            range = 1.45f,
             startup = 0.20f,
             active = 0.12f,
             recover = 0.28f,
@@ -52,7 +56,7 @@ public static class BrawlMoveSet
         {
             move = Move.FlyKick,
             damage = 16,
-            range = 1.8f,
+            range = 1.5f,
             startup = 0.10f,
             active = 0.80f,
             recover = 0.25f,
@@ -83,6 +87,14 @@ public static class BrawlMoveSet
     public const float JumpVelocity = 7.5f;
     public const float Gravity = 22f;
     public const float MinSeparation = 0.9f;
+
+    /// <summary>
+    /// Half-width of the body column a strike must reach into — the
+    /// "hurtbox". A robot is ~0.9 m wide at the shoulders after height
+    /// normalization; F3 in a Brawl mode draws it.
+    /// </summary>
+    public const float BodyHalfWidth = 0.45f;
+    public const float BodyHeight = 1.85f;
 
     // Template clip lengths for the states gameplay doesn't time-box.
     public const float HitClipTime = 0.30f;

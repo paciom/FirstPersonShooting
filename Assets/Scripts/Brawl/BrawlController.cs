@@ -118,6 +118,8 @@ public class BrawlController : MonoBehaviour
         }
         gameObject.AddComponent<BrawlBrain>().Fighter = Magenta;
 
+        BrawlDebug.Attach(gameObject, Cyan, Magenta);
+
         Camera.SetTargets(Cyan.transform, Magenta.transform);
 
         string cyanName = DisplayName(roster, _cyanRobot, _playerControls ? "PLAYER" : "CYAN");
