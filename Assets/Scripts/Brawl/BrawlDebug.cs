@@ -57,12 +57,8 @@ public class BrawlDebug : MonoBehaviour
 
     string MoveName(BrawlFighter fighter)
     {
-        var effector = fighter.ActiveEffector;
-        if (effector == null)
-            return "BLAST";
-        if (fighter.Phase == BrawlFighter.State.AirAttack)
-            return "FLYKICK";
-        return effector.name == "RightHand" ? "PUNCH" : "KICK";
+        string name = fighter.CurrentVariant.display;
+        return string.IsNullOrEmpty(name) ? "STRIKE" : name;
     }
 
     void Log(string line)

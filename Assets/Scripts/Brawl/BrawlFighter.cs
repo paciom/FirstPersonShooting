@@ -86,7 +86,10 @@ public class BrawlFighter : MonoBehaviour
     Transform _body;
     Animator _animator;
     Transform _handR;
+    Transform _handL;
+    Transform _forearmR;
     Transform _footR;
+    Transform _footL;
     float _spawnX;
     Color _tint;
 
@@ -98,10 +101,14 @@ public class BrawlFighter : MonoBehaviour
 
     // ---- move in progress ----
     BrawlMoveSet.Data _move;
+    BrawlMoveSet.Variant _variant;
     float _moveTime;
     bool _moveHasHit;
     bool _boltFired;
     bool _grazedThisMove;
+
+    /// <summary>The face of the current move — display name, limb, trigger.</summary>
+    public BrawlMoveSet.Variant CurrentVariant => _variant;
 
     // ---- timers ----
     float _stunTime;
@@ -146,11 +153,15 @@ public class BrawlFighter : MonoBehaviour
                 fighterPrefab != null ? fighterPrefab : entry.modelPrefab, body, tint);
             fighter._animator = model.GetComponentInChildren<Animator>(true);
 
-            // Contact is judged where the fist and foot ACTUALLY are, so a
+            // Contact is judged where the striking limb ACTUALLY is, so a
             // hit can only land when the strike visually reaches — cache
-            // the effector bones (all Meshy rigs share the names).
+            // the effector bones (all Meshy rigs share the names). Left
+            // side too: the hook is a left-hand punch.
             fighter._handR = FindDeep(model.transform, "RightHand");
+            fighter._handL = FindDeep(model.transform, "LeftHand");
+            fighter._forearmR = FindDeep(model.transform, "RightForeArm");
             fighter._footR = FindDeep(model.transform, "RightFoot");
+            fighter._footL = FindDeep(model.transform, "LeftFoot");
 
             // Hurtboxes ride the bones, so a crumpled or kicking body is
             // hittable exactly where it visibly is.
@@ -285,11 +296,11 @@ public class BrawlFighter : MonoBehaviour
         if (intent.blast && Charge >= 1f)
         {
             Charge = 0f;
-            StartMove(BrawlMoveSet.Move.Blast, BrawlAnim.Blast);
+            StartMove(BrawlMoveSet.Move.Blast);
             return;
         }
-        if (intent.punch) { StartMove(BrawlMoveSet.Move.Punch, BrawlAnim.Punch); return; }
-        if (intent.kick) { StartMove(BrawlMoveSet.Move.Kick, BrawlAnim.Kick); return; }
+        if (intent.punch) { StartMove(BrawlMoveSet.Move.Punch); return; }
+        if (intent.kick) { StartMove(BrawlMoveSet.Move.Kick); return; }
         if (intent.jump)
         {
             Phase = State.Air;
@@ -308,6 +319,7 @@ public class BrawlFighter : MonoBehaviour
         {
             Phase = State.AirAttack;
             _move = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
+            _variant = BrawlMoveSet.FlyKickVariant;
             _moveTime = 0f;
             _moveHasHit = false;
             _grazedThisMove = false;
@@ -413,15 +425,24 @@ public class BrawlFighter : MonoBehaviour
 
     // ------------------------------------------------------------- attacks
 
-    void StartMove(BrawlMoveSet.Move which, string trigger)
+    /// <summary>
+    /// One button, many moves: the family's frame data always applies, but
+    /// WHICH punch or kick plays is rolled fresh every press.
+    /// </summary>
+    void StartMove(BrawlMoveSet.Move which)
     {
         Phase = State.Attacking;
         _move = BrawlMoveSet.Table[which];
+        var variants = BrawlMoveSet.VariantsOf(which);
+        _variant = variants != null
+            ? variants[Random.Range(0, variants.Length)]
+            : which == BrawlMoveSet.Move.Blast ? BrawlMoveSet.BlastVariant
+            : BrawlMoveSet.FlyKickVariant;
         _moveTime = 0f;
         _moveHasHit = false;
         _boltFired = false;
         _grazedThisMove = false;
-        Trigger(trigger);
+        Trigger(_variant.trigger);
     }
 
     /// <summary>
@@ -436,7 +457,14 @@ public class BrawlFighter : MonoBehaviour
                 return null;
             if (_move.move == BrawlMoveSet.Move.Blast)
                 return null;   // the bolt is the effector
-            return _move.move == BrawlMoveSet.Move.Punch ? _handR : _footR;
+            switch (_variant.limb)
+            {
+                case BrawlMoveSet.Limb.LeftHand: return _handL;
+                case BrawlMoveSet.Limb.RightForeArm: return _forearmR;
+                case BrawlMoveSet.Limb.LeftFoot: return _footL;
+                case BrawlMoveSet.Limb.RightFoot: return _footR;
+                default: return _handR;
+            }
         }
     }
 

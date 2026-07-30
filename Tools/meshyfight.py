@@ -55,8 +55,15 @@ ROBOTS = ("ranger", "titan", "scout", "hawk", "bolt",
 MOVES = {
     "stance":    89,    # Combat Stance        -> brawl idle
     "punch":     96,    # Kung Fu Punch
+    "jab":       192,   # Right Jab from Guard
+    "hook":      193,   # Left Hook from Guard  (LEFT hand!)
+    "uppercut":  194,   # Right Uppercut from Guard
+    "elbow":     212,   # Elbow Strike
     "kick":      207,   # Roundhouse Kick
-    "highkick":  215,   # High Kick            -> spare kick variant
+    "highkick":  215,   # High Kick
+    "sidekick":  206,   # Spartan Kick         -> the side-thrust kick
+    "lowkick":   213,   # Leg Sweep
+    "spinkick":  216,   # Lunge Spin Kick
     "flykick":   94,    # Flying Fist Kick
     "block":     138,   # Block1
     "hit":       174,   # Face Punch Reaction
@@ -274,8 +281,11 @@ def download(names):
 # Only the strike routines need trimming — reactions, rises and loops adopt
 # whole in the forge, so they stay out of this table.
 EFFECTOR = {
-    "punch": "RightHand", "highkick": "RightFoot", "kick": "RightFoot",
-    "flykick": "RightFoot", "blast": "RightHand",
+    "punch": "RightHand", "jab": "RightHand", "uppercut": "RightHand",
+    "hook": "LeftHand", "elbow": "RightForeArm",
+    "kick": "RightFoot", "highkick": "RightFoot", "sidekick": "RightFoot",
+    "lowkick": "RightFoot", "spinkick": "RightFoot", "flykick": "RightFoot",
+    "blast": "RightHand",
 }
 
 # Where the CONTACT MOMENT must sit inside the trimmed clip, as a fraction:
@@ -286,8 +296,9 @@ EFFECTOR = {
 # timeout on whiffs.
 PEAK_FRACTION = {
     "punch": 0.42,     # (0.12 + 0.14/2) / 0.46
+    "jab": 0.42, "hook": 0.42, "uppercut": 0.42, "elbow": 0.42,
     "kick": 0.44,      # (0.20 + 0.16/2) / 0.64
-    "highkick": 0.44,
+    "highkick": 0.44, "sidekick": 0.44, "lowkick": 0.44, "spinkick": 0.44,
     "flykick": 0.39,   # early in the long airborne window
     "blast": 0.50,
 }

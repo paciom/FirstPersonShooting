@@ -107,6 +107,65 @@ public static class BrawlMoveSet
     /// </summary>
     public const float StrikeRadius = 0.18f;
 
+    public enum Limb { RightHand, LeftHand, RightForeArm, RightFoot, LeftFoot }
+
+    /// <summary>
+    /// One face of a move family. J and K each fire a RANDOM variant of
+    /// their family — many martial moves on one kid-sized button — while
+    /// every variant shares the family's frame data, so variety costs no
+    /// balance. `meshyKey` names the Fight/&lt;robot&gt;-&lt;key&gt;.glb whose
+    /// capture replaces the template when it exists.
+    /// </summary>
+    public struct Variant
+    {
+        public string trigger;    // animator state + trigger
+        public string display;    // captions and the F3 log
+        public string meshyKey;   // Meshy clip / trim key
+        public Limb limb;         // which bone must reach the body
+
+        public Variant(string trigger, string display, string meshyKey, Limb limb)
+        {
+            this.trigger = trigger;
+            this.display = display;
+            this.meshyKey = meshyKey;
+            this.limb = limb;
+        }
+    }
+
+    public static readonly Variant[] PunchVariants =
+    {
+        new Variant("Punch", "KUNG FU PUNCH", "punch", Limb.RightHand),
+        new Variant("PunchJab", "JAB", "jab", Limb.RightHand),
+        new Variant("PunchHook", "HOOK", "hook", Limb.LeftHand),
+        new Variant("PunchUppercut", "UPPERCUT", "uppercut", Limb.RightHand),
+        new Variant("PunchElbow", "ELBOW STRIKE", "elbow", Limb.RightForeArm),
+    };
+
+    public static readonly Variant[] KickVariants =
+    {
+        new Variant("Kick", "ROUNDHOUSE KICK", "kick", Limb.RightFoot),
+        new Variant("KickHigh", "HIGH KICK", "highkick", Limb.RightFoot),
+        new Variant("KickSide", "SIDE KICK", "sidekick", Limb.RightFoot),
+        new Variant("KickLow", "LOW SWEEP", "lowkick", Limb.RightFoot),
+        new Variant("KickSpin", "SPIN KICK", "spinkick", Limb.RightFoot),
+    };
+
+    public static readonly Variant FlyKickVariant =
+        new Variant("FlyKick", "FLYING KICK", "flykick", Limb.RightFoot);
+
+    public static readonly Variant BlastVariant =
+        new Variant("Blast", "PHOTON BLAST", "blast", Limb.RightHand);
+
+    public static Variant[] VariantsOf(Move family)
+    {
+        switch (family)
+        {
+            case Move.Punch: return PunchVariants;
+            case Move.Kick: return KickVariants;
+            default: return null;
+        }
+    }
+
     // Template clip lengths for the states gameplay doesn't time-box.
     public const float HitClipTime = 0.30f;
     public const float KnockdownClipTime = 0.90f;

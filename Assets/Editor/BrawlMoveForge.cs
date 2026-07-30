@@ -56,8 +56,10 @@ public static class BrawlMoveForge
     /// v6: the in-place pin is the shared REST pose, not per-clip frame 0.
     /// v7: the pin happens DURING the clone — post-CreateAsset curve edits
     ///     were silently lost on save, so v5/v6 shipped unpinned clips.
+    /// v8: punch/kick variant states (jab, hook, uppercut, elbow, high,
+    ///     side, low, spin) — one button, many moves.
     /// </summary>
-    const int TemplateVersion = 7;
+    const int TemplateVersion = 8;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -264,24 +266,48 @@ public static class BrawlMoveForge
         var fly = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
         var blast = BrawlMoveSet.Table[BrawlMoveSet.Move.Blast].Duration;
 
-        return new Dictionary<string, AnimationClip>
+        var moves = new Dictionary<string, AnimationClip>();
+        // Every variant of a family bakes to the family's duration — one
+        // button, many faces, identical frame data.
+        foreach (var variant in BrawlMoveSet.PunchVariants)
+            moves[variant.trigger] = Bake(rig, $"Brawl_{title}_{variant.trigger}",
+                punch, false, TemplatePose(variant.trigger));
+        foreach (var variant in BrawlMoveSet.KickVariants)
+            moves[variant.trigger] = Bake(rig, $"Brawl_{title}_{variant.trigger}",
+                kick, false, TemplatePose(variant.trigger));
+
+        moves[BrawlAnim.FlyKick] = Bake(rig, $"Brawl_{title}_FlyKick",
+            fly.startup + 0.35f + fly.recover, false, BrawlPoses.FlyKick);
+        moves[BrawlAnim.Block] = Bake(rig, $"Brawl_{title}_Block",
+            BrawlMoveSet.BlockClipTime, true, BrawlPoses.Block);
+        moves[BrawlAnim.Hit] = Bake(rig, $"Brawl_{title}_Hit",
+            BrawlMoveSet.HitClipTime, false, BrawlPoses.Hit);
+        moves[BrawlAnim.Knockdown] = Bake(rig, $"Brawl_{title}_Knockdown",
+            BrawlMoveSet.KnockdownClipTime, false, BrawlPoses.Knockdown);
+        moves[BrawlAnim.GetUp] = Bake(rig, $"Brawl_{title}_GetUp",
+            BrawlMoveSet.GetUpTime, false, BrawlPoses.GetUp);
+        moves[BrawlAnim.Victory] = Bake(rig, $"Brawl_{title}_Victory",
+            BrawlMoveSet.VictoryClipTime, true, BrawlPoses.Victory);
+        moves[BrawlAnim.Blast] = Bake(rig, $"Brawl_{title}_Blast", blast, false, BrawlPoses.Blast);
+        return moves;
+    }
+
+    static System.Action<BrawlPoseRig, float> TemplatePose(string trigger)
+    {
+        switch (trigger)
         {
-            [BrawlAnim.Punch] = Bake(rig, $"Brawl_{title}_Punch", punch, false, BrawlPoses.Punch),
-            [BrawlAnim.Kick] = Bake(rig, $"Brawl_{title}_Kick", kick, false, BrawlPoses.Kick),
-            [BrawlAnim.FlyKick] = Bake(rig, $"Brawl_{title}_FlyKick",
-                fly.startup + 0.35f + fly.recover, false, BrawlPoses.FlyKick),
-            [BrawlAnim.Block] = Bake(rig, $"Brawl_{title}_Block",
-                BrawlMoveSet.BlockClipTime, true, BrawlPoses.Block),
-            [BrawlAnim.Hit] = Bake(rig, $"Brawl_{title}_Hit",
-                BrawlMoveSet.HitClipTime, false, BrawlPoses.Hit),
-            [BrawlAnim.Knockdown] = Bake(rig, $"Brawl_{title}_Knockdown",
-                BrawlMoveSet.KnockdownClipTime, false, BrawlPoses.Knockdown),
-            [BrawlAnim.GetUp] = Bake(rig, $"Brawl_{title}_GetUp",
-                BrawlMoveSet.GetUpTime, false, BrawlPoses.GetUp),
-            [BrawlAnim.Victory] = Bake(rig, $"Brawl_{title}_Victory",
-                BrawlMoveSet.VictoryClipTime, true, BrawlPoses.Victory),
-            [BrawlAnim.Blast] = Bake(rig, $"Brawl_{title}_Blast", blast, false, BrawlPoses.Blast),
-        };
+            case "Punch": return BrawlPoses.Punch;
+            case "PunchJab": return BrawlPoses.Jab;
+            case "PunchHook": return BrawlPoses.Hook;
+            case "PunchUppercut": return BrawlPoses.Uppercut;
+            case "PunchElbow": return BrawlPoses.Elbow;
+            case "Kick": return BrawlPoses.Kick;
+            case "KickHigh": return BrawlPoses.KickHigh;
+            case "KickSide": return BrawlPoses.KickSide;
+            case "KickLow": return BrawlPoses.KickLow;
+            case "KickSpin": return BrawlPoses.KickSpin;
+            default: return BrawlPoses.Punch;
+        }
     }
 
     static AnimationClip Bake(BrawlPoseRig rig, string name, float duration, bool loop,
@@ -520,12 +546,15 @@ public static class BrawlMoveForge
     /// </summary>
     static float TargetDuration(string state)
     {
+        // Every variant of a family shares the family's window.
+        foreach (var variant in BrawlMoveSet.PunchVariants)
+            if (variant.trigger == state)
+                return BrawlMoveSet.Table[BrawlMoveSet.Move.Punch].Duration;
+        foreach (var variant in BrawlMoveSet.KickVariants)
+            if (variant.trigger == state)
+                return BrawlMoveSet.Table[BrawlMoveSet.Move.Kick].Duration;
         switch (state)
         {
-            case BrawlAnim.Punch:
-                return BrawlMoveSet.Table[BrawlMoveSet.Move.Punch].Duration;
-            case BrawlAnim.Kick:
-                return BrawlMoveSet.Table[BrawlMoveSet.Move.Kick].Duration;
             case BrawlAnim.FlyKick:
                 var fly = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
                 return fly.startup + 0.35f + fly.recover;
@@ -550,10 +579,14 @@ public static class BrawlMoveForge
 
     static string MoveStateName(string trimKey)
     {
+        foreach (var variant in BrawlMoveSet.PunchVariants)
+            if (variant.meshyKey == trimKey)
+                return variant.trigger;
+        foreach (var variant in BrawlMoveSet.KickVariants)
+            if (variant.meshyKey == trimKey)
+                return variant.trigger;
         switch (trimKey)
         {
-            case "punch": return BrawlAnim.Punch;
-            case "kick": case "highkick": return BrawlAnim.Kick;
             case "flykick": return BrawlAnim.FlyKick;
             case "block": return BrawlAnim.Block;
             case "hit": return BrawlAnim.Hit;
@@ -576,9 +609,14 @@ public static class BrawlMoveForge
         var controller = AnimatorController.CreateAnimatorControllerAtPath(path);
         controller.AddParameter(BrawlAnim.Speed, AnimatorControllerParameterType.Float);
         controller.AddParameter(BrawlAnim.Block, AnimatorControllerParameterType.Bool);
-        foreach (var trigger in new[] { BrawlAnim.Punch, BrawlAnim.Kick, BrawlAnim.FlyKick,
-                 BrawlAnim.Hit, BrawlAnim.Knockdown, BrawlAnim.GetUp, BrawlAnim.KO,
-                 BrawlAnim.Victory, BrawlAnim.Blast })
+        var triggers = new List<string>();
+        foreach (var variant in BrawlMoveSet.PunchVariants)
+            triggers.Add(variant.trigger);
+        foreach (var variant in BrawlMoveSet.KickVariants)
+            triggers.Add(variant.trigger);
+        triggers.AddRange(new[] { BrawlAnim.FlyKick, BrawlAnim.Hit, BrawlAnim.Knockdown,
+            BrawlAnim.GetUp, BrawlAnim.KO, BrawlAnim.Victory, BrawlAnim.Blast });
+        foreach (var trigger in triggers)
             controller.AddParameter(trigger, AnimatorControllerParameterType.Trigger);
 
         var machine = controller.layers[0].stateMachine;

@@ -102,9 +102,14 @@ public class BrawlShow : MonoBehaviour
         NextAct(+1);
     }
 
+    /// <summary>
+    /// The programme is generated from the SAME variant tables the fight
+    /// rolls its moves from, so a new martial art added to BrawlMoveSet
+    /// appears here with its name on the card, automatically.
+    /// </summary>
     Act[] BuildActs()
     {
-        return new[]
+        var acts = new List<Act>
         {
             new Act { caption = "FIGHTING  STANCE", sourceKey = "stance", duration = 3.0f },
             new Act
@@ -113,60 +118,69 @@ public class BrawlShow : MonoBehaviour
                 begin = show => show._animator.SetFloat(BrawlAnim.SpeedHash, BrawlMoveSet.WalkSpeed),
                 end = show => show._animator.SetFloat(BrawlAnim.SpeedHash, 0f),
             },
-            Strike("KUNG  FU  PUNCH", "punch", BrawlAnim.Punch, BrawlMoveSet.Move.Punch),
-            Strike("ROUNDHOUSE  KICK", "kick", BrawlAnim.Kick, BrawlMoveSet.Move.Kick),
-            Strike("FLYING  KICK", "flykick", BrawlAnim.FlyKick, BrawlMoveSet.Move.FlyKick),
-            new Act
-            {
-                caption = "GUARD", sourceKey = "block", duration = 2.2f,
-                begin = show => show._animator.SetBool(BrawlAnim.BlockHash, true),
-                end = show => show._animator.SetBool(BrawlAnim.BlockHash, false),
-            },
-            new Act
-            {
-                caption = "HIT  REACTION", sourceKey = "hit",
-                duration = BrawlMoveSet.HitClipTime + 1.2f,
-                begin = show => show._animator.SetTrigger(BrawlAnim.Hit),
-            },
-            new Act
-            {
-                caption = "KNOCKDOWN", sourceKey = "blownback",
-                duration = BrawlMoveSet.KnockdownClipTime + 1.0f,
-                knockbackSlide = 2.2f,
-                begin = show => show._animator.SetTrigger(BrawlAnim.Knockdown),
-            },
-            new Act
-            {
-                caption = "RISING", sourceKey = "getup",
-                duration = BrawlMoveSet.GetUpTime + 1.2f,
-                continuesPrevious = true,
-                begin = show => show._animator.SetTrigger(BrawlAnim.GetUp),
-            },
-            new Act
-            {
-                caption = "PHOTON  BLAST", sourceKey = "blast",
-                duration = BrawlMoveSet.Table[BrawlMoveSet.Move.Blast].Duration + 1.4f,
-                begin = show =>
-                {
-                    show._animator.SetTrigger(BrawlAnim.Blast);
-                    BrawlBolt.Fire(show._fighter, null, MatchAnnouncer.TeamColor(0));
-                },
-            },
-            new Act
-            {
-                caption = "VICTORY", sourceKey = "victory", duration = 2.8f,
-                begin = show => show._animator.SetTrigger(BrawlAnim.Victory),
-            },
         };
+
+        float punch = BrawlMoveSet.Table[BrawlMoveSet.Move.Punch].Duration;
+        float kick = BrawlMoveSet.Table[BrawlMoveSet.Move.Kick].Duration;
+        foreach (var variant in BrawlMoveSet.PunchVariants)
+            acts.Add(Strike(variant, punch));
+        foreach (var variant in BrawlMoveSet.KickVariants)
+            acts.Add(Strike(variant, kick));
+        acts.Add(Strike(BrawlMoveSet.FlyKickVariant,
+            BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick].startup + 0.35f + 0.25f));
+
+        acts.Add(new Act
+        {
+            caption = "GUARD", sourceKey = "block", duration = 2.2f,
+            begin = show => show._animator.SetBool(BrawlAnim.BlockHash, true),
+            end = show => show._animator.SetBool(BrawlAnim.BlockHash, false),
+        });
+        acts.Add(new Act
+        {
+            caption = "HIT  REACTION", sourceKey = "hit",
+            duration = BrawlMoveSet.HitClipTime + 1.2f,
+            begin = show => show._animator.SetTrigger(BrawlAnim.Hit),
+        });
+        acts.Add(new Act
+        {
+            caption = "KNOCKDOWN", sourceKey = "blownback",
+            duration = BrawlMoveSet.KnockdownClipTime + 1.0f,
+            knockbackSlide = 2.2f,
+            begin = show => show._animator.SetTrigger(BrawlAnim.Knockdown),
+        });
+        acts.Add(new Act
+        {
+            caption = "RISING", sourceKey = "getup",
+            duration = BrawlMoveSet.GetUpTime + 1.2f,
+            continuesPrevious = true,
+            begin = show => show._animator.SetTrigger(BrawlAnim.GetUp),
+        });
+        acts.Add(new Act
+        {
+            caption = "PHOTON  BLAST", sourceKey = "blast",
+            duration = BrawlMoveSet.Table[BrawlMoveSet.Move.Blast].Duration + 1.4f,
+            begin = show =>
+            {
+                show._animator.SetTrigger(BrawlAnim.Blast);
+                BrawlBolt.Fire(show._fighter, null, MatchAnnouncer.TeamColor(0));
+            },
+        });
+        acts.Add(new Act
+        {
+            caption = "VICTORY", sourceKey = "victory", duration = 2.8f,
+            begin = show => show._animator.SetTrigger(BrawlAnim.Victory),
+        });
+        return acts.ToArray();
     }
 
-    static Act Strike(string caption, string key, string trigger, BrawlMoveSet.Move move)
+    static Act Strike(BrawlMoveSet.Variant variant, float duration)
     {
+        string trigger = variant.trigger;
         return new Act
         {
-            caption = caption,
-            sourceKey = key,
-            duration = BrawlMoveSet.Table[move].Duration + 1.4f,
+            caption = variant.display.Replace(" ", "  "),
+            sourceKey = variant.meshyKey,
+            duration = duration + 1.4f,
             begin = show => show._animator.SetTrigger(trigger),
         };
     }
