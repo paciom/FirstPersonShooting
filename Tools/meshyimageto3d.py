@@ -47,6 +47,8 @@ TEXTURE_PROMPTS = {
              "trim, cyan light strips, clean flat panels, stylised toy finish"),
     "hawk": ("turquoise teal armour panels with golden yellow accents, dark "
              "grey tracks and gun barrel, clean flat panels, stylised toy finish"),
+    "knight": ("orange and white armour panels over dark charcoal, bright cyan "
+               "light strips, clean flat panels, stylised toy finish"),
 }
 
 LEGACY_STATE = {"ranger": f"{ROOT}/TransformerTest/tasks.json"}
