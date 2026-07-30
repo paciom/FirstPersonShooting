@@ -70,6 +70,10 @@ public static class ArenaBuilder
         // Must follow the walker forge: it solves against the prefabs and the
         // idle clips that forge produces, and patches the controller it built.
         TransformRigForge.ForgeIfMissing();
+        // And the Brawl moves ride on the same prefabs (or their re-rigged
+        // Meshy siblings); clips and controllers are plain assets loaded via
+        // Resources, so no scene serialization follows from this.
+        BrawlMoveForge.ForgeIfMissing();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 

@@ -40,9 +40,10 @@ RSP="$(cygpath -m "$(mktemp)")"
     echo "\"$(cygpath -m "$src")\""
   done
   if [ "$1" = "-e" ]; then
-    # Editor scripts additionally need the UnityEditor assemblies.
-    for dll in "$UNITY"/Data/Managed/UnityEditor.dll \
-               "$UNITY"/Data/Managed/UnityEditor/*.dll; do
+    # Editor scripts additionally need the UnityEditor assemblies — the
+    # MODULAR set only. Adding the monolithic UnityEditor.dll alongside it
+    # duplicates every type (CS0433 on MenuItem, AnimatorController, ...).
+    for dll in "$UNITY"/Data/Managed/UnityEditor/*.dll; do
       [ -f "$dll" ] && echo "-reference:\"$(cygpath -m "$dll")\""
     done
     find "$ROOT/Assets/Editor" -name '*.cs' | while read -r src; do
