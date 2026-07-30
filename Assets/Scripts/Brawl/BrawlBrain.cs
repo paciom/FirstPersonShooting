@@ -24,7 +24,7 @@ public class BrawlBrain : MonoBehaviour
     float _moveHeld;
     float _blockUntil;
     float _retreatUntil;
-    bool _punchOnce, _kickOnce, _jumpOnce;
+    bool _punchOnce, _kickOnce, _jumpOnce, _blastOnce;
     bool _flyKickQueued;
     BrawlFighter.State _lastPhase;
 
@@ -62,8 +62,9 @@ public class BrawlBrain : MonoBehaviour
             punch = _punchOnce,
             kick = _kickOnce,
             jump = _jumpOnce,
+            blast = _blastOnce,
         };
-        _punchOnce = _kickOnce = _jumpOnce = false;
+        _punchOnce = _kickOnce = _jumpOnce = _blastOnce = false;
 
         // The queued fly kick fires the frame the arc begins.
         if (_flyKickQueued && self.IsAirborne)
@@ -102,6 +103,16 @@ public class BrawlBrain : MonoBehaviour
         {
             _moveHeld = 0f;
             _blockUntil = Time.time + Random.Range(0.25f, 0.50f);
+            return;
+        }
+
+        // A loaded meter wants firing: from range, at a grounded target,
+        // with conviction proportional to aggression.
+        if (self.Charge >= 1f && !foe.IsAirborne && gap > punchRange
+            && Random.value < 0.25f + aggression * 0.4f)
+        {
+            _moveHeld = 0f;
+            _blastOnce = true;
             return;
         }
 

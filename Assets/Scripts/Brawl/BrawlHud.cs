@@ -47,6 +47,7 @@ public class BrawlHud : MonoBehaviour
         hud.BuildBars(canvasGo.transform, cyanName, magentaName);
         hud.BuildTimer(canvasGo.transform);
         hud.BuildAnnouncement(canvasGo.transform);
+        hud.BuildChargeMeters(canvasGo.transform);
         return hud;
     }
 
@@ -130,6 +131,49 @@ public class BrawlHud : MonoBehaviour
         rect.anchoredPosition = new Vector2(0f, 130f);
         rect.sizeDelta = new Vector2(1400, 140);
         _announcement.gameObject.SetActive(false);
+    }
+
+    RectTransform _cyanCharge, _magentaCharge;
+    Image _cyanChargeImage, _magentaChargeImage;
+    float _cyanChargeValue, _magentaChargeValue;
+
+    void BuildChargeMeters(Transform parent)
+    {
+        _cyanCharge = BuildCharge(parent, true, out _cyanChargeImage);
+        _magentaCharge = BuildCharge(parent, false, out _magentaChargeImage);
+    }
+
+    RectTransform BuildCharge(Transform parent, bool left, out Image fillImage)
+    {
+        float sign = left ? 1f : -1f;
+        var anchor = new Vector2(left ? 0f : 1f, 0f);
+
+        var back = MakeImage(parent, left ? "Charge_P1" : "Charge_P2", BarBack);
+        var backRect = back.rectTransform;
+        backRect.anchorMin = backRect.anchorMax = anchor;
+        backRect.pivot = anchor;
+        backRect.anchoredPosition = new Vector2(sign * 40f, 26f);
+        backRect.sizeDelta = new Vector2(320f, 16f);
+
+        var label = MakeText(parent, left ? "ChargeLabel_P1" : "ChargeLabel_P2",
+            "BLAST", 16, new Color(1f, 1f, 1f, 0.5f), FontStyle.Bold);
+        var labelRect = label.rectTransform;
+        labelRect.anchorMin = labelRect.anchorMax = anchor;
+        labelRect.pivot = anchor;
+        labelRect.anchoredPosition = new Vector2(sign * 44f, 46f);
+        labelRect.sizeDelta = new Vector2(200, 20);
+        label.alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
+
+        var fill = MakeFill(back.transform, "Fill", left ? HoloCyan : HoloMagenta, left);
+        fillImage = fill.GetComponent<Image>();
+        fill.localScale = new Vector3(0f, 1f, 1f);
+        return fill;
+    }
+
+    public void SetCharge(float cyan, float magenta)
+    {
+        _cyanChargeValue = cyan;
+        _magentaChargeValue = magenta;
     }
 
     // ---------------------------------------------------------------- API
@@ -219,6 +263,20 @@ public class BrawlHud : MonoBehaviour
             if (Time.time >= _announceUntil)
                 _announcement.gameObject.SetActive(false);
         }
+
+        UpdateCharge(_cyanCharge, _cyanChargeImage, _cyanChargeValue, HoloCyan);
+        UpdateCharge(_magentaCharge, _magentaChargeImage, _magentaChargeValue, HoloMagenta);
+    }
+
+    static void UpdateCharge(RectTransform fill, Image image, float value, Color baseColor)
+    {
+        if (fill == null)
+            return;
+        fill.localScale = new Vector3(Mathf.Clamp01(value), 1f, 1f);
+        // A full meter breathes white so READY reads from across the room.
+        image.color = value >= 1f
+            ? Color.Lerp(baseColor, Color.white, 0.4f + 0.4f * Mathf.PingPong(Time.time * 2.5f, 1f))
+            : baseColor;
     }
 
     float _cyanShownLerp = 1f, _magentaShownLerp = 1f;

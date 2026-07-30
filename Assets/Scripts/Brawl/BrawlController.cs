@@ -98,6 +98,7 @@ public class BrawlController : MonoBehaviour
 
         gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
         gameObject.AddComponent<BrawlBrain>().Fighter = Magenta;
+        gameObject.AddComponent<BrawlTouch>();
 
         Camera.SetTargets(Cyan.transform, Magenta.transform);
 
@@ -106,11 +107,30 @@ public class BrawlController : MonoBehaviour
             DisplayName(roster, _magentaRobot, "CPU"));
         gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud);
 
-        // Every landed hit thumps the camera; knockdowns thump harder.
-        System.Action<BrawlFighter, int, bool> thump =
-            (victim, damage, knockdown) => Camera.Kick(knockdown ? 0.16f : 0.07f);
+        // Every landed hit thumps the camera and freezes the world for a
+        // few hundredths — the hit-stop that makes contact feel like contact.
+        System.Action<BrawlFighter, int, bool> thump = (victim, damage, knockdown) =>
+        {
+            Camera.Kick(knockdown ? 0.16f : 0.07f);
+            HitStop(knockdown ? 0.11f : 0.05f);
+        };
         Cyan.OnHitLanded += thump;
         Magenta.OnHitLanded += thump;
+    }
+
+    // Realtime, because scaled time is exactly what a hit-stop stops.
+    float _hitStopUntil;
+
+    void HitStop(float seconds)
+    {
+        Time.timeScale = 0.06f;
+        _hitStopUntil = Time.realtimeSinceStartup + seconds;
+    }
+
+    void Update()
+    {
+        if (Time.timeScale < 1f && Time.realtimeSinceStartup >= _hitStopUntil)
+            Time.timeScale = 1f;
     }
 
     static string DisplayName(RobotRoster roster, int index, string fallback)
@@ -127,6 +147,9 @@ public class BrawlController : MonoBehaviour
     /// </summary>
     public void Teardown()
     {
+        // Never hand the menu a frozen world: Escape can land mid-hit-stop.
+        Time.timeScale = 1f;
+
         if (_cameraRig != null)
             Destroy(_cameraRig);
 

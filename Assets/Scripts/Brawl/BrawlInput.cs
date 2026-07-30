@@ -19,13 +19,18 @@ public class BrawlInput : MonoBehaviour
     {
         if (Fighter == null)
             return;
+        // Keyboard and touch merge here; either hand can drive any part.
         Fighter.Driven = new BrawlFighter.Intent
         {
-            move = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
-            jump = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W),
-            punch = Input.GetKeyDown(KeyCode.J),
-            kick = Input.GetKeyDown(KeyCode.K),
-            block = Input.GetKey(KeyCode.S),
+            move = Mathf.Clamp(
+                (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f)
+                + BrawlTouch.Move, -1f, 1f),
+            jump = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W)
+                   || BrawlTouch.ConsumeJump(),
+            punch = Input.GetKeyDown(KeyCode.J) || BrawlTouch.ConsumePunch(),
+            kick = Input.GetKeyDown(KeyCode.K) || BrawlTouch.ConsumeKick(),
+            block = Input.GetKey(KeyCode.S) || BrawlTouch.BlockHeld,
+            blast = Input.GetKeyDown(KeyCode.L) || BrawlTouch.ConsumeBlast(),
         };
     }
 }

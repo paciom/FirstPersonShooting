@@ -101,6 +101,7 @@ public class BrawlMatch : MonoBehaviour
                 _hud.SetTimer(_clock);
                 _hud.SetHealth(_cyan.Health / BrawlMoveSet.MaxHealth,
                                _magenta.Health / BrawlMoveSet.MaxHealth);
+                _hud.SetCharge(_cyan.Charge, _magenta.Charge);
                 if (_clock <= 0f)
                 {
                     _fallen = -1;

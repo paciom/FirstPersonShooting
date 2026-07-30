@@ -34,6 +34,7 @@ public class BrawlFighter : MonoBehaviour
         public bool punch;
         public bool kick;
         public bool block;   // held
+        public bool blast;   // the special — needs a full charge meter
     }
 
     public Intent Driven;
@@ -52,6 +53,13 @@ public class BrawlFighter : MonoBehaviour
     public State Phase { get; private set; } = State.Neutral;
     public float Health { get; private set; } = BrawlMoveSet.MaxHealth;
 
+    /// <summary>
+    /// The PHOTON BLAST meter, 0..1. Landing hits charges it; taking hits
+    /// charges it a little too (the comeback trickle). Persists between
+    /// rounds, Street Fighter style.
+    /// </summary>
+    public float Charge { get; private set; }
+
     /// <summary>+1 facing right (toward +X), -1 facing left.</summary>
     public float Facing { get; private set; } = 1f;
 
@@ -66,6 +74,7 @@ public class BrawlFighter : MonoBehaviour
     Transform _body;
     Animator _animator;
     float _spawnX;
+    Color _tint;
 
     // ---- motion ----
     float _verticalVelocity;
@@ -77,6 +86,7 @@ public class BrawlFighter : MonoBehaviour
     BrawlMoveSet.Data _move;
     float _moveTime;
     bool _moveHasHit;
+    bool _boltFired;
 
     // ---- timers ----
     float _stunTime;
@@ -103,6 +113,7 @@ public class BrawlFighter : MonoBehaviour
         fighter._body = body;
 
         Color tint = MatchAnnouncer.TeamColor(teamId);
+        fighter._tint = tint;
         var entry = (roster != null && roster.HasRobots)
             ? roster.Get(robotIndex)
             : default(RobotRoster.Entry);
@@ -231,6 +242,12 @@ public class BrawlFighter : MonoBehaviour
             SetBlock(true);
             return;
         }
+        if (intent.blast && Charge >= 1f)
+        {
+            Charge = 0f;
+            StartMove(BrawlMoveSet.Move.Blast, BrawlAnim.Blast);
+            return;
+        }
         if (intent.punch) { StartMove(BrawlMoveSet.Move.Punch, BrawlAnim.Punch); return; }
         if (intent.kick) { StartMove(BrawlMoveSet.Move.Kick, BrawlAnim.Kick); return; }
         if (intent.jump)
@@ -291,10 +308,25 @@ public class BrawlFighter : MonoBehaviour
     void TickAttack(float dt)
     {
         _moveTime += dt;
-        bool active = _moveTime >= _move.startup
-                      && _moveTime <= _move.startup + _move.active;
-        if (active && !_moveHasHit)
-            TryHit();
+
+        // The blast is a projectile, not a limb: it leaves the hands the
+        // moment startup ends and the melee window never applies.
+        if (_move.move == BrawlMoveSet.Move.Blast)
+        {
+            if (!_boltFired && _moveTime >= _move.startup)
+            {
+                _boltFired = true;
+                BrawlBolt.Fire(this, Opponent, _tint);
+            }
+        }
+        else
+        {
+            bool active = _moveTime >= _move.startup
+                          && _moveTime <= _move.startup + _move.active;
+            if (active && !_moveHasHit)
+                TryHit();
+        }
+
         if (_moveTime >= _move.Duration)
             Phase = State.Neutral;
     }
@@ -335,6 +367,7 @@ public class BrawlFighter : MonoBehaviour
         _move = BrawlMoveSet.Table[which];
         _moveTime = 0f;
         _moveHasHit = false;
+        _boltFired = false;
         Trigger(trigger);
     }
 
@@ -370,6 +403,8 @@ public class BrawlFighter : MonoBehaviour
         if (away == 0f)
             away = -attacker.Facing;
 
+        Vector3 chest = transform.position + new Vector3(-away * 0.35f, 1.2f, 0f);
+
         // A standing guard eats the hit: no damage (kid rules — no chip),
         // a shove instead of a stagger.
         if (Phase == State.Blocking && !IsAirborne)
@@ -377,11 +412,18 @@ public class BrawlFighter : MonoBehaviour
             _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 1.2f;
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
+            VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
             return;
         }
 
         Health = Mathf.Max(0f, Health - hit.damage);
         SetBlock(false);
+        VfxUtil.ImpactBurst(chest, new Color(1f, 0.9f, 0.6f));
+
+        // Dealing charges the meter fast, absorbing trickles it up — the
+        // robot getting beaten is quietly loading a comeback.
+        attacker.GainCharge(hit.damage / 55f);
+        GainCharge(hit.damage / 130f);
 
         bool knockdown = hit.move == BrawlMoveSet.Move.FlyKick
                          || hit.move == BrawlMoveSet.Move.Blast
@@ -391,6 +433,7 @@ public class BrawlFighter : MonoBehaviour
         if (Health <= 0f)
         {
             KnockOut();
+            VfxUtil.Explosion(transform.position + Vector3.up, _tint, 0.7f);
             OnKnockedOut?.Invoke(this);
             return;
         }
@@ -411,6 +454,11 @@ public class BrawlFighter : MonoBehaviour
             _knockbackVelocity = away * (BrawlMoveSet.HitKnockback / BrawlMoveSet.HitStun);
             Trigger(BrawlAnim.Hit);
         }
+    }
+
+    void GainCharge(float amount)
+    {
+        Charge = Mathf.Clamp01(Charge + amount);
     }
 
     // -------------------------------------------------------------- motion

@@ -682,7 +682,7 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         ShowOverlay("A / D — Move   ·   SPACE — Jump   ·   J — Punch   ·   K — Kick   ·   " +
-                    "S — Block   ·   ESC — Menu",
+                    "S — Block   ·   L — Blast   ·   ESC — Menu",
                     "BRAWL   ·   tap MENU to go back");
         LockCursor(false);
     }
