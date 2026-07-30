@@ -60,6 +60,9 @@ TEXTURE_PROMPTS = {
                 "stylised toy finish"),
     "titan": ("bright blue armour panels with bold yellow accents, dark charcoal "
               "tracks, clean flat panels, stylised toy finish"),
+    "scout": ("white and pale grey armour panels with light cyan accents, dark "
+              "charcoal tracks and gun barrel, clean flat panels, "
+              "stylised toy finish"),
 }
 
 LEGACY_STATE = {"ranger": f"{ROOT}/TransformerTest/tasks.json"}
