@@ -1,0 +1,6 @@
+# robot move start end — strike windows cut from Meshy
+# library routines; written by meshyfight.py analyze,
+# hand-tweak freely (the forge re-reads on next Play).
+ranger flykick 2.70 3.27
+ranger kick 0.97 1.49
+ranger punch 1.22 1.74

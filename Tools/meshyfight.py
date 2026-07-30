@@ -30,6 +30,7 @@ robot names — there is no "default everything" on paying commands.
   python meshyfight.py animate ranger punch kick flykick   # ~3 credits each
   python meshyfight.py animate ranger              # ... all ten moves
   python meshyfight.py download ranger             # -> Assets/Models/Meshy/Fight/
+  python meshyfight.py analyze ranger              # find strike windows -> fight_trims.txt
 """
 import base64
 import json
@@ -258,6 +259,186 @@ def download(names):
             print(f"{name:9s} {move:9s} {os.path.getsize(path) / 1024:7.0f} KB")
 
 
+# -------------------------------------------------------------------- analyze
+#
+# Meshy's library clips are full routines (ranger's Kung Fu Punch runs 7.3 s)
+# while a fighting-game strike needs ~half a second. The strike is findable
+# without eyes: forward-kinematics through the GLB at 60 Hz, track the
+# striking end-effector (fist for punches, foot for kicks), and the segment
+# around its peak speed IS the strike. Windows land in fight_trims.txt, which
+# BrawlMoveForge reads to cut the adopted clip.
+
+EFFECTOR = {
+    "punch": "RightHand", "highkick": "RightFoot", "kick": "RightFoot",
+    "flykick": "RightFoot", "blast": "RightHand", "hit": "Head",
+}
+
+
+def _mat_mul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def _trs(t, q, s):
+    x, y, z, w = q
+    # Row-major rotation from a glTF [x,y,z,w] quaternion, scaled and placed.
+    r = [
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ]
+    return [
+        [r[0][0] * s[0], r[0][1] * s[1], r[0][2] * s[2], t[0]],
+        [r[1][0] * s[0], r[1][1] * s[1], r[1][2] * s[2], t[1]],
+        [r[2][0] * s[0], r[2][1] * s[1], r[2][2] * s[2], t[2]],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
+
+def _floats(gltf, buffer, accessor_index):
+    import struct as _struct
+    from meshyretexture import accessor_bytes
+    data, acc = accessor_bytes(gltf, buffer, accessor_index)
+    count = {"VEC4": 4, "VEC3": 3, "SCALAR": 1}[acc["type"]]
+    return [list(_struct.unpack_from(f"<{count}f", data, i * count * 4))
+            if count > 1 else _struct.unpack_from("<f", data, i * 4)[0]
+            for i in range(acc["count"])]
+
+
+def _interp(times, values, t):
+    if t <= times[0]:
+        return values[0]
+    if t >= times[-1]:
+        return values[-1]
+    import bisect
+    hi = bisect.bisect_right(times, t)
+    lo = hi - 1
+    span = times[hi] - times[lo]
+    f = 0.0 if span <= 0 else (t - times[lo]) / span
+    a, b = values[lo], values[hi]
+    out = [ai + (bi - ai) * f for ai, bi in zip(a, b)]
+    if len(out) == 4:   # rotation: normalized lerp is fine at key density
+        # Antipodal pairs would wobble; flip to the near side first.
+        if sum(x * y for x, y in zip(a, b)) < 0:
+            out = [ai + (-bi - ai) * f for ai, bi in zip(a, b)]
+        norm = max(1e-8, sum(x * x for x in out) ** 0.5)
+        out = [x / norm for x in out]
+    return out
+
+
+def effector_track(path, effector_name, hz=60):
+    """(times, world positions) of one named joint through the whole clip."""
+    from meshyretexture import parse
+    gltf, buffer = parse(path)
+    nodes = gltf["nodes"]
+
+    parent = {}
+    for index, node in enumerate(nodes):
+        for child in node.get("children", ()):
+            parent[child] = index
+
+    channels = {}
+    anim = gltf["animations"][0]
+    duration = 0.0
+    for channel in anim["channels"]:
+        sampler = anim["samplers"][channel["sampler"]]
+        times = _floats(gltf, buffer, sampler["input"])
+        times = [t if isinstance(t, float) else t[0] for t in times]
+        values = _floats(gltf, buffer, sampler["output"])
+        channels.setdefault(channel["target"]["node"], {})[channel["target"]["path"]] = (times, values)
+        duration = max(duration, times[-1])
+
+    target = next(i for i, n in enumerate(nodes) if n.get("name") == effector_name)
+    chain = [target]
+    while chain[-1] in parent:
+        chain.append(parent[chain[-1]])
+    chain.reverse()
+
+    times_out, positions = [], []
+    steps = int(duration * hz)
+    for step in range(steps + 1):
+        t = step / hz
+        world = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+        for index in chain:
+            node = nodes[index]
+            tr = node.get("translation", [0, 0, 0])
+            ro = node.get("rotation", [0, 0, 0, 1])
+            sc = node.get("scale", [1, 1, 1])
+            animated = channels.get(index, {})
+            if "translation" in animated:
+                tr = _interp(*animated["translation"], t)
+            if "rotation" in animated:
+                ro = _interp(*animated["rotation"], t)
+            if "scale" in animated:
+                sc = _interp(*animated["scale"], t)
+            world = _mat_mul(world, _trs(tr, ro, sc))
+        times_out.append(t)
+        positions.append((world[0][3], world[1][3], world[2][3]))
+    return times_out, positions
+
+
+def strike_window(times, positions):
+    """[start, end] around the effector's peak speed — the strike itself."""
+    speeds = [0.0]
+    for i in range(1, len(positions)):
+        a, b = positions[i - 1], positions[i]
+        dt = times[i] - times[i - 1]
+        speeds.append(sum((bi - ai) ** 2 for ai, bi in zip(a, b)) ** 0.5 / max(dt, 1e-6))
+    # Light smoothing so a single noisy sample can't claim the peak.
+    smooth = [sum(speeds[max(0, i - 2):i + 3]) / len(speeds[max(0, i - 2):i + 3])
+              for i in range(len(speeds))]
+
+    peak = max(range(len(smooth)), key=lambda i: smooth[i])
+    threshold = smooth[peak] * 0.30
+    lo = peak
+    while lo > 0 and smooth[lo] > threshold:
+        lo -= 1
+    hi = peak
+    while hi < len(smooth) - 1 and smooth[hi] > threshold:
+        hi += 1
+
+    start, end = times[lo] - 0.10, times[hi] + 0.12
+    # A window that swallowed the whole routine is a combo, not a strike:
+    # keep the tight band around the peak instead.
+    if end - start > 0.90:
+        start, end = times[peak] - 0.28, times[peak] + 0.24
+    if end - start < 0.35:
+        pad = (0.35 - (end - start)) / 2
+        start, end = start - pad, end + pad
+    return max(0.0, start), min(times[-1], end), times[peak], smooth[peak]
+
+
+def analyze(names):
+    require_names(names, "analyze")   # free, but the same explicitness
+    trim_path = f"{ROOT}/Tools/fight_trims.txt"
+    existing = {}
+    if os.path.exists(trim_path):
+        with open(trim_path) as handle:
+            for line in handle:
+                parts = line.split()
+                if len(parts) == 4 and not line.lstrip().startswith("#"):
+                    existing[(parts[0], parts[1])] = line.rstrip()
+
+    for name in names:
+        for move, effector in EFFECTOR.items():
+            path = f"{OUT_DIR}/{name}-{move}.glb"
+            if not os.path.exists(path):
+                continue
+            times, positions = effector_track(path, effector)
+            start, end, peak, speed = strike_window(times, positions)
+            existing[(name, move)] = f"{name} {move} {start:.2f} {end:.2f}"
+            print(f"{name:9s} {move:9s} clip {times[-1]:5.2f}s  "
+                  f"peak {peak:5.2f}s ({speed:4.1f} m/s {effector})  "
+                  f"-> trim [{start:.2f}, {end:.2f}]")
+
+    with open(trim_path, "w") as handle:
+        handle.write("# robot move start end — strike windows cut from Meshy\n"
+                     "# library routines; written by meshyfight.py analyze,\n"
+                     "# hand-tweak freely (the forge re-reads on next Play).\n")
+        for key in sorted(existing):
+            handle.write(existing[key] + "\n")
+    print(f"wrote {trim_path}")
+
+
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "status"
     rest = sys.argv[2:]
@@ -269,5 +450,7 @@ if __name__ == "__main__":
         status()
     elif command == "download":
         download(rest)
+    elif command == "analyze":
+        analyze(rest)
     else:
         raise SystemExit(__doc__)

@@ -85,7 +85,7 @@ def accessor_bytes(gltf, buffer, index):
     view = gltf["bufferViews"][acc["bufferView"]]
     start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
     width = {5126: 4, 5125: 4, 5123: 2, 5121: 1}[acc["componentType"]]
-    count = {"VEC3": 3, "VEC2": 2, "SCALAR": 1}[acc["type"]]
+    count = {"VEC4": 4, "VEC3": 3, "VEC2": 2, "SCALAR": 1, "MAT4": 16}[acc["type"]]
     return buffer[start:start + acc["count"] * width * count], acc
 
 

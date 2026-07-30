@@ -50,8 +50,9 @@ public static class BrawlMoveForge
     /// leave no source-file timestamp IsStale can see, so this version —
     /// written beside the controllers — is how a stale bake gets caught on
     /// the next Play. v2: full-body kung fu chains + the stance idle.
+    /// v3: curve-level trim adoption + gameplay-window speed scaling.
     /// </summary>
-    const int TemplateVersion = 2;
+    const int TemplateVersion = 3;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -308,18 +309,45 @@ public static class BrawlMoveForge
         return SaveClip(clip, path);
     }
 
-    /// <summary>A Meshy sequence cut down to the [start,end] worth keeping.</summary>
+    /// <summary>
+    /// A Meshy sequence cut down to the [start,end] worth keeping — at the
+    /// CURVE level, keys re-timed to zero, boundaries sampled exactly.
+    /// (AnimationClipSettings start/stop is an importer concept; on a
+    /// standalone generic .anim it does not reliably trim playback.)
+    /// </summary>
     static AnimationClip CloneTrimmed(string modelPath, string path, Vector2 range)
     {
         var source = FindClip(modelPath);
         if (source == null)
             return null;
-        var clip = CloneClip(source, path, false);
+        float start = Mathf.Max(0f, range.x);
+        float end = Mathf.Min(source.length, range.y);
+        if (end - start < 0.05f)
+            return null;
+
+        var clip = new AnimationClip
+        {
+            name = Path.GetFileNameWithoutExtension(path),
+            frameRate = source.frameRate,
+        };
+        foreach (var binding in AnimationUtility.GetCurveBindings(source))
+        {
+            var curve = AnimationUtility.GetEditorCurve(source, binding);
+            var trimmed = new AnimationCurve();
+            trimmed.AddKey(new Keyframe(0f, curve.Evaluate(start)));
+            foreach (var key in curve.keys)
+                if (key.time > start + 1e-4f && key.time < end - 1e-4f)
+                    trimmed.AddKey(new Keyframe(key.time - start, key.value,
+                        key.inTangent, key.outTangent));
+            trimmed.AddKey(new Keyframe(end - start, curve.Evaluate(end)));
+            AnimationUtility.SetEditorCurve(clip, binding, trimmed);
+        }
+        clip.EnsureQuaternionContinuity();
+
         var settings = AnimationUtility.GetAnimationClipSettings(clip);
-        settings.startTime = range.x;
-        settings.stopTime = Mathf.Min(range.y, source.length);
+        settings.loopTime = false;
         AnimationUtility.SetAnimationClipSettings(clip, settings);
-        return clip;
+        return SaveClip(clip, path);
     }
 
     static AnimationClip SaveClip(AnimationClip clip, string path)
@@ -356,6 +384,32 @@ public static class BrawlMoveForge
                 result[parts[1]] = new Vector2(start, stop);
         }
         return result;
+    }
+
+    /// <summary>
+    /// How long each state's clip must take on screen. Zero means "play at
+    /// natural pace" — the loops and the victory pose.
+    /// </summary>
+    static float TargetDuration(string state)
+    {
+        switch (state)
+        {
+            case BrawlAnim.Punch:
+                return BrawlMoveSet.Table[BrawlMoveSet.Move.Punch].Duration;
+            case BrawlAnim.Kick:
+                return BrawlMoveSet.Table[BrawlMoveSet.Move.Kick].Duration;
+            case BrawlAnim.FlyKick:
+                var fly = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
+                return fly.startup + 0.35f + fly.recover;
+            case BrawlAnim.Blast:
+                return BrawlMoveSet.Table[BrawlMoveSet.Move.Blast].Duration;
+            case BrawlAnim.Hit:
+                return BrawlMoveSet.HitClipTime;
+            case BrawlAnim.Knockdown:
+                return BrawlMoveSet.KnockdownClipTime;
+            default:
+                return 0f;
+        }
     }
 
     static string MoveStateName(string trimKey)
@@ -409,6 +463,13 @@ public static class BrawlMoveForge
                 continue;   // block is a held bool, wired below
             var state = machine.AddState(pair.Key);
             state.motion = pair.Value;
+            // Gameplay windows are authoritative: an adopted Meshy segment
+            // plays fast or slow enough to land exactly on BrawlMoveSet's
+            // timing, so swapping clips never changes the feel.
+            float target = TargetDuration(pair.Key);
+            if (target > 0f && pair.Value.length > 0.01f
+                && Mathf.Abs(pair.Value.length - target) > 0.02f)
+                state.speed = pair.Value.length / target;
             var enter = machine.AddAnyStateTransition(state);
             enter.AddCondition(AnimatorConditionMode.If, 0f, pair.Key);
             enter.duration = 0.05f;
@@ -433,6 +494,7 @@ public static class BrawlMoveForge
 
                 var ko = machine.AddState(BrawlAnim.KO);
                 ko.motion = pair.Value;
+                ko.speed = state.speed;
                 var koEnter = machine.AddAnyStateTransition(ko);
                 koEnter.AddCondition(AnimatorConditionMode.If, 0f, BrawlAnim.KO);
                 koEnter.duration = 0.05f;
