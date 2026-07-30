@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -52,6 +52,7 @@ public class GameModeController : MonoBehaviour
     GameObject _spectatorRig;
     CommanderController _commander;
     BrawlController _brawl;
+    BrawlShow _brawlShow;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -235,6 +236,11 @@ public class GameModeController : MonoBehaviour
             _brawl.Teardown();
             _brawl = null;
         }
+        if (_brawlShow != null)
+        {
+            _brawlShow.Teardown();
+            _brawlShow = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -272,6 +278,7 @@ public class GameModeController : MonoBehaviour
             if (mode == GameMode.AIvAI) StartAIvAI();
             else if (mode == GameMode.Brawl) StartBrawl();
             else if (mode == GameMode.BrawlWar) StartBrawlWar();
+            else if (mode == GameMode.BrawlShow) StartBrawlShow();
             else StartPlayerVsAI();
             return;
         }
@@ -297,12 +304,15 @@ public class GameModeController : MonoBehaviour
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
         CloseRobotSelect();
-        // Brawl skips both the arena screen and the FPS-cast reskin: the
-        // stage is its own set, and the fighters are spawned fresh from the
-        // roster rather than dressed onto the hidden bots.
-        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar)
+        // The Brawl family skips both the arena screen and the FPS-cast
+        // reskin: the stage is its own set, and its robots are spawned
+        // fresh from the roster rather than dressed onto the hidden bots.
+        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar
+            || _pendingMode == GameMode.BrawlShow)
         {
-            if (_pendingMode == GameMode.Brawl) StartBrawl(); else StartBrawlWar();
+            if (_pendingMode == GameMode.Brawl) StartBrawl();
+            else if (_pendingMode == GameMode.BrawlWar) StartBrawlWar();
+            else StartBrawlShow();
             return;
         }
         ApplyRobotSelection();
@@ -663,9 +673,29 @@ public class GameModeController : MonoBehaviour
     /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the same select.</summary>
     public void RestartBrawlSelect()
     {
-        var variant = Mode == GameMode.BrawlWar ? GameMode.BrawlWar : GameMode.Brawl;
+        var variant = Mode == GameMode.BrawlWar ? GameMode.BrawlWar
+            : Mode == GameMode.BrawlShow ? GameMode.BrawlShow : GameMode.Brawl;
         EnterMenu();
         OpenRobotSelect(variant);
+    }
+
+    /// <summary>
+    /// The MARTIAL ARTS SHOW: the cyan pick alone on the stage, running its
+    /// whole repertoire with captions — the judging bench for every clip.
+    /// </summary>
+    public void StartBrawlShow()
+    {
+        Mode = GameMode.BrawlShow;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _brawlShow = BrawlShow.Begin(this, _roster, _cyanRobot);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("MARTIAL ARTS SHOW   ·   ← → — Move   ·   ESC — Menu",
+                    "MARTIAL ARTS SHOW   ·   tap MENU to go back");
+        LockCursor(false);
     }
 
     /// <summary>
