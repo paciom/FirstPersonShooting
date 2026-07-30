@@ -96,6 +96,8 @@ public class BrawlController : MonoBehaviour
         Cyan.Opponent = Magenta;
         Magenta.Opponent = Cyan;
 
+        gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
+
         Camera.SetTargets(Cyan.transform, Magenta.transform);
     }
 
