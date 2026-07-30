@@ -664,6 +664,13 @@ public class GameModeController : MonoBehaviour
     /// of three. No arena select in front of it — the stage is its own set,
     /// exactly as Commander's battlefield is.
     /// </summary>
+    /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the Brawl select.</summary>
+    public void RestartBrawlSelect()
+    {
+        EnterMenu();
+        OpenRobotSelect(GameMode.Brawl);
+    }
+
     public void StartBrawl()
     {
         Mode = GameMode.Brawl;

@@ -38,6 +38,15 @@ public class BrawlFighter : MonoBehaviour
 
     public Intent Driven;
 
+    /// <summary>
+    /// The referee's whistle: while locked (round intro, round end) the
+    /// driver's intent reads as nothing, but physics — knockback in flight,
+    /// a jump mid-arc — still resolves.
+    /// </summary>
+    public bool ControlsLocked { get; set; }
+
+    Intent Live => ControlsLocked ? default : Driven;
+
     public int TeamId { get; private set; }
     public BrawlFighter Opponent { get; set; }
     public State Phase { get; private set; } = State.Neutral;
@@ -214,30 +223,31 @@ public class BrawlFighter : MonoBehaviour
     void TickNeutral(float dt)
     {
         FaceOpponent();
+        var intent = Live;
 
-        if (Driven.block)
+        if (intent.block)
         {
             Phase = State.Blocking;
             SetBlock(true);
             return;
         }
-        if (Driven.punch) { StartMove(BrawlMoveSet.Move.Punch, BrawlAnim.Punch); return; }
-        if (Driven.kick) { StartMove(BrawlMoveSet.Move.Kick, BrawlAnim.Kick); return; }
-        if (Driven.jump)
+        if (intent.punch) { StartMove(BrawlMoveSet.Move.Punch, BrawlAnim.Punch); return; }
+        if (intent.kick) { StartMove(BrawlMoveSet.Move.Kick, BrawlAnim.Kick); return; }
+        if (intent.jump)
         {
             Phase = State.Air;
             _verticalVelocity = BrawlMoveSet.JumpVelocity;
-            _airVelocityX = Driven.move * BrawlMoveSet.WalkSpeed;
+            _airVelocityX = intent.move * BrawlMoveSet.WalkSpeed;
             return;
         }
 
-        Walk(Driven.move, dt);
+        Walk(intent.move, dt);
     }
 
     void TickAir(float dt, bool hot)
     {
         // A fly kick can start any time on the way up or down.
-        if (!hot && Driven.kick)
+        if (!hot && Live.kick)
         {
             Phase = State.AirAttack;
             _move = BrawlMoveSet.Table[BrawlMoveSet.Move.FlyKick];
@@ -292,7 +302,7 @@ public class BrawlFighter : MonoBehaviour
     void TickBlocking()
     {
         FaceOpponent();
-        if (!Driven.block)
+        if (!Live.block)
         {
             SetBlock(false);
             Phase = State.Neutral;
@@ -461,7 +471,7 @@ public class BrawlFighter : MonoBehaviour
     {
         if (_animator == null)
             return;
-        float target = Phase == State.Neutral ? Mathf.Abs(Driven.move) * BrawlMoveSet.WalkSpeed : 0f;
+        float target = Phase == State.Neutral ? Mathf.Abs(Live.move) * BrawlMoveSet.WalkSpeed : 0f;
         _animatorSpeed = Mathf.Lerp(_animatorSpeed, target, 1f - Mathf.Exp(-12f * dt));
         _animator.SetFloat(BrawlAnim.SpeedHash, _animatorSpeed);
     }

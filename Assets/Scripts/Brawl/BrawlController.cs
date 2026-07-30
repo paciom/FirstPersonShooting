@@ -99,6 +99,25 @@ public class BrawlController : MonoBehaviour
         gameObject.AddComponent<BrawlInput>().Fighter = Cyan;
 
         Camera.SetTargets(Cyan.transform, Magenta.transform);
+
+        var hud = BrawlHud.Build(transform,
+            DisplayName(roster, _cyanRobot, "PLAYER"),
+            DisplayName(roster, _magentaRobot, "CPU"));
+        gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud);
+
+        // Every landed hit thumps the camera; knockdowns thump harder.
+        System.Action<BrawlFighter, int, bool> thump =
+            (victim, damage, knockdown) => Camera.Kick(knockdown ? 0.16f : 0.07f);
+        Cyan.OnHitLanded += thump;
+        Magenta.OnHitLanded += thump;
+    }
+
+    static string DisplayName(RobotRoster roster, int index, string fallback)
+    {
+        if (roster == null || !roster.HasRobots)
+            return fallback;
+        var entry = roster.Get(index);
+        return string.IsNullOrEmpty(entry.displayName) ? fallback : entry.displayName;
     }
 
     /// <summary>
