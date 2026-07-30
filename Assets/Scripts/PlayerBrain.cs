@@ -154,6 +154,8 @@ public class PlayerBrain : MonoBehaviour
                     + "transform does nothing. Run Photon Arena → Forge Robot Transform Clips.");
             }
             _vehicle.Toggle();
+            if (_vehicle.CanTransform)
+                NetMatch.NotifyLocalTransform();
         }
 
         // Z zooms the sniper scope in and back out; it stacks with the X-Ray
@@ -171,7 +173,12 @@ public class PlayerBrain : MonoBehaviour
             bool firing = touch != null ? touch.Fire : Input.GetMouseButton(0);
             var weapon = ActiveWeapon();
             if (weapon != null && firing)
+            {
                 weapon.TryFire(aim.forward);
+                // Online PvP replicates fire intent, not hits — the other
+                // client replays this on the mirror pawn's own weapons.
+                NetMatch.NotifyLocalFire(_activeWeapon, aim.forward);
+            }
 
             if (scope != null)
                 scope.SetScoped(touch != null ? touch.Scope : Input.GetMouseButton(1));

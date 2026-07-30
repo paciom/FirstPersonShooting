@@ -47,6 +47,9 @@ public class OnlineMenuUi : MonoBehaviour
     Text _codeText;
     Text _statusText;
     InputField _joinField;
+    GameObject _startButton;
+    readonly System.Collections.Generic.List<GameObject> _preLinkUi =
+        new System.Collections.Generic.List<GameObject>();
 
     public void Init(GameObject mainMenuCanvas)
     {
@@ -56,6 +59,15 @@ public class OnlineMenuUi : MonoBehaviour
 
     void Update()
     {
+        // The match taking over is this screen's success exit: the arena is
+        // live behind us, the main menu stays hidden, the link stays up.
+        var controller = GameModeController.Instance;
+        if (controller != null && controller.Mode == GameMode.OnlinePvP)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         // Escape while typing a code just leaves the text box (the
         // InputField's own behavior) — it shouldn't also close the screen.
         if (Input.GetKeyDown(KeyCode.Escape)
@@ -69,9 +81,31 @@ public class OnlineMenuUi : MonoBehaviour
         if (session == null)
             return;
 
-        _codeText.text = session.IsHost && session.MatchCode.Length > 0
-            ? "MATCH  CODE:   " + session.MatchCode
-            : "";
+        bool linked = session.Status == NetStatus.Connected;
+        if (linked)
+            NetMatch.Ensure();
+        var match = NetMatch.Instance;
+
+        // Host/join controls give way to the start step once the link is up.
+        foreach (var go in _preLinkUi)
+            if (go != null && go.activeSelf == linked)
+                go.SetActive(!linked);
+        bool showStart = linked && session.IsHost
+            && match != null && match.State == NetMatch.MatchState.Idle;
+        if (_startButton.activeSelf != showStart)
+            _startButton.SetActive(showStart);
+
+        if (!linked)
+            _codeText.text = session.IsHost && session.MatchCode.Length > 0
+                ? "MATCH  CODE:   " + session.MatchCode
+                : "";
+        else if (session.IsHost)
+            _codeText.text = match != null && match.State != NetMatch.MatchState.Idle
+                ? "STARTING  MATCH…"
+                : "LINKED  —  READY  WHEN  YOU  ARE";
+        else
+            _codeText.text = "LINKED  —  WAITING  FOR  THE  HOST  TO  START…";
+
         _statusText.text = session.StatusLine;
         _statusText.color = session.Status == NetStatus.Failed
             ? new Color(1f, 0.45f, 0.4f)
@@ -104,15 +138,21 @@ public class OnlineMenuUi : MonoBehaviour
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -195), new Vector2(900, 36));
 
-        MakeButton(transform, "HOST  A  MATCH", 120, () => NetSession.Ensure().Host());
+        _preLinkUi.Add(
+            MakeButton(transform, "HOST  A  MATCH", 120, () => NetSession.Ensure().Host()));
 
         _codeText = MakeText(transform, "Code", "", 44, HoloCyan, FontStyle.Bold,
             new Vector2(0.5f, 0.5f), new Vector2(0, 40), new Vector2(900, 60));
 
-        MakeText(transform, "JoinLabel", "OR  TYPE  A  FRIEND'S  CODE", 20,
+        _preLinkUi.Add(MakeText(transform, "JoinLabel", "OR  TYPE  A  FRIEND'S  CODE", 20,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
-            new Vector2(0.5f, 0.5f), new Vector2(0, -40), new Vector2(600, 30));
+            new Vector2(0.5f, 0.5f), new Vector2(0, -40), new Vector2(600, 30)).gameObject);
         BuildJoinRow();
+
+        // The success path: appears for the host once the link is up.
+        _startButton = MakeButton(transform, "START  MATCH", -110,
+            () => NetMatch.Ensure().ProposeMatch());
+        _startButton.SetActive(false);
 
         _statusText = MakeText(transform, "Status", "", 26,
             new Color(1f, 1f, 1f, 0.7f), FontStyle.Normal,
@@ -173,9 +213,12 @@ public class OnlineMenuUi : MonoBehaviour
         joinButton.onClick.AddListener(() => NetSession.Ensure().Join(_joinField.text));
         MakeText(joinImage.transform, "Label", "JOIN", 30, Color.white, FontStyle.Bold,
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(160, 60));
+
+        _preLinkUi.Add(box.gameObject);
+        _preLinkUi.Add(joinImage.gameObject);
     }
 
-    void MakeButton(Transform parent, string label, float y, UnityEngine.Events.UnityAction onClick)
+    GameObject MakeButton(Transform parent, string label, float y, UnityEngine.Events.UnityAction onClick)
     {
         var image = MakeImage(parent, $"Button_{label}", ButtonColor);
         var rect = image.rectTransform;
@@ -200,6 +243,7 @@ public class OnlineMenuUi : MonoBehaviour
 
         MakeText(image.transform, "Label", label, 34, Color.white, FontStyle.Bold,
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(440, 80));
+        return image.gameObject;
     }
 
     static Image MakeImage(Transform parent, string name, Color color)

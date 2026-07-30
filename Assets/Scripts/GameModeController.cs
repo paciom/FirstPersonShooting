@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -136,7 +136,7 @@ public class GameModeController : MonoBehaviour
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
         // Never while the on-screen controls are up — they need a free cursor.
-        if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview)
+        if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview || Mode == GameMode.OnlinePvP)
             && !TouchControls.Active
             && Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
         {
@@ -212,6 +212,12 @@ public class GameModeController : MonoBehaviour
 
     public void EnterMenu()
     {
+        // Leaving an online match tells the other player before anything is
+        // torn down; a no-op in every other mode (and when the match already
+        // ended itself — NetMatch guards on its own state).
+        if (Mode == GameMode.OnlinePvP)
+            NetMatch.OnLocalLeftMatch();
+
         Mode = GameMode.Menu;
         DestroySpectatorRig();
         // Torn down before anything touches the characters: Teardown is what
@@ -232,6 +238,10 @@ public class GameModeController : MonoBehaviour
                 _playerMotor.SetMoveInput(Vector2.zero);
         }
         SetBotsActive(false);
+
+        // Bring hidden bots back — online matches hide their bodies, and the
+        // menu's arena backdrop expects the full cast standing in it.
+        SetBotsHidden(false);
 
         CloseRobotSelect();
         // Also closed here, or backing out of a match mid-arena-select leaves an
@@ -360,6 +370,12 @@ public class GameModeController : MonoBehaviour
     /// </summary>
     public RobotRoster.Entry PlayerRobot =>
         (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
+
+    // Online PvP reads these to describe the local setup to the other client
+    // and to dress their mirror pawn in the robot they actually picked.
+    public int PlayerRobotIndex => _cyanRobot;
+    public int CurrentArenaIndex => _arenaIndex;
+    public RobotRoster Roster => _roster;
 
     /// <summary>
     /// Gives the player the same robot rig the bots wear.
@@ -492,6 +508,74 @@ public class GameModeController : MonoBehaviour
         _menuCanvas.SetActive(false);
         ShowOverlay("T — Transform   ·   Z — Sniper Scope   ·   ESC — Menu", "");
         LockCursor(true);
+    }
+
+    /// <summary>
+    /// The online 1v1: local player vs the other human's mirror pawn (built by
+    /// NetMatch after this returns). No bots — their brains are off AND their
+    /// bodies hidden, since a brainless robot standing at spawn reads as a
+    /// target. No airdrops either: treasure rolls are unseeded randomness that
+    /// the two clients could never agree on (v1).
+    ///
+    /// The guest spawns across the arena on the magenta line so the two
+    /// players' world positions agree on both clients: host = PlayerSpawn,
+    /// guest = TeamSpawns(1)[0], everywhere.
+    /// </summary>
+    public void StartOnlinePvP(int arenaIndex, bool isHost)
+    {
+        _arenaIndex = arenaIndex;
+        CloseRobotSelect();
+        CloseArenaSelect();
+        // Arena before characters, as everywhere: re-baking the NavMesh under
+        // live agents strands them, and spawns come from the loaded arena.
+        ArenaRuntime.Load(arenaIndex);
+
+        Mode = GameMode.OnlinePvP;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+        ScoreKeeper.Reset();
+        EnsurePlayerRobot();
+
+        if (_player != null)
+        {
+            _player.SetActive(true);
+            _playerBrain.enabled = true;
+
+            if (!isHost)
+            {
+                var spot = ArenaContext.Current.TeamSpawns(1)[0];
+                var rotation = Quaternion.Euler(0f, 180f, 0f);
+                if (_playerMotor != null)
+                    _playerMotor.Teleport(spot);
+                else
+                    _player.transform.position = spot;
+                _player.transform.rotation = rotation;
+                var deRez = _player.GetComponent<DeRezEffect>();
+                if (deRez != null)
+                    deRez.SetSpawn(spot, rotation);
+            }
+        }
+
+        SetBotsActive(false);
+        SetBotsHidden(true);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("ONLINE MATCH   ·   T — Transform   ·   Z — Scope   ·   ESC — Leave",
+                    "ONLINE MATCH   ·   tap MENU to leave");
+        LockCursor(true);
+    }
+
+    /// <summary>
+    /// Bots have no place in an online match (yet). Hidden AFTER
+    /// RestoreAllDeRez, which this mode's entry already ran — deactivating a
+    /// mid-cycle character would strand its coroutines. EnterMenu unhides.
+    /// </summary>
+    void SetBotsHidden(bool hidden)
+    {
+        foreach (var bot in _bots)
+            if (bot != null && bot.gameObject.activeSelf == hidden)
+                bot.gameObject.SetActive(!hidden);
     }
 
     public void StartAIvAI()
