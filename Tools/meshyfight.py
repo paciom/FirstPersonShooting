@@ -61,6 +61,9 @@ MOVES = {
     "block":     138,   # Block1
     "hit":       174,   # Face Punch Reaction
     "knockdown": 187,   # Knock Down
+    "blownback": 182,   # Shot and Blown Back  -> knockdown with body travel
+    "getup":     344,   # Stand Up 1
+    "getup2":    345,   # Stand Up 2           -> spare rise, judged in the Show
     "blast":     125,   # Charged Spell Cast   -> PHOTON BLAST cast
     "victory":   59,    # Victory Cheer
 }
@@ -268,9 +271,11 @@ def download(names):
 # around its peak speed IS the strike. Windows land in fight_trims.txt, which
 # BrawlMoveForge reads to cut the adopted clip.
 
+# Only the strike routines need trimming — reactions, rises and loops adopt
+# whole in the forge, so they stay out of this table.
 EFFECTOR = {
     "punch": "RightHand", "highkick": "RightFoot", "kick": "RightFoot",
-    "flykick": "RightFoot", "blast": "RightHand", "hit": "Head",
+    "flykick": "RightFoot", "blast": "RightHand",
 }
 
 

@@ -91,6 +91,7 @@ public class BrawlFighter : MonoBehaviour
     // ---- timers ----
     float _stunTime;
     float _floorTime;
+    bool _getUpFired;
 
     public static BrawlFighter Spawn(Transform stageRoot, RobotRoster roster,
         int robotIndex, int teamId)
@@ -180,6 +181,7 @@ public class BrawlFighter : MonoBehaviour
         _moveTime = 0f;
         _stunTime = 0f;
         _floorTime = 0f;
+        _getUpFired = false;
         transform.localPosition = new Vector3(_spawnX, 0f, 0f);
         if (_animator != null)
         {
@@ -353,10 +355,17 @@ public class BrawlFighter : MonoBehaviour
     void TickKnockdown(float dt)
     {
         _floorTime -= dt;
+        // The slide: a knocked-down robot travels, it doesn't drop in place.
         Move(_knockbackVelocity * dt, 0f);
-        _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 8f * dt);
+        _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 5f * dt);
+        // The rise is its own clip, cued so it completes as control returns.
+        if (!_getUpFired && _floorTime <= BrawlMoveSet.GetUpTime)
+        {
+            _getUpFired = true;
+            Trigger(BrawlAnim.GetUp);
+        }
         if (_floorTime <= 0f)
-            Phase = State.Neutral;   // the animator's own exit plays the rise
+            Phase = State.Neutral;
     }
 
     // ------------------------------------------------------------- attacks
@@ -444,7 +453,8 @@ public class BrawlFighter : MonoBehaviour
         {
             Phase = State.Knockdown;
             _floorTime = BrawlMoveSet.KnockdownTime + BrawlMoveSet.GetUpTime;
-            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 2.2f;
+            _getUpFired = false;
+            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 3.2f;
             Trigger(BrawlAnim.Knockdown);
         }
         else

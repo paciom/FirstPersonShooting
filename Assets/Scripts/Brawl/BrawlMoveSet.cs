@@ -75,8 +75,10 @@ public static class BrawlMoveSet
     public const float RoundSeconds = 60f;
     public const float HitStun = 0.25f;
     public const float HitKnockback = 0.8f;
-    public const float KnockdownTime = 0.70f;
-    public const float GetUpTime = 0.45f;
+    /// <summary>Fall + floor beat; the rise starts when this much is left…</summary>
+    public const float KnockdownTime = 0.90f;
+    /// <summary>…and takes this long. Down for 1.7 s total, invulnerable throughout.</summary>
+    public const float GetUpTime = 0.80f;
     public const float WalkSpeed = 3.0f;
     public const float JumpVelocity = 7.5f;
     public const float Gravity = 22f;
@@ -84,7 +86,7 @@ public static class BrawlMoveSet
 
     // Template clip lengths for the states gameplay doesn't time-box.
     public const float HitClipTime = 0.30f;
-    public const float KnockdownClipTime = 0.70f;
+    public const float KnockdownClipTime = 0.90f;
     public const float VictoryClipTime = 1.20f;
     public const float BlockClipTime = 0.30f;
 }

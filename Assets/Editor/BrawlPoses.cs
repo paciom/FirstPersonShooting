@@ -194,20 +194,72 @@ public static class BrawlPoses
         rig.Shift(rig.Hips, new Vector3(0f, -0.03f, -0.10f), w);
     }
 
+    /// <summary>
+    /// The crumpled sprawl a knockdown ends in — shared so the rise can
+    /// begin in EXACTLY the shape the fall finished (no pop at the seam)
+    /// and the KO state can hold it. Hips tipped ~58° with the knees folded
+    /// under, not the 90° stiff plank of a felled tree.
+    /// </summary>
+    public static void FallPose(BrawlPoseRig rig, float w)
+    {
+        if (w <= 0f)
+            return;
+        rig.Rotate(rig.Hips, Vector3.right, -58f, w);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.66f, -0.45f), w);
+        rig.Rotate(rig.UpLegR, Vector3.right, 46f, w);
+        rig.Rotate(rig.UpLegL, Vector3.right, 38f, w);
+        rig.Rotate(rig.LegR, Vector3.right, -34f, w);
+        rig.Rotate(rig.LegL, Vector3.right, -26f, w);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.85f, 0.05f, -0.45f), w);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.85f, 0.05f, -0.45f), w);
+        rig.Rotate(rig.Chest, Vector3.right, -10f, w);
+        rig.Rotate(rig.Head, Vector3.right, 14f, w);   // chin tucked, not lolled flat
+    }
+
     public static void Knockdown(BrawlPoseRig rig, float u)
     {
-        // One-way fall; the KO state simply never leaves the last frame.
-        float w = Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, u / 0.85f));
-        StanceBase(rig, 1f - w);
-        rig.Rotate(rig.Hips, Vector3.right, -75f, w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.72f, -0.28f), w);
-        rig.Rotate(rig.UpLegR, Vector3.right, 28f, w);
-        rig.Rotate(rig.UpLegL, Vector3.right, 22f, w);
-        rig.Rotate(rig.LegR, Vector3.right, -18f, w);
-        rig.Rotate(rig.LegL, Vector3.right, -14f, w);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.9f, 0.15f, -0.2f), w);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.9f, 0.15f, -0.2f), w);
-        rig.Rotate(rig.Head, Vector3.right, -12f, w);
+        float whiplash = Pulse(u, 0.00f, 0.10f, 0.16f, 0.45f);
+        float fall = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((u - 0.18f) / 0.62f));
+        StanceBase(rig, 1f - fall);
+
+        // The hit arrives first: head and chest snap back, the arms fling
+        // up, the whole frame is thrown rearward — the body REACTS before
+        // gravity gets a say.
+        rig.Rotate(rig.Head, Vector3.right, -26f, whiplash);
+        rig.Rotate(rig.Chest, Vector3.right, -18f, whiplash);
+        rig.Rotate(rig.Chest, Vector3.up, 12f, whiplash);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.35f, 0.75f, 0.30f), whiplash);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.45f, 0.65f, 0.25f), whiplash);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.02f, -0.12f), whiplash);
+
+        // Then the legs give and the body crumples down and backward into
+        // the sprawl the get-up starts from.
+        FallPose(rig, fall);
+    }
+
+    public static void GetUp(BrawlPoseRig rig, float u)
+    {
+        // Nobody hinges upright. The floor pose unwinds while the knees
+        // gather underneath, the body passes through a deep crouch — torso
+        // folded over the feet, arms pushing off — and only then does the
+        // stance rise out of it.
+        float lying = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.45f));
+        float crouch = Pulse(u, 0.20f, 0.50f, 0.62f, 0.95f);
+        float stance = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((u - 0.55f) / 0.45f));
+
+        StanceBase(rig, stance);
+        FallPose(rig, lying);
+
+        rig.Shift(rig.Hips, new Vector3(0f, -0.34f, -0.06f), crouch);
+        rig.Rotate(rig.Hips, Vector3.right, 24f, crouch);
+        rig.Rotate(rig.Chest, Vector3.right, 18f, crouch);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.05f, -0.55f, 0.65f), crouch);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.05f, -0.60f, 0.55f), crouch);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -1f, -0.30f), crouch);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -1f, -0.25f), crouch);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.30f, -0.80f, 0.25f), crouch);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.30f, -0.80f, 0.25f), crouch);
+        rig.Rotate(rig.Head, Vector3.right, -20f, crouch);   // eyes come up first
     }
 
     public static void Victory(BrawlPoseRig rig, float u)

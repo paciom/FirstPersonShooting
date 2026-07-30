@@ -51,8 +51,9 @@ public static class BrawlMoveForge
     /// written beside the controllers — is how a stale bake gets caught on
     /// the next Play. v2: full-body kung fu chains + the stance idle.
     /// v3: curve-level trim adoption + gameplay-window speed scaling.
+    /// v4: reaction knockdown + crouch-through get-up + whole adoption.
     /// </summary>
-    const int TemplateVersion = 3;
+    const int TemplateVersion = 4;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -202,7 +203,22 @@ public static class BrawlMoveForge
             Object.DestroyImmediate(instance);
         }
 
-        // ---- adopted Meshy strike clips, only where a human blessed a trim ----
+        // ---- adopted Meshy clips ----
+        // Reactions, rises and loops are complete motions: adopt whole
+        // whenever the GLB is on disk (first candidate wins; blownback
+        // beats the plain knockdown because the body travels). Strike
+        // ROUTINES stay behind fight_trims.txt — they need a strike window.
+        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, "blownback", "knockdown");
+        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, "getup", "getup2");
+        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, "hit");
+        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, "block");
+        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, "victory");
+        var meshyStance = AdoptClip(robot, title, "stance", true);
+        if (meshyStance != null)
+            stance = meshyStance;
+
+        // Trim entries win over whole adoption: they exist because a human
+        // (or the velocity analyzer) chose better.
         foreach (var pair in Trims(robot))
         {
             var clip = CloneTrimmed($"{FightDir}/{robot}-{pair.Key}.glb",
@@ -245,6 +261,8 @@ public static class BrawlMoveForge
                 BrawlMoveSet.HitClipTime, false, BrawlPoses.Hit),
             [BrawlAnim.Knockdown] = Bake(rig, $"Brawl_{title}_Knockdown",
                 BrawlMoveSet.KnockdownClipTime, false, BrawlPoses.Knockdown),
+            [BrawlAnim.GetUp] = Bake(rig, $"Brawl_{title}_GetUp",
+                BrawlMoveSet.GetUpTime, false, BrawlPoses.GetUp),
             [BrawlAnim.Victory] = Bake(rig, $"Brawl_{title}_Victory",
                 BrawlMoveSet.VictoryClipTime, true, BrawlPoses.Victory),
             [BrawlAnim.Blast] = Bake(rig, $"Brawl_{title}_Blast", blast, false, BrawlPoses.Blast),
@@ -276,6 +294,26 @@ public static class BrawlMoveForge
     }
 
     // -------------------------------------------------------- clip plumbing
+
+    static AnimationClip AdoptClip(string robot, string title, string key, bool loop)
+    {
+        return CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
+            $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop);
+    }
+
+    static void AdoptWhole(string robot, string title, Dictionary<string, AnimationClip> moves,
+        string state, bool loop, params string[] candidates)
+    {
+        foreach (var key in candidates)
+        {
+            var clip = AdoptClip(robot, title, key, loop);
+            if (clip != null)
+            {
+                moves[state] = clip;
+                return;
+            }
+        }
+    }
 
     static AnimationClip FindClip(string modelPath)
     {
@@ -407,6 +445,8 @@ public static class BrawlMoveForge
                 return BrawlMoveSet.HitClipTime;
             case BrawlAnim.Knockdown:
                 return BrawlMoveSet.KnockdownClipTime;
+            case BrawlAnim.GetUp:
+                return BrawlMoveSet.GetUpTime;
             default:
                 return 0f;
         }
@@ -421,7 +461,8 @@ public static class BrawlMoveForge
             case "flykick": return BrawlAnim.FlyKick;
             case "block": return BrawlAnim.Block;
             case "hit": return BrawlAnim.Hit;
-            case "knockdown": return BrawlAnim.Knockdown;
+            case "knockdown": case "blownback": return BrawlAnim.Knockdown;
+            case "getup": case "getup2": return BrawlAnim.GetUp;
             case "victory": return BrawlAnim.Victory;
             case "blast": return BrawlAnim.Blast;
             default: return trimKey;
@@ -440,7 +481,8 @@ public static class BrawlMoveForge
         controller.AddParameter(BrawlAnim.Speed, AnimatorControllerParameterType.Float);
         controller.AddParameter(BrawlAnim.Block, AnimatorControllerParameterType.Bool);
         foreach (var trigger in new[] { BrawlAnim.Punch, BrawlAnim.Kick, BrawlAnim.FlyKick,
-                 BrawlAnim.Hit, BrawlAnim.Knockdown, BrawlAnim.KO, BrawlAnim.Victory, BrawlAnim.Blast })
+                 BrawlAnim.Hit, BrawlAnim.Knockdown, BrawlAnim.GetUp, BrawlAnim.KO,
+                 BrawlAnim.Victory, BrawlAnim.Blast })
             controller.AddParameter(trigger, AnimatorControllerParameterType.Trigger);
 
         var machine = controller.layers[0].stateMachine;
@@ -475,6 +517,9 @@ public static class BrawlMoveForge
             enter.duration = 0.05f;
             enter.hasExitTime = false;
             enter.canTransitionToSelf = false;
+            // Knockdown has no exit at all: it clamps in the sprawl until
+            // gameplay fires GetUp (whose own state walks back to
+            // locomotion), or the KO twin holds the floor forever.
             if (pair.Key != BrawlAnim.Knockdown)
             {
                 var exit = state.AddTransition(locomotion);
@@ -482,16 +527,8 @@ public static class BrawlMoveForge
                 exit.exitTime = 1f;
                 exit.duration = 0.15f;
             }
-
-            // KO plays the knockdown fall and stays on the floor: same clip,
-            // separate state, no way out.
-            if (pair.Key == BrawlAnim.Knockdown)
+            else
             {
-                var getUp = state.AddTransition(locomotion);
-                getUp.hasExitTime = true;
-                getUp.exitTime = 1f;
-                getUp.duration = BrawlMoveSet.GetUpTime;
-
                 var ko = machine.AddState(BrawlAnim.KO);
                 ko.motion = pair.Value;
                 ko.speed = state.speed;

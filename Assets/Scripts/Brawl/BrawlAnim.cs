@@ -13,6 +13,7 @@ public static class BrawlAnim
     public const string FlyKick = "FlyKick";
     public const string Hit = "Hit";
     public const string Knockdown = "Knockdown";
+    public const string GetUp = "GetUp";
     public const string KO = "KO";
     public const string Victory = "Victory";
     public const string Blast = "Blast";
