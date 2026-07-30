@@ -53,8 +53,9 @@ public static class BrawlMoveForge
     /// v3: curve-level trim adoption + gameplay-window speed scaling.
     /// v4: reaction knockdown + crouch-through get-up + whole adoption.
     /// v5: reactions play in place — the root owns all knockdown travel.
+    /// v6: the in-place pin is the shared REST pose, not per-clip frame 0.
     /// </summary>
-    const int TemplateVersion = 5;
+    const int TemplateVersion = 6;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -187,6 +188,7 @@ public static class BrawlMoveForge
         var instance = Object.Instantiate(source);
         Dictionary<string, AnimationClip> moves;
         AnimationClip stance;
+        Vector3 restHips;
         try
         {
             instance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
@@ -196,6 +198,7 @@ public static class BrawlMoveForge
                 Debug.LogWarning($"[BrawlMoveForge] {robot}: rig joints not found — skipping.");
                 return false;
             }
+            restHips = rig.RestHipsPosition;
             stance = Bake(rig, $"Brawl_{title}_Stance", 1.6f, true, BrawlPoses.Stance);
             moves = BakeMoves(rig, title);
         }
@@ -209,11 +212,11 @@ public static class BrawlMoveForge
         // whenever the GLB is on disk (first candidate wins; blownback
         // beats the plain knockdown because the body travels). Strike
         // ROUTINES stay behind fight_trims.txt — they need a strike window.
-        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, true, "blownback", "knockdown");
-        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, true, "getup", "getup2");
-        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, true, "hit");
-        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, false, "block");
-        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, false, "victory");
+        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, restHips, "blownback", "knockdown");
+        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, restHips, "getup", "getup2");
+        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, restHips, "hit");
+        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, null, "block");
+        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, null, "victory");
         var meshyStance = AdoptClip(robot, title, "stance", true);
         if (meshyStance != null)
             stance = meshyStance;
@@ -297,21 +300,21 @@ public static class BrawlMoveForge
     // -------------------------------------------------------- clip plumbing
 
     static AnimationClip AdoptClip(string robot, string title, string key, bool loop,
-        bool inPlace = false)
+        Vector3? pinHips = null)
     {
         var clip = CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
             $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop);
-        if (clip != null && inPlace)
-            FlattenHorizontalHips(clip);
+        if (clip != null && pinHips.HasValue)
+            FlattenHorizontalHips(clip, pinHips.Value);
         return clip;
     }
 
     static void AdoptWhole(string robot, string title, Dictionary<string, AnimationClip> moves,
-        string state, bool loop, bool inPlace, params string[] candidates)
+        string state, bool loop, Vector3? pinHips, params string[] candidates)
     {
         foreach (var key in candidates)
         {
-            var clip = AdoptClip(robot, title, key, loop, inPlace);
+            var clip = AdoptClip(robot, title, key, loop, pinHips);
             if (clip != null)
             {
                 moves[state] = clip;
@@ -321,31 +324,32 @@ public static class BrawlMoveForge
     }
 
     /// <summary>
-    /// Pins the Hips' horizontal channels to their first frame, keeping Y.
+    /// Pins the Hips' horizontal channels to the SKELETON REST values,
+    /// keeping Y animated.
     ///
     /// WHY: Meshy reaction clips carry their travel IN the curves —
     /// ranger's Shot_and_Blown_Back moves the hips 5.2 m backward, and
-    /// Stand_Up1 walks 0.8 m forward while rising. The fighter's ROOT never
-    /// went with them, so the next state snapped the robot back to wherever
-    /// the root actually was: knocked down over there, stood up over here.
-    /// The project rule everywhere else is "clips are in-place; the motor
-    /// moves us" (see MeshyWalkerForge) — this applies it to reactions, and
-    /// BrawlFighter's knockback slide owns the real distance.
+    /// Stand_Up1 STARTS 0.85 m behind its own origin. The fighter's ROOT
+    /// never goes with either, so any per-clip constant becomes a visible
+    /// snap at the next transition (pinning to each clip's FIRST FRAME was
+    /// exactly that bug: the rise held the body 0.85 m off the root, then
+    /// leapt to the stance). One shared pin — the rest pose — means every
+    /// clip agrees horizontally at every seam, and BrawlFighter's knockback
+    /// slide owns all real travel, the same clips-in-place/motor-moves rule
+    /// as everywhere else (see MeshyWalkerForge).
     /// </summary>
-    static void FlattenHorizontalHips(AnimationClip clip)
+    static void FlattenHorizontalHips(AnimationClip clip, Vector3 restHips)
     {
         foreach (var binding in AnimationUtility.GetCurveBindings(clip))
         {
             if (!binding.path.EndsWith("Hips"))
                 continue;
-            if (binding.propertyName != "m_LocalPosition.x"
-                && binding.propertyName != "m_LocalPosition.z")
-                continue;
-            var curve = AnimationUtility.GetEditorCurve(clip, binding);
-            if (curve == null || curve.keys.Length == 0)
-                continue;
+            float pin;
+            if (binding.propertyName == "m_LocalPosition.x") pin = restHips.x;
+            else if (binding.propertyName == "m_LocalPosition.z") pin = restHips.z;
+            else continue;
             AnimationUtility.SetEditorCurve(clip, binding,
-                AnimationCurve.Constant(0f, Mathf.Max(clip.length, 0.01f), curve.keys[0].value));
+                AnimationCurve.Constant(0f, Mathf.Max(clip.length, 0.01f), pin));
         }
     }
 

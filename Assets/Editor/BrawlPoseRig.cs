@@ -108,6 +108,9 @@ public class BrawlPoseRig
         return string.Join("/", parts);
     }
 
+    /// <summary>The Hips' rest local position — the pin every in-place clip shares.</summary>
+    public Vector3 RestHipsPosition => _restPosition[Hips];
+
     public void RestoreRest()
     {
         foreach (var joint in _recorded)

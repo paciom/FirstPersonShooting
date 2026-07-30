@@ -27,6 +27,10 @@ public class BrawlShow : MonoBehaviour
         /// rise from the knockdown's floor) — suppresses the between-act
         /// rebind that would snap the robot upright first.</summary>
         public bool continuesPrevious;
+        /// <summary>Metres the root is thrown backward during this act —
+        /// the clip plays in place, so the show scripts the travel the
+        /// fight's knockback slide would provide: hit at A, land at B.</summary>
+        public float knockbackSlide;
         public System.Action<BrawlShow> begin;
         public System.Action<BrawlShow> end;
     }
@@ -125,6 +129,7 @@ public class BrawlShow : MonoBehaviour
             {
                 caption = "KNOCKDOWN", sourceKey = "blownback",
                 duration = BrawlMoveSet.KnockdownClipTime + 1.0f,
+                knockbackSlide = 2.2f,
                 begin = show => show._animator.SetTrigger(BrawlAnim.Knockdown),
             },
             new Act
@@ -163,18 +168,37 @@ public class BrawlShow : MonoBehaviour
         };
     }
 
+    Vector3 _slideFrom;
+    Vector3 _slideDirection;
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.RightArrow))
-            NextAct(+1);
-        else if (Input.GetKeyDown(KeyCode.LeftArrow))
-            NextAct(-1);
-        else
         {
-            _actTime += Time.deltaTime;
-            if (_actTime >= _acts[_actIndex].duration)
-                NextAct(+1);
+            NextAct(+1);
+            return;
         }
+        if (Input.GetKeyDown(KeyCode.LeftArrow))
+        {
+            NextAct(-1);
+            return;
+        }
+
+        _actTime += Time.deltaTime;
+
+        // The scripted knockback: eased out over the fall, then it stays
+        // where it stopped — the following RISING act rises right there.
+        var act = _acts[_actIndex];
+        if (act.knockbackSlide > 0f && _fighter != null)
+        {
+            float p = Mathf.Clamp01(_actTime / BrawlMoveSet.KnockdownClipTime);
+            float ease = 1f - (1f - p) * (1f - p);
+            _fighter.transform.position =
+                _slideFrom + _slideDirection * (act.knockbackSlide * ease);
+        }
+
+        if (_actTime >= act.duration)
+            NextAct(+1);
     }
 
     void NextAct(int step)
@@ -193,12 +217,24 @@ public class BrawlShow : MonoBehaviour
         // A skipped act may leave a state mid-pose; rebind puts the rig
         // back in the stance so every move starts clean — EXCEPT when the
         // next act deliberately continues the last one's pose (the rise
-        // begins on the knockdown's floor, not standing).
+        // begins on the knockdown's floor, exactly where it slid to).
         bool continues = act.continuesPrevious && step > 0 && previous == _actIndex - 1;
         if (!continues)
         {
             _animator.Rebind();
             _animator.Update(0f);
+            // Back to centre stage for the fresh act — the knockback slide
+            // may have parked the robot two metres toward the backdrop.
+            if (_fighter != null)
+                _fighter.transform.localPosition = Vector3.zero;
+        }
+
+        if (act.knockbackSlide > 0f && _fighter != null)
+        {
+            _slideFrom = _fighter.transform.position;
+            _slideDirection = -_fighter.transform.forward;
+            _slideDirection.y = 0f;
+            _slideDirection.Normalize();
         }
         _caption.text = act.caption;
         _source.text = HasMeshyClip(act.sourceKey)

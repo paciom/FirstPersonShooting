@@ -455,9 +455,9 @@ public class BrawlFighter : MonoBehaviour
             _floorTime = BrawlMoveSet.KnockdownTime + BrawlMoveSet.GetUpTime;
             _getUpFired = false;
             // The clips play in place, so this slide IS the being-blown-
-            // backward — ~1.3 m before it decays, and the rise happens
+            // backward — ~2.3 m before it decays, and the rise happens
             // wherever it ends.
-            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 4.5f;
+            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 6f;
             Trigger(BrawlAnim.Knockdown);
         }
         else
