@@ -52,8 +52,9 @@ public static class BrawlMoveForge
     /// the next Play. v2: full-body kung fu chains + the stance idle.
     /// v3: curve-level trim adoption + gameplay-window speed scaling.
     /// v4: reaction knockdown + crouch-through get-up + whole adoption.
+    /// v5: reactions play in place — the root owns all knockdown travel.
     /// </summary>
-    const int TemplateVersion = 4;
+    const int TemplateVersion = 5;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -208,11 +209,11 @@ public static class BrawlMoveForge
         // whenever the GLB is on disk (first candidate wins; blownback
         // beats the plain knockdown because the body travels). Strike
         // ROUTINES stay behind fight_trims.txt — they need a strike window.
-        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, "blownback", "knockdown");
-        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, "getup", "getup2");
-        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, "hit");
-        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, "block");
-        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, "victory");
+        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, true, "blownback", "knockdown");
+        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, true, "getup", "getup2");
+        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, true, "hit");
+        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, false, "block");
+        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, false, "victory");
         var meshyStance = AdoptClip(robot, title, "stance", true);
         if (meshyStance != null)
             stance = meshyStance;
@@ -295,23 +296,56 @@ public static class BrawlMoveForge
 
     // -------------------------------------------------------- clip plumbing
 
-    static AnimationClip AdoptClip(string robot, string title, string key, bool loop)
+    static AnimationClip AdoptClip(string robot, string title, string key, bool loop,
+        bool inPlace = false)
     {
-        return CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
+        var clip = CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
             $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop);
+        if (clip != null && inPlace)
+            FlattenHorizontalHips(clip);
+        return clip;
     }
 
     static void AdoptWhole(string robot, string title, Dictionary<string, AnimationClip> moves,
-        string state, bool loop, params string[] candidates)
+        string state, bool loop, bool inPlace, params string[] candidates)
     {
         foreach (var key in candidates)
         {
-            var clip = AdoptClip(robot, title, key, loop);
+            var clip = AdoptClip(robot, title, key, loop, inPlace);
             if (clip != null)
             {
                 moves[state] = clip;
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// Pins the Hips' horizontal channels to their first frame, keeping Y.
+    ///
+    /// WHY: Meshy reaction clips carry their travel IN the curves —
+    /// ranger's Shot_and_Blown_Back moves the hips 5.2 m backward, and
+    /// Stand_Up1 walks 0.8 m forward while rising. The fighter's ROOT never
+    /// went with them, so the next state snapped the robot back to wherever
+    /// the root actually was: knocked down over there, stood up over here.
+    /// The project rule everywhere else is "clips are in-place; the motor
+    /// moves us" (see MeshyWalkerForge) — this applies it to reactions, and
+    /// BrawlFighter's knockback slide owns the real distance.
+    /// </summary>
+    static void FlattenHorizontalHips(AnimationClip clip)
+    {
+        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+        {
+            if (!binding.path.EndsWith("Hips"))
+                continue;
+            if (binding.propertyName != "m_LocalPosition.x"
+                && binding.propertyName != "m_LocalPosition.z")
+                continue;
+            var curve = AnimationUtility.GetEditorCurve(clip, binding);
+            if (curve == null || curve.keys.Length == 0)
+                continue;
+            AnimationUtility.SetEditorCurve(clip, binding,
+                AnimationCurve.Constant(0f, Mathf.Max(clip.length, 0.01f), curve.keys[0].value));
         }
     }
 

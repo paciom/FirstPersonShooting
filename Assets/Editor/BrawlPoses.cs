@@ -191,7 +191,7 @@ public static class BrawlPoses
         rig.Rotate(rig.Head, Vector3.right, -11f, w);
         rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, -0.35f, -0.30f), w * 0.5f);
         rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.60f, -0.20f, 0.15f), w * 0.5f);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, -0.10f), w);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0f), w);   // the stagger is the root's knockback
     }
 
     /// <summary>
@@ -204,8 +204,12 @@ public static class BrawlPoses
     {
         if (w <= 0f)
             return;
+        // No Z here on purpose: like every clip in the project, the fall
+        // plays in place and BrawlFighter's knockback slide owns the travel
+        // — in-clip travel is exactly what made robots stand up somewhere
+        // other than where they landed.
         rig.Rotate(rig.Hips, Vector3.right, -58f, w);
-        rig.Shift(rig.Hips, new Vector3(0f, -0.66f, -0.45f), w);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.66f, 0f), w);
         rig.Rotate(rig.UpLegR, Vector3.right, 46f, w);
         rig.Rotate(rig.UpLegL, Vector3.right, 38f, w);
         rig.Rotate(rig.LegR, Vector3.right, -34f, w);
@@ -230,7 +234,7 @@ public static class BrawlPoses
         rig.Rotate(rig.Chest, Vector3.up, 12f, whiplash);
         rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.35f, 0.75f, 0.30f), whiplash);
         rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.45f, 0.65f, 0.25f), whiplash);
-        rig.Shift(rig.Hips, new Vector3(0f, 0.02f, -0.12f), whiplash);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.02f, 0f), whiplash);
 
         // Then the legs give and the body crumples down and backward into
         // the sprawl the get-up starts from.
@@ -250,7 +254,7 @@ public static class BrawlPoses
         StanceBase(rig, stance);
         FallPose(rig, lying);
 
-        rig.Shift(rig.Hips, new Vector3(0f, -0.34f, -0.06f), crouch);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.34f, 0f), crouch);
         rig.Rotate(rig.Hips, Vector3.right, 24f, crouch);
         rig.Rotate(rig.Chest, Vector3.right, 18f, crouch);
         rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.05f, -0.55f, 0.65f), crouch);
