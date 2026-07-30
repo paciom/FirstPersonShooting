@@ -55,6 +55,9 @@ TEXTURE_PROMPTS = {
     "racer": ("white and pale grey armour panels with orange accents, a red "
               "visor strip, dark charcoal tracks, clean flat panels, "
               "stylised toy finish"),
+    "samurai": ("bright turquoise armour panels with orange accents and dark "
+                "navy plating, charcoal tracks, clean flat panels, "
+                "stylised toy finish"),
 }
 
 LEGACY_STATE = {"ranger": f"{ROOT}/TransformerTest/tasks.json"}
