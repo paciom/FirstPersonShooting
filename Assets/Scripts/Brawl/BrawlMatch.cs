@@ -82,6 +82,7 @@ public class BrawlMatch : MonoBehaviour
         winner?.Celebrate();
         _hud.SetPips(_cyanPips, _magentaPips);
         _hud.Announce(banner, 1.4f, new Color(1f, 0.85f, 0.3f));
+        BrawlAudio.PlayFlat(BrawlAudio.Id.Gong, 0.9f);
     }
 
     void Update()
@@ -98,6 +99,7 @@ public class BrawlMatch : MonoBehaviour
                     _stageTime = 0f;
                     SetLocked(false);
                     _hud.Announce("FIGHT!", 0.6f, new Color(0.3f, 1f, 0.5f));
+                    BrawlAudio.PlayFlat(BrawlAudio.Id.RoundDing);
                 }
                 break;
 
@@ -138,6 +140,7 @@ public class BrawlMatch : MonoBehaviour
     void FinishMatch(string result)
     {
         _stage = Stage.MatchEnd;
+        BrawlAudio.PlayFlat(BrawlAudio.Id.Victory);
         _hud.ShowEndPanel(result,
             onRematch: () =>
             {

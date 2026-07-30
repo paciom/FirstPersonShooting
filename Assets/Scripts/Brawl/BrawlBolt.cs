@@ -88,6 +88,7 @@ public class BrawlBolt : MonoBehaviour
         _spent = true;
         _target.TakeHit(BrawlMoveSet.Table[BrawlMoveSet.Move.Blast], _shooter);
         VfxUtil.ImpactBurst(transform.position, _tint);
+        BrawlAudio.Play(BrawlAudio.Id.BlastHit, transform.position);
         Destroy(gameObject);
     }
 }

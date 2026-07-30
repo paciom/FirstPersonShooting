@@ -306,6 +306,7 @@ public class BrawlFighter : MonoBehaviour
             Phase = State.Air;
             _verticalVelocity = BrawlMoveSet.JumpVelocity;
             _airVelocityX = intent.move * BrawlMoveSet.WalkSpeed;
+            BrawlAudio.Play(BrawlAudio.Id.Jump, transform.position, 0.4f);
             return;
         }
 
@@ -369,6 +370,7 @@ public class BrawlFighter : MonoBehaviour
             if (!_boltFired && _moveTime >= _move.startup)
             {
                 _boltFired = true;
+                BrawlAudio.Play(BrawlAudio.Id.BlastFire, transform.position + Vector3.up * 1.15f);
                 BrawlBolt.Fire(this, Opponent, _tint);
             }
         }
@@ -442,6 +444,7 @@ public class BrawlFighter : MonoBehaviour
         _moveHasHit = false;
         _boltFired = false;
         _grazedThisMove = false;
+        BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position + Vector3.up * 1.2f, 0.35f);
         Trigger(_variant.trigger);
     }
 
@@ -517,6 +520,7 @@ public class BrawlFighter : MonoBehaviour
         {
             _grazedThisMove = true;
             VfxUtil.SpawnBurst(effector.position, new Color(0.8f, 0.95f, 1f), 5, 2.5f, 0.08f);
+            BrawlAudio.Play(BrawlAudio.Id.Graze, effector.position, 0.6f);
             OnGrazed?.Invoke(part.Label);
         }
     }
@@ -540,6 +544,7 @@ public class BrawlFighter : MonoBehaviour
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
             VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
+            BrawlAudio.Play(BrawlAudio.Id.Block, chest, 0.8f);
             attacker.OnHitBlocked?.Invoke(this, hit.move);
             return;
         }
@@ -556,12 +561,15 @@ public class BrawlFighter : MonoBehaviour
         bool knockdown = hit.move == BrawlMoveSet.Move.FlyKick
                          || hit.move == BrawlMoveSet.Move.Blast
                          || Health <= 0f;
+        // Metal on metal: the heavy clang for anything that floors a robot.
+        BrawlAudio.Play(knockdown ? BrawlAudio.Id.HitHeavy : BrawlAudio.Id.Hit, chest);
         attacker.OnHitLanded?.Invoke(this, hit.damage, knockdown);
 
         if (Health <= 0f)
         {
             KnockOut();
             VfxUtil.Explosion(transform.position + Vector3.up, _tint, 0.7f);
+            BrawlAudio.Play(BrawlAudio.Id.KO, transform.position + Vector3.up);
             OnKnockedOut?.Invoke(this);
             return;
         }
@@ -590,7 +598,10 @@ public class BrawlFighter : MonoBehaviour
 
     void GainCharge(float amount)
     {
+        bool wasReady = Charge >= 1f;
         Charge = Mathf.Clamp01(Charge + amount);
+        if (!wasReady && Charge >= 1f)
+            BrawlAudio.PlayFlat(BrawlAudio.Id.ChargeReady, 0.7f);
     }
 
     // -------------------------------------------------------------- motion
