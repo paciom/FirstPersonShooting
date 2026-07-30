@@ -13,7 +13,15 @@ animation pass per robot behind the same forge (probe one robot now, fleet
 after eyeballing); lane-locked 2.5D combat with seconds-based frame data; no
 new scene serialization — the mode is 100% runtime-generated like Commander.
 
-> **Status 2026-07-30: plan written, build starting on `feature/commander`.**
+> **Status 2026-07-30: ALL PHASES BUILT**, one commit per phase on
+> `feature/commander` — menu entry, world swap, stage, camera, pose-template
+> clips + controllers, combat core, round flow + HUD, CPU brain, hit-stop /
+> sparks / PHOTON BLAST / touch pads. Compile-checked via Roslyn
+> (`Tools/compile_check.sh`). The forge itself had not yet run when this was
+> written (the open editor holds the project lock; batch mode can't attach) —
+> it fires automatically on the next Play via ArenaBuilder's ForgeIfMissing
+> chain. Ranger probe bought and analysed (see §4); the ~315-credit fleet
+> pass **awaits approval** after the Meshy clips are eyeballed in-editor.
 
 ---
 
