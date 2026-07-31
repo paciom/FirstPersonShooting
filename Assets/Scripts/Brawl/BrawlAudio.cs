@@ -114,25 +114,26 @@ public static class BrawlAudio
                 return One("block", ShieldZap());
             case Id.Whoosh:
                 return One("whoosh", Whoosh());
+            // A jump is just air — the servo wheep read as cartoon.
             case Id.Jump:
-                return One("jump", Servo(280f, 640f, 0.16f));
+                return One("jump", Whoosh());
             case Id.BlastFire:
                 return One("blastfire", Zap(760f, 140f, 0.35f));
             case Id.BlastHit:
                 return One("blasthit", Zap(500f, 80f, 0.4f));
             case Id.KO:
                 return One("ko", Clang("ko", 72f, 1.4f, 1.1f, seed: 50));
+            // No melodies anywhere below: sine dings and arpeggios are the
+            // cartoon register. Cues are drums (pitch-dropping booms) and
+            // rising air — an arena, not a cereal commercial.
             case Id.ChargeReady:
-                return One("chargeready", Ding(880f, 0.28f));
+                return One("chargeready", Swell(0.35f));
             case Id.RoundDing:
-                return One("roundding", Layer(Ding(660f, 0.30f), Delay(Ding(990f, 0.30f), 0.09f)));
-            // Not a Clang: the tube ring is exactly the sound that got the
-            // synth impacts fired. A clean falling two-tone marks the round.
+                return One("roundding", Boom(95f, 0.40f));
             case Id.Gong:
-                return One("gong", Layer(Ding(330f, 0.6f), Delay(Ding(196f, 0.8f), 0.11f)));
+                return One("gong", Boom(62f, 0.75f));
             case Id.Victory:
-                return One("victory", Layer(Ding(523f, 0.5f),
-                    Delay(Ding(659f, 0.5f), 0.12f), Delay(Ding(784f, 0.6f), 0.24f)));
+                return One("victory", Layer(Boom(70f, 0.8f), Delay(Swell(0.65f), 0.06f)));
             default:
                 return new AudioClip[0];
         }
@@ -221,16 +222,32 @@ public static class BrawlAudio
         });
     }
 
-    /// <summary>A little motor: swept sine with a flutter.</summary>
-    static AudioClip Servo(float fromHz, float toHz, float seconds)
+    /// <summary>
+    /// A drum, not a bell: low body whose pitch falls out of the attack,
+    /// noise slap on top, no sustained tone to read as a beep.
+    /// </summary>
+    static AudioClip Boom(float hz, float seconds)
     {
-        return Bake("servo", seconds, (t, noise) =>
+        return Bake("boom", seconds, (t, noise) =>
         {
-            float u = t / seconds;
-            float hz = Mathf.Lerp(fromHz, toHz, u);
-            float flutter = 1f + 0.06f * Mathf.Sin(2f * Mathf.PI * 37f * t);
-            return Mathf.Sin(2f * Mathf.PI * hz * flutter * t)
-                   * Mathf.Sin(u * Mathf.PI) * 0.28f;
+            float envelope = Mathf.Exp(-4.5f * t / seconds);
+            float droop = 1f + 0.45f * Mathf.Exp(-28f * t);
+            float body = Mathf.Sin(2f * Mathf.PI * hz * droop * t);
+            float slap = noise * Mathf.Exp(-80f * t) * 0.7f;
+            return (body * envelope + slap) * 0.6f;
+        });
+    }
+
+    /// <summary>Rising air — a filtered-noise swell, tone-free.</summary>
+    static AudioClip Swell(float seconds)
+    {
+        float[] lowpass = new float[1];
+        return Bake("swell", seconds, (t, noise) =>
+        {
+            float u = Mathf.Clamp01(t / seconds);
+            float envelope = Mathf.Sin(u * Mathf.PI);
+            lowpass[0] += (0.04f + 0.30f * u) * (noise - lowpass[0]);
+            return lowpass[0] * envelope * 2.2f * 0.55f;
         });
     }
 
@@ -245,17 +262,6 @@ public static class BrawlAudio
                 + 2.5f * Mathf.Sin(2f * Mathf.PI * hz * 1.5f * t));
             float envelope = Mathf.Exp(-6f * u) * Mathf.Min(1f, t * 200f);
             return (body + noise * 0.25f) * envelope * 0.5f;
-        });
-    }
-
-    /// <summary>A clean bright ping — announcements, the charge meter.</summary>
-    static AudioClip Ding(float hz, float seconds)
-    {
-        return Bake("ding", seconds, (t, noise) =>
-        {
-            float envelope = Mathf.Exp(-9f * t) * Mathf.Min(1f, t * 400f);
-            return (Mathf.Sin(2f * Mathf.PI * hz * t)
-                    + 0.4f * Mathf.Sin(2f * Mathf.PI * hz * 2f * t)) * envelope * 0.4f;
         });
     }
 
