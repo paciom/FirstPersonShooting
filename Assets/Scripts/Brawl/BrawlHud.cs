@@ -26,6 +26,8 @@ public class BrawlHud : MonoBehaviour
     Text _announcement;
     float _announceUntil;
     GameObject _endPanel;
+    Text _cyanMove, _magentaMove;
+    float _cyanMoveUntil, _magentaMoveUntil;
 
     public static BrawlHud Build(Transform parent, string cyanName, string magentaName,
         string stageName = null)
@@ -69,6 +71,43 @@ public class BrawlHud : MonoBehaviour
     {
         _cyanFill = BuildBar(parent, true, cyanName, HoloCyan, out _cyanGhost, out _cyanPips);
         _magentaFill = BuildBar(parent, false, magentaName, HoloMagenta, out _magentaGhost, out _magentaPips);
+        _cyanMove = BuildMoveCaption(parent, true, HoloCyan);
+        _magentaMove = BuildMoveCaption(parent, false, HoloMagenta);
+    }
+
+    /// <summary>
+    /// The move ticker under each fighter's name: every attack announces
+    /// itself by name as it starts, so a spectator can READ the fight —
+    /// half the fun of watching is knowing the crescent kick was one.
+    /// </summary>
+    Text BuildMoveCaption(Transform parent, bool left, Color color)
+    {
+        float sign = left ? 1f : -1f;
+        var anchor = new Vector2(left ? 0f : 1f, 1f);
+        var caption = MakeText(parent, left ? "Move_P1" : "Move_P2", "", 27,
+            Color.Lerp(color, Color.white, 0.35f), FontStyle.BoldAndItalic);
+        var rect = caption.rectTransform;
+        rect.anchorMin = rect.anchorMax = anchor;
+        rect.pivot = anchor;
+        rect.anchoredPosition = new Vector2(sign * 44f, -102f);
+        rect.sizeDelta = new Vector2(480, 32);
+        caption.alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
+        caption.gameObject.SetActive(false);
+        return caption;
+    }
+
+    /// <summary>Flash a move name under one side's health bar.</summary>
+    public void ShowMove(bool cyanSide, string moveName)
+    {
+        var caption = cyanSide ? _cyanMove : _magentaMove;
+        if (caption == null)
+            return;
+        caption.text = moveName;
+        caption.gameObject.SetActive(true);
+        caption.transform.localScale = Vector3.one * 1.30f;   // pops, then settles
+        var c = caption.color; c.a = 1f; caption.color = c;
+        if (cyanSide) _cyanMoveUntil = Time.time + 1.0f;
+        else _magentaMoveUntil = Time.time + 1.0f;
     }
 
     RectTransform BuildBar(Transform parent, bool left, string name, Color color,
@@ -260,6 +299,7 @@ public class BrawlHud : MonoBehaviour
             "PHOTON BLAST  —  L when the meter below your bar is full\n" +
             "\n" +
             "Landing hits fills your BLAST meter. Getting hit fills it a little too.\n" +
+            "Every move calls its name under the fighter's health bar.\n" +
             "Win the round: empty their health, or lead when time runs out.\n" +
             "\n" +
             "=  —  show the buttons     F3  —  hitboxes     ESC  —  menu",
@@ -363,6 +403,27 @@ public class BrawlHud : MonoBehaviour
 
         UpdateCharge(_cyanCharge, _cyanChargeImage, _cyanChargeValue, HoloCyan);
         UpdateCharge(_magentaCharge, _magentaChargeImage, _magentaChargeValue, HoloMagenta);
+
+        UpdateMoveCaption(_cyanMove, _cyanMoveUntil, dt);
+        UpdateMoveCaption(_magentaMove, _magentaMoveUntil, dt);
+    }
+
+    static void UpdateMoveCaption(Text caption, float until, float dt)
+    {
+        if (caption == null || !caption.gameObject.activeSelf)
+            return;
+        caption.transform.localScale = Vector3.Lerp(
+            caption.transform.localScale, Vector3.one, 1f - Mathf.Exp(-12f * dt));
+        float left = until - Time.time;
+        if (left <= 0f)
+        {
+            caption.gameObject.SetActive(false);
+            return;
+        }
+        // The last third of its life fades out; a fresh move resets alpha.
+        var c = caption.color;
+        c.a = Mathf.Clamp01(left / 0.35f);
+        caption.color = c;
     }
 
     static void UpdateCharge(RectTransform fill, Image image, float value, Color baseColor)

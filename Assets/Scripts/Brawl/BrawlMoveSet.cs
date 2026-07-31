@@ -107,7 +107,7 @@ public static class BrawlMoveSet
     /// </summary>
     public const float StrikeRadius = 0.18f;
 
-    public enum Limb { RightHand, LeftHand, RightForeArm, RightFoot, LeftFoot }
+    public enum Limb { RightHand, LeftHand, RightForeArm, RightFoot, LeftFoot, RightKnee }
 
     /// <summary>
     /// One face of a move family. J and K each fire a RANDOM variant of
@@ -147,6 +147,10 @@ public static class BrawlMoveSet
         new Variant("PunchHook", "HOOK", "hook", Limb.LeftHand, 0.10f),
         new Variant("PunchUppercut", "UPPERCUT", "uppercut", Limb.RightHand, 0.10f),
         new Variant("PunchElbow", "ELBOW STRIKE", "elbow", Limb.RightForeArm, 0.22f),
+        new Variant("PunchBackfist", "SPINNING BACKFIST", "backfist", Limb.RightHand, 0.20f),
+        new Variant("PunchHammer", "HAMMERFIST", "hammerfist", Limb.RightHand, 0.15f),
+        new Variant("PunchPalm", "PALM STRIKE", "palmstrike", Limb.LeftHand, 0.28f),
+        new Variant("PunchChop", "KNIFE HAND CHOP", "chop", Limb.RightHand, 0.15f),
     };
 
     public static readonly Variant[] KickVariants =
@@ -156,6 +160,10 @@ public static class BrawlMoveSet
         new Variant("KickSide", "SIDE KICK", "sidekick", Limb.RightFoot, 0.35f),
         new Variant("KickLow", "LOW SWEEP", "lowkick", Limb.RightFoot, 0.15f),
         new Variant("KickSpin", "SPIN KICK", "spinkick", Limb.RightFoot, 0.40f),
+        new Variant("KickAxe", "AXE KICK", "axekick", Limb.RightFoot, 0.25f),
+        new Variant("KickCrescent", "CRESCENT KICK", "crescentkick", Limb.LeftFoot, 0.15f),
+        new Variant("KickBack", "BACK KICK", "backkick", Limb.RightFoot, 0.30f),
+        new Variant("KickKnee", "KNEE STRIKE", "kneestrike", Limb.RightKnee, 0.30f),
     };
 
     public static readonly Variant FlyKickVariant =

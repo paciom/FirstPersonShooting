@@ -79,6 +79,9 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>Raised when knockback drives the fighter into a lane end (speed passed).</summary>
     public System.Action<BrawlFighter, float> OnWallSlam;
 
+    /// <summary>Raised as any attack begins, with its display name — the HUD captions ride this.</summary>
+    public System.Action<string> OnMoveStarted;
+
     /// <summary>Raised once when health reaches zero. BrawlMatch owns what happens next.</summary>
     public System.Action<BrawlFighter> OnKnockedOut;
 
@@ -104,6 +107,7 @@ public class BrawlFighter : MonoBehaviour
     Transform _forearmR;
     Transform _footR;
     Transform _footL;
+    Transform _kneeR;
     float _spawnX;
     Color _tint;
 
@@ -189,6 +193,8 @@ public class BrawlFighter : MonoBehaviour
             fighter._forearmR = FindDeep(model.transform, "RightForeArm");
             fighter._footR = FindDeep(model.transform, "RightFoot");
             fighter._footL = FindDeep(model.transform, "LeftFoot");
+            // The shin bone's origin IS the knee joint.
+            fighter._kneeR = FindDeep(model.transform, "RightLeg");
 
             // Hurtboxes ride the bones, so a crumpled or kicking body is
             // hittable exactly where it visibly is.
@@ -396,6 +402,7 @@ public class BrawlFighter : MonoBehaviour
             // The lunge: committing adds forward speed toward the opponent.
             _airVelocity += FacingDir * 2.2f;
             Trigger(BrawlAnim.FlyKick);
+            OnMoveStarted?.Invoke(_variant.display);
             hot = true;
         }
 
@@ -534,6 +541,7 @@ public class BrawlFighter : MonoBehaviour
         _propHitThisMove = false;
         BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position + Vector3.up * 1.2f, 0.35f);
         Trigger(_variant.trigger);
+        OnMoveStarted?.Invoke(_variant.display);
     }
 
     /// <summary>
@@ -554,6 +562,7 @@ public class BrawlFighter : MonoBehaviour
                 case BrawlMoveSet.Limb.RightForeArm: return _forearmR;
                 case BrawlMoveSet.Limb.LeftFoot: return _footL;
                 case BrawlMoveSet.Limb.RightFoot: return _footR;
+                case BrawlMoveSet.Limb.RightKnee: return _kneeR;
                 default: return _handR;
             }
         }

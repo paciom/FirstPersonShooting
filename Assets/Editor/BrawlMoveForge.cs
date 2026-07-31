@@ -62,7 +62,7 @@ public static class BrawlMoveForge
     ///     pins Y too) — Variant.lunge moves the root instead. Ends the
     ///     mid-move body drift that snapped home at every state seam.
     /// </summary>
-    const int TemplateVersion = 9;
+    const int TemplateVersion = 10;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -310,11 +310,19 @@ public static class BrawlMoveForge
             case "PunchHook": return BrawlPoses.Hook;
             case "PunchUppercut": return BrawlPoses.Uppercut;
             case "PunchElbow": return BrawlPoses.Elbow;
+            case "PunchBackfist": return BrawlPoses.Backfist;
+            case "PunchHammer": return BrawlPoses.Hammerfist;
+            case "PunchPalm": return BrawlPoses.PalmStrike;
+            case "PunchChop": return BrawlPoses.Chop;
             case "Kick": return BrawlPoses.Kick;
             case "KickHigh": return BrawlPoses.KickHigh;
             case "KickSide": return BrawlPoses.KickSide;
             case "KickLow": return BrawlPoses.KickLow;
             case "KickSpin": return BrawlPoses.KickSpin;
+            case "KickAxe": return BrawlPoses.KickAxe;
+            case "KickCrescent": return BrawlPoses.KickCrescent;
+            case "KickBack": return BrawlPoses.KickBack;
+            case "KickKnee": return BrawlPoses.KickKnee;
             default: return BrawlPoses.Punch;
         }
     }

@@ -150,6 +150,10 @@ public class BrawlController : MonoBehaviour
         var hud = BrawlHud.Build(transform,
             _playerControls ? cyanName : cyanName + levelTag,
             magentaName + levelTag, def.name);
+        // Every attack calls its own name under the attacker's health bar —
+        // watching a bout, you can read the fight move by move.
+        Cyan.OnMoveStarted += name => hud.ShowMove(true, name);
+        Magenta.OnMoveStarted += name => hud.ShowMove(false, name);
         gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud,
             _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
             _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");

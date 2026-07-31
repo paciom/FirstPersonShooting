@@ -166,6 +166,90 @@ public static class BrawlPoses
         rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0.09f), Mathf.Max(0f, strike));
     }
 
+    public static void Backfist(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The spin sells it: the fist folds across the chest while the
+        // whole frame winds, then hips-chest-arm release in order and the
+        // knuckles whip out on the end of the uncoil.
+        float chamber = Pulse(u, 0.00f, 0.16f, 0.20f, 0.42f);
+        float strike = Pulse(u, 0.20f, 0.38f, 0.58f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, 26f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, 34f, chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.35f, 0.30f, 0.35f), chamber);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.55f, 0.15f, 0.45f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.06f, 0f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, -40f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, -26f, strike);
+        rig.Rotate(rig.Head, Vector3.up, 50f, strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.45f, 0.20f, 0.85f), strike);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.30f, 0.10f, 0.95f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.40f, -0.60f, -0.45f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0.10f), strike);
+    }
+
+    public static void Hammerfist(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // Cocks high behind the head, then the whole trunk crunches forward
+        // and drops its weight through the falling fist.
+        float chamber = Pulse(u, 0.00f, 0.18f, 0.22f, 0.44f);
+        float strike = Pulse(u, 0.22f, 0.40f, 0.58f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, 10f, chamber);
+        rig.Rotate(rig.Chest, Vector3.right, -14f, chamber);   // arches back
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.30f, 0.95f, 0.05f), chamber);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.15f, 0.85f, -0.25f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.04f, 0f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, -14f, strike);
+        rig.Rotate(rig.Chest, Vector3.right, 20f, strike);      // the crunch
+        rig.Rotate(rig.Head, Vector3.right, 8f, strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.10f, 0.05f, 0.98f), strike);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.02f, -0.25f, 0.95f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.35f, 0.30f, 0.45f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.07f, 0.10f), strike);
+    }
+
+    public static void PalmStrike(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The LEFT palm heel: draws to the hip, then the hips drive it
+        // straight through the centre — a shove with the whole body in it.
+        float chamber = Pulse(u, 0.00f, 0.14f, 0.18f, 0.40f);
+        float strike = Pulse(u, 0.18f, 0.36f, 0.56f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, -12f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, -16f, chamber);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.40f, -0.55f, -0.45f), chamber);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.20f, -0.15f, -0.85f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, -0.04f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, 20f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, 30f, strike);
+        rig.Rotate(rig.Head, Vector3.up, -26f, strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.05f, 0.08f, 1f), strike);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.02f, 0.30f, 0.90f), strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.40f, -0.65f, -0.45f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.02f, 0.12f), strike);
+    }
+
+    public static void Chop(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The knife hand rises beside the ear and scythes down across the
+        // centreline, torso wheeling with it.
+        float chamber = Pulse(u, 0.00f, 0.16f, 0.20f, 0.42f);
+        float strike = Pulse(u, 0.20f, 0.38f, 0.58f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, 12f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, 16f, chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, 0.55f, -0.15f), chamber);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.25f, 0.75f, -0.35f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, -22f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, -32f, strike);
+        rig.Rotate(rig.Head, Vector3.up, 28f, strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.10f, 0.15f, 0.95f), strike);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.30f, -0.05f, 0.90f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.40f, -0.55f, -0.40f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.04f, 0.08f), strike);
+    }
+
     public static void Kick(BrawlPoseRig rig, float u)
     {
         StanceBase(rig, 1f);
@@ -273,6 +357,97 @@ public static class BrawlPoses
         rig.Aim(rig.LegR, rig.FootR, new Vector3(-0.15f, 0.3f, 1f), strike);
         rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.75f, 0.1f, -0.35f), strike);
         rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.7f, 0.2f, -0.25f), strike);
+    }
+
+    public static void KickAxe(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The leg swings straight up past the target's guard, then the heel
+        // drops like a guillotine while the trunk crunches down after it.
+        float chamber = Pulse(u, 0.00f, 0.22f, 0.28f, 0.50f);
+        float strike = Pulse(u, 0.26f, 0.46f, 0.60f, 1.00f);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.02f, 0.80f, 0.55f), chamber);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, 0.55f, 0.80f), chamber);
+        rig.Rotate(rig.Chest, Vector3.right, -12f, chamber);   // leans off the rise
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.45f, 0.35f, -0.30f), chamber * 0.8f);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.45f, 0.35f, -0.30f), chamber * 0.8f);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.04f, 0f), chamber);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.02f, 0.10f, 0.95f), strike);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.50f, 0.80f), strike);
+        rig.Rotate(rig.Chest, Vector3.right, 18f, strike);     // rides the chop down
+        rig.Rotate(rig.Hips, Vector3.up, -10f, strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.50f, -0.40f, -0.30f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.45f, -0.35f, 0.25f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.08f, 0.08f), strike);
+    }
+
+    public static void KickCrescent(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The LEFT leg for once: it lifts across the centreline and sweeps
+        // an outward arc through head height, arms fanning against it.
+        float chamber = Pulse(u, 0.00f, 0.22f, 0.28f, 0.50f);
+        float strike = Pulse(u, 0.26f, 0.46f, 0.60f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, -18f, chamber);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(0.30f, 0.55f, 0.55f), chamber);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0.15f, -0.60f, -0.50f), chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, 0.30f, 0.25f), chamber * 0.8f);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.50f, 0.15f, -0.35f), chamber * 0.8f);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.06f, 0f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, 26f, strike);
+        rig.Rotate(rig.Chest, Vector3.up, 20f, strike);
+        rig.Rotate(rig.Head, Vector3.up, -30f, strike);        // eyes stay front
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.30f, 0.60f, 0.70f), strike);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(-0.20f, 0.30f, 0.90f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.55f, -0.30f, -0.40f), strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.35f, 0.40f, 0.45f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.03f, 0.06f), strike);
+    }
+
+    public static void KickBack(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // The mule kick: the body turns AWAY, eyes finding the target over
+        // the shoulder, torso tipping off it while the heel piston-drives
+        // straight back into the opponent.
+        float chamber = Pulse(u, 0.00f, 0.20f, 0.26f, 0.48f);
+        float strike = Pulse(u, 0.24f, 0.44f, 0.60f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, 30f, chamber);
+        rig.Rotate(rig.Chest, Vector3.up, 22f, chamber);
+        rig.Rotate(rig.Head, Vector3.up, -40f, chamber);       // over the shoulder
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.05f, 0.55f, 0.30f), chamber);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.85f, -0.35f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.07f, 0f), chamber);
+        rig.Rotate(rig.Hips, Vector3.up, 32f, strike);          // keeps turning
+        rig.Rotate(rig.Chest, Vector3.up, 18f, strike);
+        rig.Rotate(rig.Chest, Vector3.right, -22f, strike);     // tips away
+        rig.Rotate(rig.Head, Vector3.up, -15f, strike);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(-0.05f, 0.10f, 0.95f), strike);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.15f, 0.98f), strike);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, 0.25f, -0.55f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.45f, 0.30f, -0.35f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, 0.10f), strike);
+    }
+
+    public static void KickKnee(BrawlPoseRig rig, float u)
+    {
+        StanceBase(rig, 1f);
+        // Muay thai: the hands reach and RIP down while the knee spears up
+        // through the middle, hips thrusting in behind it.
+        float chamber = Pulse(u, 0.00f, 0.18f, 0.24f, 0.46f);
+        float strike = Pulse(u, 0.22f, 0.42f, 0.58f, 1.00f);
+        rig.Rotate(rig.Hips, Vector3.up, 8f, chamber);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.20f, 0.25f, 0.85f), chamber);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.05f, 0.10f, 0.95f), chamber);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.20f, 0.25f, 0.85f), chamber);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.05f, 0.10f, 0.95f), chamber);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, 0f), chamber);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0f, 0.60f, 0.75f), strike);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.90f, -0.30f), strike);   // shin folded hard
+        rig.Rotate(rig.Chest, Vector3.right, 18f, strike);     // crunches onto it
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.40f, -0.55f, -0.30f), strike);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.40f, -0.55f, -0.30f), strike);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.02f, 0.14f), strike);
     }
 
     public static void FlyKick(BrawlPoseRig rig, float u)
