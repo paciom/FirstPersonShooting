@@ -53,6 +53,7 @@ public class GameModeController : MonoBehaviour
     CommanderController _commander;
     BrawlController _brawl;
     BrawlShow _brawlShow;
+    GameObject _brawlStageSelect;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -114,6 +115,12 @@ public class GameModeController : MonoBehaviour
         if (Mode == GameMode.Menu && _arenaSelect != null && Input.GetKeyDown(KeyCode.Escape))
         {
             CancelArenaSelect();
+            return;
+        }
+
+        if (Mode == GameMode.Menu && _brawlStageSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelBrawlStageSelect();
             return;
         }
 
@@ -261,6 +268,7 @@ public class GameModeController : MonoBehaviour
         // Also closed here, or backing out of a match mid-arena-select leaves an
         // orphaned canvas floating over the main menu.
         CloseArenaSelect();
+        CloseBrawlStageSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
         LockCursor(false);
@@ -304,15 +312,20 @@ public class GameModeController : MonoBehaviour
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
         CloseRobotSelect();
-        // The Brawl family skips both the arena screen and the FPS-cast
-        // reskin: the stage is its own set, and its robots are spawned
-        // fresh from the roster rather than dressed onto the hidden bots.
-        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar
-            || _pendingMode == GameMode.BrawlShow)
+        // The Brawl family skips the FPS-cast reskin — its robots spawn
+        // fresh from the roster. Brawl and its exhibition go through the
+        // stage picker (the same step FPS modes give arenas); the Show
+        // launches straight onto its bench.
+        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar)
         {
-            if (_pendingMode == GameMode.Brawl) StartBrawl();
-            else if (_pendingMode == GameMode.BrawlWar) StartBrawlWar();
-            else StartBrawlShow();
+            _menuCanvas.SetActive(false);
+            CloseBrawlStageSelect();
+            _brawlStageSelect = BrawlStageSelect.Build(this, _pendingMode);
+            return;
+        }
+        if (_pendingMode == GameMode.BrawlShow)
+        {
+            StartBrawlShow();
             return;
         }
         ApplyRobotSelection();
@@ -668,6 +681,33 @@ public class GameModeController : MonoBehaviour
                 "drag / WASD / wheel to take it   ·   ESC — Menu",
                 $"AI WAR — MAP #{seed}   ·   drag — pan   ·   pinch — zoom   ·   MENU to go back");
         LockCursor(false);
+    }
+
+    /// <summary>A stage card was clicked: remember it and fight there.</summary>
+    public void ChooseBrawlStage(int selection)
+    {
+        BrawlArenas.SetSelected(_pendingMode, selection);
+        CloseBrawlStageSelect();
+        if (_pendingMode == GameMode.BrawlWar) StartBrawlWar(); else StartBrawl();
+    }
+
+    /// <summary>Escape/BACK from the stage screen goes back a step, to robot select.</summary>
+    public void CancelBrawlStageSelect()
+    {
+        CloseBrawlStageSelect();
+        if (_roster != null && _roster.HasRobots)
+            _robotSelect = RobotSelectMenu.Build(this, _roster, _pendingMode, _cyanRobot, _magentaRobot);
+        else
+            _menuCanvas.SetActive(true);
+    }
+
+    void CloseBrawlStageSelect()
+    {
+        if (_brawlStageSelect != null)
+        {
+            Destroy(_brawlStageSelect);
+            _brawlStageSelect = null;
+        }
     }
 
     /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the same select.</summary>

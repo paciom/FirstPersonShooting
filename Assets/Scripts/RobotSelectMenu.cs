@@ -132,11 +132,10 @@ public static class RobotSelectMenu
         MakeButton(canvasGo.transform, "BACK", new Vector2(-560, -350), new Vector2(200, 78), 28,
             controller.CancelRobotSelect);
 
+        // The stage gets its own SCREEN after this one; only the CPU level
+        // is picked here.
         if (pendingMode == GameMode.Brawl || pendingMode == GameMode.BrawlWar)
-        {
             BuildLevelPicker(canvasGo.transform, pendingMode);
-            BuildStagePicker(canvasGo.transform, pendingMode);
-        }
 
         inspector.BuildUI(canvasGo.transform);
 
@@ -506,35 +505,6 @@ public static class RobotSelectMenu
                 Color.white, FontStyle.Bold,
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
         }
-        Refresh();
-    }
-
-    /// <summary>
-    /// The stage cycler: ◀ STAGE — FRONTLINE ▶ above the level chips.
-    /// Arrows, not chips — the remix roster makes the list as long as the
-    /// arena library. RANDOM first, remembered per mode.
-    /// </summary>
-    static void BuildStagePicker(Transform parent, GameMode mode)
-    {
-        var title = MakeText(parent, "StageTitle", "", 18,
-            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
-            new Vector2(0.5f, 0.5f), new Vector2(385f, -272f), new Vector2(300f, 24f));
-
-        void Refresh()
-        {
-            title.text = "STAGE  —  " + BrawlArenas.NameOf(BrawlArenas.SelectedFor(mode));
-        }
-
-        void Cycle(int step)
-        {
-            int count = BrawlArenas.CountWithRandom;
-            int next = (BrawlArenas.SelectedFor(mode) + step + count) % count;
-            BrawlArenas.SetSelected(mode, next);
-            Refresh();
-        }
-
-        MakeButton(parent, "◀", new Vector2(213f, -272f), new Vector2(44f, 34f), 20, () => Cycle(-1));
-        MakeButton(parent, "▶", new Vector2(557f, -272f), new Vector2(44f, 34f), 20, () => Cycle(+1));
         Refresh();
     }
 
