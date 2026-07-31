@@ -21,6 +21,7 @@ public class BrawlCamera : MonoBehaviour
     float _x;
     float _distance = NearDistance;
     float _shakeAmplitude;
+    float _obstruction;
 
     public void SetTargets(Transform a, Transform b)
     {
@@ -65,10 +66,30 @@ public class BrawlCamera : MonoBehaviour
 
     void Place(Vector3 shake)
     {
-        transform.position = new Vector3(_x, 2.3f, -_distance) + shake;
         // The gaze point rides at chest height between the fighters; shake
         // moves it at half strength so a thump reads as a jolt, not a pan.
         Vector3 gaze = new Vector3(_x, 1.1f, 0f) + shake * 0.5f;
-        transform.rotation = Quaternion.LookRotation(gaze - transform.position, Vector3.up);
+        Vector3 desired = new Vector3(_x, 2.3f, -_distance);
+
+        // Auto-avoid: nothing gets to stand between the lens and the fight.
+        // A sphere-cast from the fight toward the desired spot finds the
+        // first blocker (remix arenas are full of them); the camera pulls
+        // in front of it and rises a little to peek over. Corrections come
+        // on fast and relax slowly, so a passing pillar doesn't pump zoom.
+        Vector3 line = desired - gaze;
+        float length = line.magnitude;
+        Vector3 direction = line / Mathf.Max(length, 1e-4f);
+        float wantedPullIn = 0f;
+        if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, length,
+                ~0, QueryTriggerInteraction.Ignore))
+            wantedPullIn = length - Mathf.Max(3.5f, hit.distance - 0.45f);
+        float ease = wantedPullIn > _obstruction ? 14f : 2.5f;
+        _obstruction = Mathf.Lerp(_obstruction, wantedPullIn,
+            1f - Mathf.Exp(-ease * Time.deltaTime));
+
+        Vector3 position = gaze + direction * (length - _obstruction) + shake;
+        position.y += _obstruction * 0.30f;
+        transform.position = position;
+        transform.rotation = Quaternion.LookRotation(gaze - position, Vector3.up);
     }
 }

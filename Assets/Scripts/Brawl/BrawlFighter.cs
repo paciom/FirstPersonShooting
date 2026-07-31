@@ -242,6 +242,8 @@ public class BrawlFighter : MonoBehaviour
         _floorTime = 0f;
         _getUpFired = false;
         transform.localPosition = new Vector3(_spawnX, 0f, 0f);
+        // Remix corners can sit on raised arena tiles — spawn ON them.
+        SetY(BrawlGround.HeightAt(transform.position.x));
         if (_animator != null)
         {
             _animator.Rebind();

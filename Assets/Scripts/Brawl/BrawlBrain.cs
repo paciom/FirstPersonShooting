@@ -112,6 +112,18 @@ public class BrawlBrain : MonoBehaviour
             return;
         }
 
+        // Different floors: swinging across a metre of elevation is how a
+        // CPU flails forever at someone it can't reach. Close the height
+        // gap first — jump up to them, or walk off the ledge onto them.
+        float heightGap = foe.transform.position.y - self.transform.position.y;
+        if (Mathf.Abs(heightGap) > 0.9f && !self.IsAirborne && !foe.IsAirborne)
+        {
+            _moveHeld = toFoe * 0.9f;
+            if (heightGap > 0f && gap < 1.8f && Random.value < 0.6f)
+                _jumpOnce = true;
+            return;
+        }
+
         // An open opponent — reeling from a hit, or recovering from a swing
         // that missed — is the punisher's moment.
         bool foeOpen = foe.Phase == BrawlFighter.State.HitStun
