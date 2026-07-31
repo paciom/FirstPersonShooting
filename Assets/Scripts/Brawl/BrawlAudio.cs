@@ -56,12 +56,17 @@ public static class BrawlAudio
         source.clip = clip;
         source.volume = Mathf.Clamp01(volume) * Master;
         source.pitch = Random.Range(0.94f, 1.06f);
-        // The heavy hit is the same punch family dropped a fourth and
-        // pushed — one recording set, two weights.
+        // One recording set, three weights: heavies drop a fourth and
+        // push, grazes ride up a third and sit back.
         if (id == Id.HitHeavy)
         {
             source.pitch *= 0.8f;
             source.volume = Mathf.Min(1f, source.volume * 1.2f);
+        }
+        else if (id == Id.Graze)
+        {
+            source.pitch *= 1.3f;
+            source.volume *= 0.55f;
         }
         source.spatialBlend = spatial;
         source.dopplerLevel = 0f;
@@ -95,8 +100,16 @@ public static class BrawlAudio
                     ? Variants("hit", 3, v => Clang($"hit{v}", 150f + 40f * v, 0.34f, 0.9f, seed: 10 + v))
                     : Variants("hitheavy", 2, v => Clang($"hitheavy{v}", 95f + 25f * v, 0.55f, 1.0f, seed: 20 + v));
             }
+            // Grazes are the punch recordings too — pitched up and pulled
+            // back in Spawn, so a light contact sounds like a lighter
+            // version of a real hit instead of a different instrument.
             case Id.Graze:
+            {
+                var punches = LoadFamily("punch");
+                if (punches.Length > 0)
+                    return punches;
                 return Variants("graze", 2, v => Clang($"graze{v}", 420f + 90f * v, 0.16f, 0.45f, seed: 30 + v));
+            }
             case Id.Block:
                 return One("block", ShieldZap());
             case Id.Whoosh:
@@ -106,15 +119,17 @@ public static class BrawlAudio
             case Id.BlastFire:
                 return One("blastfire", Zap(760f, 140f, 0.35f));
             case Id.BlastHit:
-                return One("blasthit", Layer(Zap(500f, 80f, 0.3f), Clang("bh", 110f, 0.5f, 1f, 41)));
+                return One("blasthit", Zap(500f, 80f, 0.4f));
             case Id.KO:
                 return One("ko", Clang("ko", 72f, 1.4f, 1.1f, seed: 50));
             case Id.ChargeReady:
                 return One("chargeready", Ding(880f, 0.28f));
             case Id.RoundDing:
                 return One("roundding", Layer(Ding(660f, 0.30f), Delay(Ding(990f, 0.30f), 0.09f)));
+            // Not a Clang: the tube ring is exactly the sound that got the
+            // synth impacts fired. A clean falling two-tone marks the round.
             case Id.Gong:
-                return One("gong", Clang("gong", 130f, 1.1f, 0.8f, seed: 60));
+                return One("gong", Layer(Ding(330f, 0.6f), Delay(Ding(196f, 0.8f), 0.11f)));
             case Id.Victory:
                 return One("victory", Layer(Ding(523f, 0.5f),
                     Delay(Ding(659f, 0.5f), 0.12f), Delay(Ding(784f, 0.6f), 0.24f)));
