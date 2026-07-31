@@ -122,39 +122,47 @@ public static class BrawlMoveSet
         public string display;    // captions and the F3 log
         public string meshyKey;   // Meshy clip / trim key
         public Limb limb;         // which bone must reach the body
+        /// <summary>
+        /// Metres the ROOT steps forward through startup+active. Clips play
+        /// in place (in-clip travel snapped the body off the root — the
+        /// teleport), so the commitment a lunging move shows comes from
+        /// here, where it also moves the real hurt/hit geometry.
+        /// </summary>
+        public float lunge;
 
-        public Variant(string trigger, string display, string meshyKey, Limb limb)
+        public Variant(string trigger, string display, string meshyKey, Limb limb, float lunge)
         {
             this.trigger = trigger;
             this.display = display;
             this.meshyKey = meshyKey;
             this.limb = limb;
+            this.lunge = lunge;
         }
     }
 
     public static readonly Variant[] PunchVariants =
     {
-        new Variant("Punch", "KUNG FU PUNCH", "punch", Limb.RightHand),
-        new Variant("PunchJab", "JAB", "jab", Limb.RightHand),
-        new Variant("PunchHook", "HOOK", "hook", Limb.LeftHand),
-        new Variant("PunchUppercut", "UPPERCUT", "uppercut", Limb.RightHand),
-        new Variant("PunchElbow", "ELBOW STRIKE", "elbow", Limb.RightForeArm),
+        new Variant("Punch", "KUNG FU PUNCH", "punch", Limb.RightHand, 0.15f),
+        new Variant("PunchJab", "JAB", "jab", Limb.RightHand, 0.25f),
+        new Variant("PunchHook", "HOOK", "hook", Limb.LeftHand, 0.10f),
+        new Variant("PunchUppercut", "UPPERCUT", "uppercut", Limb.RightHand, 0.10f),
+        new Variant("PunchElbow", "ELBOW STRIKE", "elbow", Limb.RightForeArm, 0.22f),
     };
 
     public static readonly Variant[] KickVariants =
     {
-        new Variant("Kick", "ROUNDHOUSE KICK", "kick", Limb.RightFoot),
-        new Variant("KickHigh", "HIGH KICK", "highkick", Limb.RightFoot),
-        new Variant("KickSide", "SIDE KICK", "sidekick", Limb.RightFoot),
-        new Variant("KickLow", "LOW SWEEP", "lowkick", Limb.RightFoot),
-        new Variant("KickSpin", "SPIN KICK", "spinkick", Limb.RightFoot),
+        new Variant("Kick", "ROUNDHOUSE KICK", "kick", Limb.RightFoot, 0.15f),
+        new Variant("KickHigh", "HIGH KICK", "highkick", Limb.RightFoot, 0.10f),
+        new Variant("KickSide", "SIDE KICK", "sidekick", Limb.RightFoot, 0.35f),
+        new Variant("KickLow", "LOW SWEEP", "lowkick", Limb.RightFoot, 0.15f),
+        new Variant("KickSpin", "SPIN KICK", "spinkick", Limb.RightFoot, 0.40f),
     };
 
     public static readonly Variant FlyKickVariant =
-        new Variant("FlyKick", "FLYING KICK", "flykick", Limb.RightFoot);
+        new Variant("FlyKick", "FLYING KICK", "flykick", Limb.RightFoot, 0f);
 
     public static readonly Variant BlastVariant =
-        new Variant("Blast", "PHOTON BLAST", "blast", Limb.RightHand);
+        new Variant("Blast", "PHOTON BLAST", "blast", Limb.RightHand, 0f);
 
     public static Variant[] VariantsOf(Move family)
     {

@@ -376,8 +376,13 @@ public class BrawlFighter : MonoBehaviour
         }
         else
         {
-            bool active = _moveTime >= _move.startup
-                          && _moveTime <= _move.startup + _move.active;
+            // The lunge: the ROOT carries the move's forward commitment
+            // (clips are in place), stopping when the window closes.
+            float window = _move.startup + _move.active;
+            if (_variant.lunge > 0f && _moveTime <= window)
+                Move(Facing * (_variant.lunge / window) * dt, 0f);
+
+            bool active = _moveTime >= _move.startup && _moveTime <= window;
             if (active && !_moveHasHit)
                 TryHit();
         }

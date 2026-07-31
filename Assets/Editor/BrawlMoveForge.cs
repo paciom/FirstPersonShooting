@@ -58,8 +58,11 @@ public static class BrawlMoveForge
     ///     were silently lost on save, so v5/v6 shipped unpinned clips.
     /// v8: punch/kick variant states (jab, hook, uppercut, elbow, high,
     ///     side, low, spin) — one button, many moves.
+    /// v9: EVERY adopted clip pins in place (strikes included; fly kick
+    ///     pins Y too) — Variant.lunge moves the root instead. Ends the
+    ///     mid-move body drift that snapped home at every state seam.
     /// </summary>
-    const int TemplateVersion = 8;
+    const int TemplateVersion = 9;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -216,33 +219,39 @@ public static class BrawlMoveForge
         // whenever the GLB is on disk (first candidate wins; blownback
         // beats the plain knockdown because the body travels). Strike
         // ROUTINES stay behind fight_trims.txt — they need a strike window.
-        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, restHips, "blownback", "knockdown");
-        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, restHips, "getup", "getup2");
-        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, restHips, "hit");
-        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, null, "block");
-        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, null, "victory");
-        var meshyStance = AdoptClip(robot, title, "stance", true);
+        // EVERY adopted clip plays in place — the root owns all travel.
+        // Strikes were exempt once ("short windows, small drift") and the
+        // traveling moves proved that wrong: a Lunge Spin Kick's slice
+        // carries the body a metre off the root, then the next state snaps
+        // it home — the teleport. Variant.lunge moves the ROOT instead.
+        AdoptWhole(robot, title, moves, BrawlAnim.Knockdown, false, restHips, HipsPin.Horizontal, "blownback", "knockdown");
+        AdoptWhole(robot, title, moves, BrawlAnim.GetUp, false, restHips, HipsPin.Horizontal, "getup", "getup2");
+        AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, restHips, HipsPin.Horizontal, "hit");
+        AdoptWhole(robot, title, moves, BrawlAnim.Block, true, restHips, HipsPin.Horizontal, "block");
+        AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, restHips, HipsPin.Horizontal, "victory");
+        var meshyStance = AdoptClip(robot, title, "stance", true, restHips, HipsPin.Horizontal);
         if (meshyStance != null)
             stance = meshyStance;
 
         // Trim entries win over whole adoption: they exist because a human
-        // (or the velocity analyzer) chose better. Reaction states stay
-        // pinned in place no matter which path adopted them.
+        // (or the velocity analyzer) chose better. The fly kick pins Y as
+        // well — its flight comes from the motor's jump arc, and a clip
+        // that also flies doubles the height then drops at the seam.
         foreach (var pair in Trims(robot))
         {
             string state = MoveStateName(pair.Key);
             var clip = CloneTrimmed($"{FightDir}/{robot}-{pair.Key}.glb",
-                $"{AnimDir}/Brawl_{title}_{pair.Key}_meshy.anim", pair.Value,
-                NeedsPin(state) ? restHips : (Vector3?)null);
+                $"{AnimDir}/Brawl_{title}_{pair.Key}_meshy.anim", pair.Value, restHips,
+                state == BrawlAnim.FlyKick ? HipsPin.Full : HipsPin.Horizontal);
             if (clip != null)
                 moves[state] = clip;
         }
 
         // What actually plays comes off the DISK, so verify the saved
-        // assets: a drifting "in-place" reaction means teleporting robots.
-        foreach (var state in new[] { BrawlAnim.Knockdown, BrawlAnim.GetUp, BrawlAnim.Hit })
-            if (moves.TryGetValue(state, out var reaction))
-                WarnIfDrifting(robot, state, reaction);
+        // assets: any adopted clip that still drifts means teleporting.
+        foreach (var pair in moves)
+            if (pair.Value != null && pair.Value.name.EndsWith("_meshy"))
+                WarnIfDrifting(robot, pair.Key, pair.Value);
 
         var controller = BuildController($"{OutDir}/{robot}.controller", stance, walk, moves);
 
@@ -336,19 +345,22 @@ public static class BrawlMoveForge
 
     // -------------------------------------------------------- clip plumbing
 
+    /// <summary>How much of the Hips position a clip may keep animating.</summary>
+    enum HipsPin { None, Horizontal, Full }
+
     static AnimationClip AdoptClip(string robot, string title, string key, bool loop,
-        Vector3? pinHips = null)
+        Vector3 restHips, HipsPin pin)
     {
         return CloneClip(FindClip($"{FightDir}/{robot}-{key}.glb"),
-            $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop, pinHips);
+            $"{AnimDir}/Brawl_{title}_{key}_meshy.anim", loop, restHips, pin);
     }
 
     static void AdoptWhole(string robot, string title, Dictionary<string, AnimationClip> moves,
-        string state, bool loop, Vector3? pinHips, params string[] candidates)
+        string state, bool loop, Vector3 restHips, HipsPin pin, params string[] candidates)
     {
         foreach (var key in candidates)
         {
-            var clip = AdoptClip(robot, title, key, loop, pinHips);
+            var clip = AdoptClip(robot, title, key, loop, restHips, pin);
             if (clip != null)
             {
                 moves[state] = clip;
@@ -386,7 +398,7 @@ public static class BrawlMoveForge
     /// serialization.
     /// </summary>
     static AnimationClip CloneClip(AnimationClip source, string path, bool loop,
-        Vector3? pinHips = null)
+        Vector3 restHips = default, HipsPin pin = HipsPin.None)
     {
         if (source == null)
             return null;
@@ -398,8 +410,8 @@ public static class BrawlMoveForge
         foreach (var binding in AnimationUtility.GetCurveBindings(source))
         {
             AnimationCurve curve;
-            if (pinHips.HasValue && PinValue(binding, pinHips.Value, out float pin))
-                curve = AnimationCurve.Constant(0f, Mathf.Max(source.length, 0.01f), pin);
+            if (PinValue(binding, restHips, pin, out float value))
+                curve = AnimationCurve.Constant(0f, Mathf.Max(source.length, 0.01f), value);
             else
                 curve = AnimationUtility.GetEditorCurve(source, binding);
             AnimationUtility.SetEditorCurve(clip, binding, curve);
@@ -410,14 +422,19 @@ public static class BrawlMoveForge
         return SaveClip(clip, path);
     }
 
-    /// <summary>True when this binding is a Hips horizontal position channel.</summary>
-    static bool PinValue(EditorCurveBinding binding, Vector3 restHips, out float pin)
+    /// <summary>True when this binding is a Hips position channel the pin owns.</summary>
+    static bool PinValue(EditorCurveBinding binding, Vector3 restHips, HipsPin pin, out float value)
     {
-        pin = 0f;
-        if (!binding.path.EndsWith("Hips"))
+        value = 0f;
+        if (pin == HipsPin.None || !binding.path.EndsWith("Hips"))
             return false;
-        if (binding.propertyName == "m_LocalPosition.x") { pin = restHips.x; return true; }
-        if (binding.propertyName == "m_LocalPosition.z") { pin = restHips.z; return true; }
+        if (binding.propertyName == "m_LocalPosition.x") { value = restHips.x; return true; }
+        if (binding.propertyName == "m_LocalPosition.z") { value = restHips.z; return true; }
+        if (pin == HipsPin.Full && binding.propertyName == "m_LocalPosition.y")
+        {
+            value = restHips.y;
+            return true;
+        }
         return false;
     }
 
@@ -463,7 +480,7 @@ public static class BrawlMoveForge
     /// standalone generic .anim it does not reliably trim playback.)
     /// </summary>
     static AnimationClip CloneTrimmed(string modelPath, string path, Vector2 range,
-        Vector3? pinHips = null)
+        Vector3 restHips, HipsPin pin)
     {
         var source = FindClip(modelPath);
         if (source == null)
@@ -480,10 +497,10 @@ public static class BrawlMoveForge
         };
         foreach (var binding in AnimationUtility.GetCurveBindings(source))
         {
-            if (pinHips.HasValue && PinValue(binding, pinHips.Value, out float pin))
+            if (PinValue(binding, restHips, pin, out float value))
             {
                 AnimationUtility.SetEditorCurve(clip, binding,
-                    AnimationCurve.Constant(0f, end - start, pin));
+                    AnimationCurve.Constant(0f, end - start, value));
                 continue;
             }
             var curve = AnimationUtility.GetEditorCurve(source, binding);
@@ -569,12 +586,6 @@ public static class BrawlMoveForge
             default:
                 return 0f;
         }
-    }
-
-    /// <summary>States whose clips must play in place (the root owns travel).</summary>
-    static bool NeedsPin(string state)
-    {
-        return state == BrawlAnim.Knockdown || state == BrawlAnim.GetUp || state == BrawlAnim.Hit;
     }
 
     static string MoveStateName(string trimKey)
