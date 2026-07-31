@@ -26,9 +26,10 @@ public class BrawlLift : MonoBehaviour
         // terrain probe reads the pad directly.
         pad.transform.SetParent(go.transform, false);
         pad.transform.localScale = new Vector3(Width, 0.22f, 2.4f);
+        // Plain lit, not the world-space Surface — a rising pad slid
+        // through its own pattern (same defect the crates had).
         pad.GetComponent<MeshRenderer>().sharedMaterial =
-            ArenaMaterials.Surface("brawl-lift", new Color(0.09f, 0.13f, 0.19f),
-                new Color(0.2f, 0.9f, 1f), 1.6f, 0.7f);
+            ArenaMaterials.Lit("brawl-lift-pad", new Color(0.12f, 0.17f, 0.24f), 0.45f);
 
         var glow = GameObject.CreatePrimitive(PrimitiveType.Cube);
         glow.name = "Underglow";

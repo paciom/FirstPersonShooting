@@ -46,21 +46,44 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         go.transform.localRotation = Quaternion.Euler(
             Random.Range(-8f, 8f), Random.Range(0f, 360f), Random.Range(-8f, 8f));
 
+        // The look is GEOMETRY, not shader pattern: ArenaMaterials.Surface
+        // paints in world space (right for static walls that must tile,
+        // wrong for a tumbling box — the pattern stayed put while the box
+        // moved through it). Plain lit panels with glowing straps travel
+        // with the crate by construction.
         var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
         visual.name = "Body";
         Object.Destroy(visual.GetComponent<Collider>());
         visual.transform.SetParent(go.transform, false);
         visual.transform.localScale = Vector3.one * Size;
         visual.GetComponent<MeshRenderer>().sharedMaterial =
-            ArenaMaterials.Surface("brawl-crate", new Color(0.16f, 0.13f, 0.07f),
-                new Color(1f, 0.75f, 0.25f), 1.2f, 0.9f);
-        var band = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        band.name = "Band";
-        Object.Destroy(band.GetComponent<Collider>());
-        band.transform.SetParent(go.transform, false);
-        band.transform.localScale = new Vector3(Size + 0.04f, 0.16f, Size + 0.04f);
-        band.GetComponent<MeshRenderer>().sharedMaterial =
-            ArenaMaterials.Emissive("brawl-crate-band", new Color(1f, 0.75f, 0.25f), 1.8f);
+            ArenaMaterials.Lit("brawl-crate-body", new Color(0.30f, 0.24f, 0.13f), 0.35f);
+
+        var strap = ArenaMaterials.Emissive("brawl-crate-band", new Color(1f, 0.75f, 0.25f), 1.8f);
+        foreach (float turn in new[] { 0f, 90f })
+        {
+            var band = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            band.name = "Band";
+            Object.Destroy(band.GetComponent<Collider>());
+            band.transform.SetParent(go.transform, false);
+            band.transform.localRotation = Quaternion.Euler(0f, turn, 0f);
+            band.transform.localScale = new Vector3(Size + 0.04f, Size + 0.04f, 0.16f);
+            band.GetComponent<MeshRenderer>().sharedMaterial = strap;
+        }
+
+        var trim = ArenaMaterials.Lit("brawl-crate-trim", new Color(0.16f, 0.12f, 0.06f), 0.3f);
+        foreach (float sx in new[] { -1f, 1f })
+            foreach (float sz in new[] { -1f, 1f })
+            {
+                var post = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                post.name = "Post";
+                Object.Destroy(post.GetComponent<Collider>());
+                post.transform.SetParent(go.transform, false);
+                post.transform.localPosition =
+                    new Vector3(sx * Size * 0.46f, 0f, sz * Size * 0.46f);
+                post.transform.localScale = new Vector3(0.14f, Size + 0.02f, 0.14f);
+                post.GetComponent<MeshRenderer>().sharedMaterial = trim;
+            }
 
         var box = go.AddComponent<BoxCollider>();
         box.size = Vector3.one * Size;
