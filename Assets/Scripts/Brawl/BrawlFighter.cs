@@ -29,7 +29,7 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>What the driver wants this frame. Buttons are edges except block.</summary>
     public struct Intent
     {
-        public float move;   // -1..1 along the lane
+        public Vector2 move; // world-space XZ direction, magnitude ≤ 1
         public bool jump;
         public bool punch;
         public bool kick;
@@ -60,8 +60,8 @@ public class BrawlFighter : MonoBehaviour
     /// </summary>
     public float Charge { get; private set; }
 
-    /// <summary>+1 facing right (toward +X), -1 facing left.</summary>
-    public float Facing { get; private set; } = 1f;
+    /// <summary>Horizontal unit vector toward the opponent — the fight axis.</summary>
+    public Vector3 FacingDir { get; private set; } = Vector3.right;
 
     /// <summary>The tallest step a walking robot climbs without jumping.</summary>
     const float StepUp = 0.6f;
@@ -72,7 +72,7 @@ public class BrawlFighter : MonoBehaviour
     /// tier, not the ground floor beneath it.
     /// </summary>
     public float Ground => BrawlGround.HeightAt(transform.position.x,
-        aboveY: transform.position.y);
+        transform.position.z, aboveY: transform.position.y);
 
     public bool IsAirborne => transform.position.y > Ground + 0.02f;
 
@@ -109,8 +109,8 @@ public class BrawlFighter : MonoBehaviour
 
     // ---- motion ----
     float _verticalVelocity;
-    float _airVelocityX;
-    float _knockbackVelocity;
+    Vector3 _airVelocity;       // horizontal (XZ) flight
+    Vector3 _knockback;         // horizontal shove, decaying
     float _animatorSpeed;
 
     // ---- move in progress ----
@@ -135,10 +135,10 @@ public class BrawlFighter : MonoBehaviour
     {
         var go = new GameObject(teamId == 0 ? "BrawlFighter_P1" : "BrawlFighter_P2");
         go.transform.SetParent(stageRoot, false);
-        // Cyan opens on the left, the classic P1 side, on the fight line.
+        // Cyan opens on the left, the classic P1 side, on the spawn line.
         float side = teamId == 0 ? -1f : 1f;
         go.transform.localPosition =
-            new Vector3(side * BrawlStage.StartOffset, 0f, BrawlStage.LaneZ);
+            new Vector3(side * BrawlStage.StartOffset, 0f, BrawlStage.SpawnZ);
 
         var fighter = go.AddComponent<BrawlFighter>();
         fighter.TeamId = teamId;
@@ -252,16 +252,16 @@ public class BrawlFighter : MonoBehaviour
         Phase = State.Neutral;
         Driven = default;
         _verticalVelocity = 0f;
-        _airVelocityX = 0f;
-        _knockbackVelocity = 0f;
+        _airVelocity = Vector3.zero;
+        _knockback = Vector3.zero;
         _moveTime = 0f;
         _stunTime = 0f;
         _floorTime = 0f;
         _getUpFired = false;
-        transform.localPosition = new Vector3(_spawnX, 0f, BrawlStage.LaneZ);
+        transform.localPosition = new Vector3(_spawnX, 0f, BrawlStage.SpawnZ);
         // Spawn ON whatever stands here — raised tiles, tall tiers — never
         // inside it: the probe runs from high above.
-        SetY(BrawlGround.HeightAt(transform.position.x, aboveY: 30f));
+        SetY(BrawlGround.HeightAt(transform.position.x, transform.position.z, aboveY: 30f));
         if (_animator != null)
         {
             _animator.Rebind();
@@ -276,20 +276,20 @@ public class BrawlFighter : MonoBehaviour
     /// </summary>
     public void Reposition()
     {
-        Reposition(_spawnX);
+        Reposition(_spawnX, BrawlStage.SpawnZ);
     }
 
     /// <summary>The referee points at a spot; the fighter stands there.</summary>
-    public void Reposition(float x)
+    public void Reposition(float x, float z)
     {
         Phase = State.Neutral;
         Driven = default;
         _verticalVelocity = 0f;
-        _airVelocityX = 0f;
-        _knockbackVelocity = 0f;
+        _airVelocity = Vector3.zero;
+        _knockback = Vector3.zero;
         SetBlock(false);
-        transform.localPosition = new Vector3(x, 0f, BrawlStage.LaneZ);
-        SetY(BrawlGround.HeightAt(transform.position.x, aboveY: 30f));
+        transform.localPosition = new Vector3(x, 0f, z);
+        SetY(BrawlGround.HeightAt(transform.position.x, transform.position.z, aboveY: 30f));
     }
 
     /// <summary>Round lost: fall and stay down. Fires no further events.</summary>
@@ -371,12 +371,15 @@ public class BrawlFighter : MonoBehaviour
         {
             Phase = State.Air;
             _verticalVelocity = BrawlMoveSet.JumpVelocity;
-            _airVelocityX = intent.move * BrawlMoveSet.WalkSpeed;
+            _airVelocity = new Vector3(intent.move.x, 0f, intent.move.y) * BrawlMoveSet.WalkSpeed;
             BrawlAudio.Play(BrawlAudio.Id.Jump, transform.position, 0.4f);
             return;
         }
 
-        GroundWalk(intent.move * BrawlMoveSet.WalkSpeed * dt, dt);
+        Vector3 stride = new Vector3(intent.move.x, 0f, intent.move.y);
+        if (stride.sqrMagnitude > 1f)
+            stride.Normalize();
+        GroundWalk(stride * (BrawlMoveSet.WalkSpeed * dt), dt);
     }
 
     void TickAir(float dt, bool hot)
@@ -391,7 +394,7 @@ public class BrawlFighter : MonoBehaviour
             _moveHasHit = false;
             _grazedThisMove = false;
             // The lunge: committing adds forward speed toward the opponent.
-            _airVelocityX += Facing * 2.2f;
+            _airVelocity += FacingDir * 2.2f;
             Trigger(BrawlAnim.FlyKick);
             hot = true;
         }
@@ -406,11 +409,11 @@ public class BrawlFighter : MonoBehaviour
         }
 
         _verticalVelocity -= BrawlMoveSet.Gravity * dt;
-        // Horizontal flight goes through the shoulder-sampled mover: a
-        // wall stops it dead instead of letting the body enter and pop
-        // out on the block's lid.
-        if (_airVelocityX != 0f && !TryMoveX(_airVelocityX * dt))
-            _airVelocityX = 0f;
+        // Horizontal flight goes through the wall-checked mover: a wall
+        // stops it dead instead of letting the body enter and pop out on
+        // the block's lid.
+        if (_airVelocity.sqrMagnitude > 1e-6f && !TryMove(_airVelocity * dt))
+            _airVelocity = Vector3.zero;
         Move(0f, _verticalVelocity * dt);
 
         float landing = Ground;
@@ -454,7 +457,7 @@ public class BrawlFighter : MonoBehaviour
             // into block faces one press at a time.
             float window = _move.startup + _move.active;
             if (_variant.lunge > 0f && _moveTime <= window)
-                TryMoveX(Facing * (_variant.lunge / window) * dt);
+                TryMove(FacingDir * (_variant.lunge / window * dt));
 
             bool active = _moveTime >= _move.startup && _moveTime <= window;
             if (active && !_moveHasHit)
@@ -487,8 +490,8 @@ public class BrawlFighter : MonoBehaviour
     void TickHitStun(float dt)
     {
         _stunTime -= dt;
-        SlideAlongGround(_knockbackVelocity * dt);
-        _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 12f * dt);
+        SlideAlongGround(_knockback * dt);
+        _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, 12f * dt);
         if (_stunTime <= 0f)
             Phase = State.Neutral;
     }
@@ -497,8 +500,8 @@ public class BrawlFighter : MonoBehaviour
     {
         _floorTime -= dt;
         // The slide: a knocked-down robot travels, it doesn't drop in place.
-        SlideAlongGround(_knockbackVelocity * dt);
-        _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 5f * dt);
+        SlideAlongGround(_knockback * dt);
+        _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, 5f * dt);
         // The rise is its own clip, cued so it completes as control returns.
         if (!_getUpFired && _floorTime <= BrawlMoveSet.GetUpTime)
         {
@@ -574,14 +577,16 @@ public class BrawlFighter : MonoBehaviour
         var target = Opponent;
         if (target == null)
             return;
-        float gap = Mathf.Abs(target.transform.position.x - transform.position.x);
+        Vector3 offset = target.transform.position - transform.position;
+        offset.y = 0f;
+        float gap = offset.magnitude;
         if (gap > _move.range + 1f)
             return;
 
         var effector = ActiveEffector;
         if (effector == null || !target.HasHurtboxes)
         {
-            // Capsule-fallback robots: the old tuned column check.
+            // Capsule-fallback robots: the tuned distance check.
             float dy = Mathf.Abs(target.transform.position.y - transform.position.y);
             float band = _move.move == BrawlMoveSet.Move.FlyKick ? 1.8f : 1.2f;
             if (gap <= _move.range && dy <= band)
@@ -621,17 +626,17 @@ public class BrawlFighter : MonoBehaviour
         if (Phase == State.Knockdown || Phase == State.KO || Phase == State.Celebrating)
             return;
 
-        float away = Mathf.Sign(transform.position.x - attacker.transform.position.x);
-        if (away == 0f)
-            away = -attacker.Facing;
+        Vector3 away = transform.position - attacker.transform.position;
+        away.y = 0f;
+        away = away.sqrMagnitude > 1e-4f ? away.normalized : attacker.FacingDir;
 
-        Vector3 chest = transform.position + new Vector3(-away * 0.35f, 1.2f, 0f);
+        Vector3 chest = transform.position - away * 0.35f + Vector3.up * 1.2f;
 
         // A standing guard eats the hit: no damage (kid rules — no chip),
         // a shove instead of a stagger.
         if (Phase == State.Blocking && !IsAirborne)
         {
-            _knockbackVelocity = away * 2.5f;
+            _knockback = away * 2.5f;
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
             VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
@@ -675,7 +680,7 @@ public class BrawlFighter : MonoBehaviour
             // The clips play in place, so this slide IS the being-blown-
             // backward — ~2.3 m before it decays, and the rise happens
             // wherever it ends.
-            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 6f;
+            _knockback = away * (BrawlMoveSet.HitKnockback * 6f);
             Trigger(BrawlAnim.Knockdown);
         }
         else
@@ -685,7 +690,7 @@ public class BrawlFighter : MonoBehaviour
             // The visible shove: ~1 m of ground given along the attack
             // direction. The old 0.4 m vanished under hit-stop and the
             // attacker's own advance, and hits read as no reaction at all.
-            _knockbackVelocity = away * 4.8f;
+            _knockback = away * 4.8f;
             Trigger(BrawlAnim.Hit);
         }
     }
@@ -723,7 +728,7 @@ public class BrawlFighter : MonoBehaviour
             // The floor left (or never was): fall from here.
             Phase = State.Air;
             _verticalVelocity = 0f;
-            _airVelocityX = 0f;
+            _airVelocity = Vector3.zero;
             return false;
         }
         if (!Mathf.Approximately(y, ground))
@@ -732,27 +737,27 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
-    /// The one horizontal mover everything routes through. Walls are found
-    /// by HORIZONTAL rays from the body toward the move, at knee-plus and
-    /// chest height — the old vertical probe couldn't see any block whose
-    /// top rose above its start (a ray born inside a collider hits
-    /// nothing), which is exactly how tall blocks kept swallowing robots
-    /// on raised terrain. Two heights: above StepUp so ledges still step,
-    /// below the head so every real wall blocks. False = wall.
+    /// The one horizontal mover everything routes through, any direction
+    /// on the plane. Walls are found by HORIZONTAL rays toward the move at
+    /// knee-plus and chest height — vertical probes are blind to any block
+    /// taller than their start (a ray born inside a collider hits
+    /// nothing). False = a wall stopped the move.
     /// </summary>
-    bool TryMoveX(float dx)
+    bool TryMove(Vector3 delta)
     {
-        if (dx == 0f)
+        delta.y = 0f;
+        float length = delta.magnitude;
+        if (length < 1e-6f)
             return true;
-        Vector3 direction = new Vector3(Mathf.Sign(dx), 0f, 0f);
-        float reach = Mathf.Abs(dx) + BrawlMoveSet.BodyHalfWidth;
+        Vector3 direction = delta / length;
+        float reach = length + BrawlMoveSet.BodyHalfWidth;
         Vector3 feet = transform.position;
         if (Physics.Raycast(feet + Vector3.up * (StepUp + 0.15f), direction, reach,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
             || Physics.Raycast(feet + Vector3.up * 1.4f, direction, reach,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             return false;
-        transform.position = new Vector3(feet.x + dx, feet.y, feet.z);
+        transform.position = feet + delta;
         return true;
     }
 
@@ -762,15 +767,15 @@ public class BrawlFighter : MonoBehaviour
     /// shove dead instead of embedding the robot. Hard stops ring the
     /// wall-slam bell.
     /// </summary>
-    void SlideAlongGround(float dx)
+    void SlideAlongGround(Vector3 delta)
     {
-        if (dx == 0f)
+        if (delta.sqrMagnitude < 1e-8f)
             return;
-        if (!TryMoveX(dx))
+        if (!TryMove(delta))
         {
-            if (Mathf.Abs(_knockbackVelocity) > 2f)
-                OnWallSlam?.Invoke(this, Mathf.Abs(_knockbackVelocity));
-            _knockbackVelocity = 0f;
+            if (_knockback.magnitude > 2f)
+                OnWallSlam?.Invoke(this, _knockback.magnitude);
+            _knockback = Vector3.zero;
             return;
         }
         SetY(Ground);
@@ -780,12 +785,12 @@ public class BrawlFighter : MonoBehaviour
     /// Walking over terrain: small ledges are stepped onto, tall stacks
     /// are walls, and edges are walked off into a fall.
     /// </summary>
-    void GroundWalk(float dx, float dt)
+    void GroundWalk(Vector3 delta, float dt)
     {
-        if (dx == 0f)
+        if (delta.sqrMagnitude < 1e-8f)
             return;
         float y = transform.position.y;
-        if (!TryMoveX(dx))
+        if (!TryMove(delta))
             return;   // a wall at the shoulder — jump it instead
         float floor = Ground;   // what's under the CENTRE decides footing
         if (floor >= y - StepUp)
@@ -795,7 +800,7 @@ public class BrawlFighter : MonoBehaviour
             // Walked off the edge: keep the stride as air momentum.
             Phase = State.Air;
             _verticalVelocity = 0f;
-            _airVelocityX = dx / Mathf.Max(dt, 1e-4f);
+            _airVelocity = delta / Mathf.Max(dt, 1e-4f);
         }
     }
 
@@ -819,30 +824,34 @@ public class BrawlFighter : MonoBehaviour
     {
         if (Opponent == null || IsAirborne || Opponent.IsAirborne)
             return;
-        float gap = transform.position.x - Opponent.transform.position.x;
-        float overlap = BrawlMoveSet.MinSeparation - Mathf.Abs(gap);
+        Vector3 gap = transform.position - Opponent.transform.position;
+        gap.y = 0f;
+        float distance = gap.magnitude;
+        float overlap = BrawlMoveSet.MinSeparation - distance;
         if (overlap <= 0f)
             return;
-        float push = (gap >= 0f ? 1f : -1f) * overlap * 0.5f;
-        // Shoulder-checked: never squeezed into a wall face — the
-        // opponent's own Separate carries the spacing at cargo walls.
-        TryMoveX(push);
+        Vector3 direction = distance > 1e-4f ? gap / distance : Vector3.right;
+        // Wall-checked: never squeezed into a face — the opponent's own
+        // Separate carries the spacing at cargo walls.
+        TryMove(direction * (overlap * 0.5f));
     }
 
     void ClampToLane()
     {
         var p = transform.position;
-        float x = Mathf.Clamp(p.x, -BrawlStage.CurrentLaneHalf, BrawlStage.CurrentLaneHalf);
-        if (x != p.x)
+        var half = BrawlStage.BoundsHalf;
+        float x = Mathf.Clamp(p.x, -half.x, half.x);
+        float z = Mathf.Clamp(p.z, -half.y, half.y);
+        if (x != p.x || z != p.z)
         {
-            // Driven into the lane end by a shove — the crystal corners
+            // Driven into the ring's edge by a shove — the crystal corners
             // (and anything else watching) get to react.
-            if (Mathf.Abs(_knockbackVelocity) > 2f)
+            if (_knockback.magnitude > 2f)
             {
-                OnWallSlam?.Invoke(this, Mathf.Abs(_knockbackVelocity));
-                _knockbackVelocity = 0f;
+                OnWallSlam?.Invoke(this, _knockback.magnitude);
+                _knockback = Vector3.zero;
             }
-            transform.position = new Vector3(x, p.y, p.z);
+            transform.position = new Vector3(x, p.y, z);
         }
     }
 
@@ -859,9 +868,13 @@ public class BrawlFighter : MonoBehaviour
     {
         if (Opponent == null)
             return;
-        Facing = Opponent.transform.position.x >= transform.position.x ? 1f : -1f;
-        // Robots model +Z as forward and the lane runs along X: ±90° yaw.
-        transform.rotation = Quaternion.Euler(0f, 90f * Facing, 0f);
+        Vector3 toFoe = Opponent.transform.position - transform.position;
+        toFoe.y = 0f;
+        if (toFoe.sqrMagnitude < 1e-4f)
+            return;
+        FacingDir = toFoe.normalized;
+        // Robots model +Z as forward: look straight at the opponent.
+        transform.rotation = Quaternion.LookRotation(FacingDir, Vector3.up);
     }
 
     // ------------------------------------------------------------ animator
@@ -870,7 +883,8 @@ public class BrawlFighter : MonoBehaviour
     {
         if (_animator == null)
             return;
-        float target = Phase == State.Neutral ? Mathf.Abs(Live.move) * BrawlMoveSet.WalkSpeed : 0f;
+        float target = Phase == State.Neutral
+            ? Mathf.Min(1f, Live.move.magnitude) * BrawlMoveSet.WalkSpeed : 0f;
         _animatorSpeed = Mathf.Lerp(_animatorSpeed, target, 1f - Mathf.Exp(-12f * dt));
         _animator.SetFloat(BrawlAnim.SpeedHash, _animatorSpeed);
     }

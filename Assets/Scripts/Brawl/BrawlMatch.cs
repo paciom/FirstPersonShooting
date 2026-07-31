@@ -131,12 +131,14 @@ public class BrawlMatch : MonoBehaviour
                 if (Time.time - _lastContact > 8f)
                 {
                     _lastContact = Time.time;
+                    float atZ = (_cyan.transform.position.z + _magenta.transform.position.z) * 0.5f;
+                    atZ = Mathf.Clamp(atZ, -BrawlStage.BoundsHalf.y + 2f, BrawlStage.BoundsHalf.y - 2f);
                     float centre = FindClearSpan(
-                        (_cyan.transform.position.x + _magenta.transform.position.x) * 0.5f);
+                        (_cyan.transform.position.x + _magenta.transform.position.x) * 0.5f, atZ);
                     RefereeFlash(_cyan);
                     RefereeFlash(_magenta);
-                    _cyan.Reposition(centre - 1.2f);
-                    _magenta.Reposition(centre + 1.2f);
+                    _cyan.Reposition(centre - 1.2f, atZ);
+                    _magenta.Reposition(centre + 1.2f, atZ);
                     RefereeFlash(_cyan);
                     RefereeFlash(_magenta);
                     _hud.Announce("BREAK!", 0.9f, Color.white);
@@ -198,9 +200,9 @@ public class BrawlMatch : MonoBehaviour
     /// blind probe once scored the pyramid's interior as 'flat ground'
     /// and the break teleported both fighters onto its peak.
     /// </summary>
-    static float FindClearSpan(float near)
+    static float FindClearSpan(float near, float atZ)
     {
-        float half = BrawlStage.CurrentLaneHalf - 2f;
+        float half = BrawlStage.BoundsHalf.x - 2f;
         float bestCentre = 0f;
         float bestScore = float.MinValue;
         for (float centre = -half; centre <= half; centre += 1f)
@@ -209,7 +211,7 @@ public class BrawlMatch : MonoBehaviour
             float high = float.MinValue;
             for (float offset = -1.8f; offset <= 1.8f; offset += 0.6f)
             {
-                float height = BrawlGround.HeightAt(centre + offset, aboveY: 30f);
+                float height = BrawlGround.HeightAt(centre + offset, atZ, aboveY: 30f);
                 low = Mathf.Min(low, height);
                 high = Mathf.Max(high, height);
             }

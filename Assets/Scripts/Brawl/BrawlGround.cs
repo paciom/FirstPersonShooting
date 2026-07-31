@@ -17,15 +17,15 @@ public static class BrawlGround
     class Platform
     {
         public Component owner;
-        public System.Func<float, float> topAt;   // NaN = not under this x
+        public System.Func<float, float, float> topAt;   // (x, z) => top, NaN = not here
     }
 
     static readonly List<Platform> Platforms = new List<Platform>();
 
     public static void Clear() => Platforms.Clear();
 
-    /// <summary>Register a platform: return the surface height at x, or NaN when x is off it.</summary>
-    public static void Register(Component owner, System.Func<float, float> topAt)
+    /// <summary>Register a platform: surface height at (x, z), NaN when off it.</summary>
+    public static void Register(Component owner, System.Func<float, float, float> topAt)
     {
         Platforms.Add(new Platform { owner = owner, topAt = topAt });
     }
@@ -56,15 +56,15 @@ public static class BrawlGround
     /// its own head height, so tall structures are real floors instead of
     /// surfaces the fixed-height probe was born inside of (and blind to).
     /// </summary>
-    public static float HeightAt(float x, float below = float.PositiveInfinity,
+    public static float HeightAt(float x, float z, float below = float.PositiveInfinity,
         Component exclude = null, float aboveY = float.NegativeInfinity)
     {
         float best = 0f;
         float probeStart = Mathf.Max(ProbeTop, aboveY + 2.4f);
         // DefaultRaycastLayers skips Ignore Raycast — where fighters'
-        // bumper capsules and still-bouncing crates live. The probe runs
-        // on the ACTIVE fight line, wherever the stage put it.
-        if (Physics.Raycast(new Vector3(x, probeStart, BrawlStage.LaneZ), Vector3.down, out var hit,
+        // bumper capsules and still-bouncing crates live. The fight is a
+        // PLANE now, so the probe takes both coordinates.
+        if (Physics.Raycast(new Vector3(x, probeStart, z), Vector3.down, out var hit,
                 probeStart + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             float top = hit.point.y;
@@ -82,7 +82,7 @@ public static class BrawlGround
             }
             if (platform.owner == exclude)
                 continue;
-            float top = platform.topAt(x);
+            float top = platform.topAt(x, z);
             if (float.IsNaN(top) || top > below + 0.3f)
                 continue;
             if (top > best)

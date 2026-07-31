@@ -13,13 +13,15 @@ public class BrawlCamera : MonoBehaviour
     const float NearDistance = 8f;
     const float FarDistance = 14f;
 
-    // Viewing azimuths the director may cut between, degrees around the
-    // fight (0 = the classic side). Scored by line-of-sight every beat.
-    static readonly float[] Angles = { 0f, 28f, -28f, 56f, -56f, 180f };
+    // Viewing azimuths the director may cut between: the full circle in
+    // 30° steps — no home side, purely the best available shot.
+    static readonly float[] Angles =
+        { 0f, 30f, 60f, 90f, 120f, 150f, 180f, 210f, 240f, 270f, 300f, 330f };
 
     Transform _a, _b;
     float _x;
     float _y;
+    float _z;
     float _distance = NearDistance;
     float _shakeAmplitude;
     float _obstruction;
@@ -27,14 +29,11 @@ public class BrawlCamera : MonoBehaviour
     float _azimuthTarget;
     float _rethink;
 
-    // Slightly inside the lane so the frame never slides off the ends.
-    static float TrackHalf => BrawlStage.CurrentLaneHalf - 1.5f;
-
     public void SetTargets(Transform a, Transform b)
     {
         _a = a;
         _b = b;
-        Solve(out _x, out _y, out _distance);
+        Solve(out _x, out _y, out _z, out _distance);
         Place(Vector3.zero);
     }
 
@@ -44,18 +43,19 @@ public class BrawlCamera : MonoBehaviour
         _shakeAmplitude = Mathf.Max(_shakeAmplitude, amplitude);
     }
 
-    void Solve(out float x, out float y, out float distance)
+    void Solve(out float x, out float y, out float z, out float distance)
     {
-        x = Mathf.Clamp((_a.position.x + _b.position.x) * 0.5f, -TrackHalf, TrackHalf);
-        // The gaze RIDES the fighters' elevation — a duel on top of remix
-        // structures is framed exactly like one on the deck, instead of the
-        // camera staring at the ground floor while the fight happens above.
+        // The gaze rides the fighters' midpoint in ALL THREE axes now —
+        // the fight roams a plane and climbs terrain.
+        x = (_a.position.x + _b.position.x) * 0.5f;
         y = (_a.position.y + _b.position.y) * 0.5f;
+        z = (_a.position.z + _b.position.z) * 0.5f;
         // Vertical splits (one robot up a level) need pull-back too, and
         // more per metre than lateral ones — the frame is wide, not tall.
-        float separation = Mathf.Max(
-            Mathf.Abs(_a.position.x - _b.position.x),
-            Mathf.Abs(_a.position.y - _b.position.y) * 2.2f);
+        Vector3 flat = _a.position - _b.position;
+        float dy = Mathf.Abs(flat.y);
+        flat.y = 0f;
+        float separation = Mathf.Max(flat.magnitude, dy * 2.2f);
         distance = Mathf.Lerp(NearDistance, FarDistance,
             Mathf.InverseLerp(2f, 10f, separation));
     }
@@ -65,10 +65,11 @@ public class BrawlCamera : MonoBehaviour
         if (_a == null || _b == null)
             return;
 
-        Solve(out float wantedX, out float wantedY, out float wantedDistance);
+        Solve(out float wantedX, out float wantedY, out float wantedZ, out float wantedDistance);
         float ease = 1f - Mathf.Exp(-6f * Time.deltaTime);
         _x = Mathf.Lerp(_x, wantedX, ease);
         _y = Mathf.Lerp(_y, wantedY, ease);
+        _z = Mathf.Lerp(_z, wantedZ, ease);
         _distance = Mathf.Lerp(_distance, wantedDistance, ease);
 
         // The director's beat: every so often, score the candidate angles
@@ -147,23 +148,29 @@ public class BrawlCamera : MonoBehaviour
 
     void ChooseAzimuth()
     {
-        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ));
+        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, _z));
+        // The best fighting shot is PERPENDICULAR to the line between the
+        // fighters — both robots separated on screen instead of stacked.
+        Vector3 pair = _b.position - _a.position;
+        pair.y = 0f;
+        Vector3 pairDir = pair.sqrMagnitude > 1e-4f ? pair.normalized : Vector3.right;
+
         float bestScore = float.MinValue;
         float best = _azimuthTarget;
         foreach (var candidate in Angles)
         {
-            Vector3 offset = AzimuthDirection(candidate) * _distance + Vector3.up * 1.2f;
+            Vector3 direction = AzimuthDirection(candidate);
+            Vector3 offset = direction * _distance + Vector3.up * 1.2f;
             Vector3 end = gaze + offset;
             float clear = Occlusion(gaze, offset.normalized, _distance);
             // An end position embedded in geometry can't be a shot at all.
             if (Physics.CheckSphere(end, 0.32f,
                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 clear -= 100f;
-            // Clear sight wins; staying put and the classic side both get
-            // a thumb on the scale so the director doesn't fidget.
+            // Clear sight first, side-on framing second, no fidgeting third.
             float score = clear
-                          - Mathf.Abs(Mathf.DeltaAngle(candidate, _azimuthTarget)) * 0.010f
-                          - Mathf.Abs(Mathf.DeltaAngle(candidate, 0f)) * 0.012f;
+                          + (1f - Mathf.Abs(Vector3.Dot(direction, pairDir))) * 2.5f
+                          - Mathf.Abs(Mathf.DeltaAngle(candidate, _azimuthTarget)) * 0.012f;
             if (score > bestScore)
             {
                 bestScore = score;
@@ -178,7 +185,7 @@ public class BrawlCamera : MonoBehaviour
         // The gaze point rides at chest height above the fighters' own
         // level; shake moves it at half strength so a thump reads as a
         // jolt, not a pan. A slow sway keeps even a standoff alive.
-        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ)) + shake * 0.5f;
+        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, _z)) + shake * 0.5f;
         float swayed = _azimuth + 4f * Mathf.Sin(Time.time * 0.35f);
         Vector3 desired = gaze + AzimuthDirection(swayed) * _distance + Vector3.up * 1.2f;
 

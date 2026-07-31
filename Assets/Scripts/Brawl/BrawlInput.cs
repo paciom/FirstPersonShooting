@@ -19,17 +19,27 @@ public class BrawlInput : MonoBehaviour
     {
         if (Fighter == null)
             return;
+        // Movement is OPPONENT-RELATIVE — the kid-simple frame for an
+        // arena brawler: W/S close in and back off, A/D circle around.
+        // The fighter auto-faces, so 'forward' always means 'at them'.
+        float inOut = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f)
+                      + BrawlTouch.Move;
+        float circle = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
+        Vector3 forward = Fighter.FacingDir;
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        Vector3 world = forward * inOut + right * circle;
+        if (world.sqrMagnitude > 1f)
+            world.Normalize();
+
         // Keyboard and touch merge here; either hand can drive any part.
         Fighter.Driven = new BrawlFighter.Intent
         {
-            move = Mathf.Clamp(
-                (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f)
-                + BrawlTouch.Move, -1f, 1f),
-            jump = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W)
-                   || BrawlTouch.ConsumeJump(),
+            move = new Vector2(world.x, world.z),
+            jump = Input.GetKeyDown(KeyCode.Space) || BrawlTouch.ConsumeJump(),
             punch = Input.GetKeyDown(KeyCode.J) || BrawlTouch.ConsumePunch(),
             kick = Input.GetKeyDown(KeyCode.K) || BrawlTouch.ConsumeKick(),
-            block = Input.GetKey(KeyCode.S) || BrawlTouch.BlockHeld,
+            block = Input.GetKey(KeyCode.C) || Input.GetKey(KeyCode.LeftShift)
+                    || BrawlTouch.BlockHeld,
             blast = Input.GetKeyDown(KeyCode.L) || BrawlTouch.ConsumeBlast(),
         };
     }

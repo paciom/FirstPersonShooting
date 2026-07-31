@@ -28,7 +28,7 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
     bool _settled;
     GameObject _warning;
 
-    public static void Spawn(Transform stageRoot, float x)
+    public static void Spawn(Transform stageRoot, float x, float z)
     {
         if (_bouncy == null)
             _bouncy = new PhysicsMaterial("brawl-crate")
@@ -42,8 +42,9 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         var go = new GameObject("BrawlCrate");
         go.layer = IgnoreRaycastLayer;   // not terrain until it settles
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 9f, BrawlStage.LaneZ);
-        go.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-10f, 10f));
+        go.transform.localPosition = new Vector3(x, 9f, z);
+        go.transform.localRotation = Quaternion.Euler(
+            Random.Range(-8f, 8f), Random.Range(0f, 360f), Random.Range(-8f, 8f));
 
         var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
         visual.name = "Body";
@@ -67,26 +68,25 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
 
         var body = go.AddComponent<Rigidbody>();
         body.mass = 3f;
-        body.constraints = RigidbodyConstraints.FreezePositionZ
-                           | RigidbodyConstraints.FreezeRotationX
-                           | RigidbodyConstraints.FreezeRotationY;
-        body.angularVelocity = new Vector3(0f, 0f, Random.Range(-2f, 2f));
+        // A plane fight gets full 3D tumble — no frozen axes.
+        body.angularVelocity = new Vector3(
+            Random.Range(-2f, 2f), Random.Range(-1f, 1f), Random.Range(-2f, 2f));
 
         var crate = go.AddComponent<BrawlCrate>();
         crate._body = body;
         crate._box = box;
-        crate._warning = crate.BuildWarningRing(stageRoot, x);
+        crate._warning = crate.BuildWarningRing(stageRoot, x, z);
         BrawlProps.Register(crate);
     }
 
-    GameObject BuildWarningRing(Transform stageRoot, float x)
+    GameObject BuildWarningRing(Transform stageRoot, float x, float z)
     {
         var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         ring.name = "DropWarning";
         Destroy(ring.GetComponent<Collider>());
         ring.transform.SetParent(stageRoot, false);
         ring.transform.localPosition =
-            new Vector3(x, BrawlGround.HeightAt(x) + 0.03f, BrawlStage.LaneZ);
+            new Vector3(x, BrawlGround.HeightAt(x, z) + 0.03f, z);
         ring.transform.localScale = new Vector3(Size * 1.3f, 0.012f, Size * 1.3f);
         ring.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Emissive("brawl-crate-warning", new Color(1f, 0.55f, 0.15f), 2.2f);
@@ -164,10 +164,10 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         _hitsLeft--;
         _kicker = attacker;
         _kickerGrace = 0.6f;
-        float direction = attacker != null ? attacker.Facing : 1f;
+        Vector3 direction = attacker != null ? attacker.FacingDir : Vector3.right;
         // The kick is an impulse with spin — the box TUMBLES away.
-        _body.linearVelocity = new Vector3(direction * 7f, 3.2f, 0f);
-        _body.angularVelocity = new Vector3(0f, 0f, -direction * 9f);
+        _body.linearVelocity = direction * 7f + Vector3.up * 3.2f;
+        _body.angularVelocity = Vector3.Cross(direction, Vector3.up) * -9f;
         VfxUtil.SpawnBurst(point, new Color(1f, 0.8f, 0.4f), 6, 3f, 0.09f);
         BrawlAudio.Play(BrawlAudio.Id.Hit, point, 0.7f);
 

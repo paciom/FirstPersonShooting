@@ -13,17 +13,17 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
     const float LazyBounce = 5.5f;
     const float LifeSeconds = 26f;
 
-    float _vx;
+    Vector3 _velocity;   // horizontal (XZ)
     float _vy;
     float _hot;      // seconds the ball stays dangerous after a kick
     BrawlFighter _kicker;
     float _life = LifeSeconds;
 
-    public static void Spawn(Transform stageRoot, float x)
+    public static void Spawn(Transform stageRoot, float x, float z)
     {
         var go = new GameObject("BrawlBall");
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 7.5f, BrawlStage.LaneZ);
+        go.transform.localPosition = new Vector3(x, 7.5f, z);
 
         var shell = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         shell.name = "Shell";
@@ -40,7 +40,8 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
         light.intensity = 1.1f;
 
         var ball = go.AddComponent<BrawlBall>();
-        ball._vx = Random.value < 0.5f ? 1.6f : -1.6f;
+        float wander = Random.Range(0f, Mathf.PI * 2f);
+        ball._velocity = new Vector3(Mathf.Cos(wander), 0f, Mathf.Sin(wander)) * 1.6f;
         BrawlProps.Register(ball);
     }
 
@@ -56,22 +57,27 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
         }
 
         _vy -= BrawlMoveSet.Gravity * dt;
-        var p = transform.position + new Vector3(_vx * dt, _vy * dt, 0f);
+        var p = transform.position + _velocity * dt + Vector3.up * (_vy * dt);
 
-        // The lane ends and the floor are its walls; energy fades back to
-        // the lazy bounce whether it was kicked hard or not.
-        float half = BrawlStage.CurrentLaneHalf;
-        if (p.x < -half + Radius || p.x > half - Radius)
+        // The ring's edges and the floor are its walls; energy fades back
+        // to the lazy bounce whether it was kicked hard or not.
+        var half = BrawlStage.BoundsHalf;
+        if (p.x < -half.x + Radius || p.x > half.x - Radius)
         {
-            p.x = Mathf.Clamp(p.x, -half + Radius, half - Radius);
-            _vx = -_vx * 0.85f;
+            p.x = Mathf.Clamp(p.x, -half.x + Radius, half.x - Radius);
+            _velocity.x = -_velocity.x * 0.85f;
         }
-        float floor = BrawlGround.HeightAt(p.x) + Radius;
+        if (p.z < -half.y + Radius || p.z > half.y - Radius)
+        {
+            p.z = Mathf.Clamp(p.z, -half.y + Radius, half.y - Radius);
+            _velocity.z = -_velocity.z * 0.85f;
+        }
+        float floor = BrawlGround.HeightAt(p.x, p.z) + Radius;
         if (p.y < floor && _vy < 0f)
         {
             p.y = floor;
             _vy = Mathf.Max(-_vy * Restitution, LazyBounce);
-            _vx *= 0.96f;
+            _velocity *= 0.96f;
             BrawlAudio.Play(BrawlAudio.Id.Graze, p, 0.3f);
         }
         transform.position = p;
@@ -100,7 +106,7 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
             fighter.TakeHit(hit, _kicker != null ? _kicker : fighter.Opponent);
             VfxUtil.ImpactBurst(transform.position, new Color(0.7f, 0.5f, 1f));
             _hot = 0f;
-            _vx = -_vx * 0.5f;
+            _velocity = -_velocity * 0.5f;
             _vy = Mathf.Max(_vy, 4f);
             return;
         }
@@ -112,8 +118,8 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
             return false;
         _kicker = attacker;
         _hot = 1.6f;
-        float direction = attacker != null ? attacker.Facing : Mathf.Sign(-transform.position.x);
-        _vx = direction * 9.5f;
+        Vector3 direction = attacker != null ? attacker.FacingDir : -transform.position.normalized;
+        _velocity = direction * 9.5f;
         _vy = 4.5f;
         VfxUtil.SpawnBurst(transform.position, new Color(0.7f, 0.5f, 1f), 7, 3.5f, 0.10f);
         BrawlAudio.Play(BrawlAudio.Id.Hit, transform.position, 0.8f);

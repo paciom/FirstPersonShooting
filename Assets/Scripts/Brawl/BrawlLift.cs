@@ -18,7 +18,7 @@ public class BrawlLift : MonoBehaviour
     {
         var go = new GameObject("BrawlLift");
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 0f, BrawlStage.LaneZ);
+        go.transform.localPosition = new Vector3(x, 0f, BrawlStage.SpawnZ);
 
         var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
         pad.name = "Pad";
@@ -54,9 +54,10 @@ public class BrawlLift : MonoBehaviour
         _top = transform.position.y + 0.11f;
     }
 
-    float WalkableTop(float x)
+    float WalkableTop(float x, float z)
     {
-        if (Mathf.Abs(x - transform.position.x) > Width * 0.5f)
+        if (Mathf.Abs(x - transform.position.x) > Width * 0.5f
+            || Mathf.Abs(z - transform.position.z) > 1.2f)
             return float.NaN;
         return _top;
     }

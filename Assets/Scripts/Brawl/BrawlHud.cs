@@ -251,16 +251,16 @@ public class BrawlHud : MonoBehaviour
         titleRect.sizeDelta = new Vector2(900f, 70f);
 
         var body = MakeText(_helpPanel.transform, "Body",
-            "MOVE  —  A / D   (or the ◀ ▶ pads)\n" +
+            "MOVE  —  W / S close in and back off   ·   A / D circle around\n" +
+            "        (you always face your opponent — the whole arena is yours)\n" +
             "JUMP  —  SPACE   (or JUMP)\n" +
             "PUNCH  —  J   ·   a different kung fu punch every press\n" +
             "KICK  —  K   ·   a different kick every press — in the air: FLYING KICK\n" +
-            "BLOCK  —  hold S   ·   a guard takes no damage\n" +
+            "BLOCK  —  hold C (or SHIFT)   ·   a guard takes no damage\n" +
             "PHOTON BLAST  —  L when the meter below your bar is full\n" +
             "\n" +
             "Landing hits fills your BLAST meter. Getting hit fills it a little too.\n" +
             "Win the round: empty their health, or lead when time runs out.\n" +
-            "Win the match: take two rounds.\n" +
             "\n" +
             "=  —  show the buttons     F3  —  hitboxes     ESC  —  menu",
             26, new Color(1f, 1f, 1f, 0.92f), FontStyle.Normal);

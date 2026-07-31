@@ -12,22 +12,22 @@ using UnityEngine;
 /// </summary>
 public static class BrawlStage
 {
-    /// <summary>Half-length of the authored stage's lane — the corners.</summary>
+    /// <summary>Half-length of the authored stage's long axis.</summary>
     public const float LaneHalf = 8f;
 
     /// <summary>
-    /// The ACTIVE lane bounds. Authored stages fence at ±8; remix stages
-    /// open to ±14 — the arena is the stage, and the fight ranges across
-    /// its whole terrain.
+    /// The fight AREA's half extents (x, z) — the brawl is a plane, not a
+    /// line. Authored stages fence a 16×12 floor; remix stages open the
+    /// whole arena, 28×28.
     /// </summary>
-    public static float CurrentLaneHalf { get; private set; } = LaneHalf;
+    public static Vector2 BoundsHalf { get; private set; } = new Vector2(LaneHalf, 6f);
 
     /// <summary>
-    /// WHERE the fight line runs (world z). Authored stages use 0; remix
-    /// stages scan candidate lines and pick the most traversable one, so
-    /// the lane threads between pillars instead of through them.
+    /// Where the fighters START (world z). Remix stages scan candidate
+    /// lines and open on the most traversable one; the fight roams free
+    /// from there.
     /// </summary>
-    public static float LaneZ { get; private set; }
+    public static float SpawnZ { get; private set; }
 
     /// <summary>Where each fighter starts, either side of centre.</summary>
     public const float StartOffset = 3f;
@@ -54,40 +54,42 @@ public static class BrawlStage
         // the container for the stage's toys; the arena is the stage.
         if (def.remixArena)
         {
-            CurrentLaneHalf = 14f;
-            LaneZ = PickFightLine();
+            BoundsHalf = new Vector2(14f, 14f);
+            SpawnZ = PickFightLine();
             FinishFeatures(root, def, roster);
             return root;
         }
-        CurrentLaneHalf = LaneHalf;
-        LaneZ = 0f;
+        BoundsHalf = new Vector2(LaneHalf, 6f);
+        SpawnZ = 0f;
 
-        // The deck: top surface at exactly y = 0, where the fighters stand.
-        // Panel-seam surface rather than flat lit, so lateral motion reads
-        // even in the middle of an empty floor.
+        // The deck: a FLOOR now, not a strip — the fight is a plane. Top
+        // surface at exactly y = 0. Panel seams so motion reads anywhere.
         Box(root, "Deck",
-            new Vector3(0f, -0.45f, 0f), new Vector3(LaneHalf * 2f + 4f, 0.9f, 6f),
+            new Vector3(0f, -0.45f, 0f), new Vector3(LaneHalf * 2f + 4f, 0.9f, 13f),
             ArenaMaterials.Surface("brawl-deck", DeckDark, EdgeCyan, 3.5f, 0.5f));
 
-        // Glowing rails along the long edges — the lane, drawn in light.
+        // Glowing rails around the whole floor — the ring, drawn in light.
         // 2.2 emission: hot enough to bloom, under the 2.5 whiteout line.
         var rail = ArenaMaterials.Emissive("brawl-rail", EdgeCyan, 2.2f);
-        Box(root, "RailNear", new Vector3(0f, 0.03f, -3.05f),
+        Box(root, "RailNear", new Vector3(0f, 0.03f, -6.55f),
             new Vector3(LaneHalf * 2f + 4f, 0.06f, 0.12f), rail);
-        Box(root, "RailFar", new Vector3(0f, 0.03f, 3.05f),
+        Box(root, "RailFar", new Vector3(0f, 0.03f, 6.55f),
             new Vector3(LaneHalf * 2f + 4f, 0.06f, 0.12f), rail);
+        Box(root, "RailLeft", new Vector3(-(LaneHalf + 2f), 0.03f, 0f),
+            new Vector3(0.12f, 0.06f, 13f), rail);
+        Box(root, "RailRight", new Vector3(LaneHalf + 2f, 0.03f, 0f),
+            new Vector3(0.12f, 0.06f, 13f), rail);
 
-        // Corner pylons: the ends of the world, so being cornered is visible
-        // from across the room. Dark column, hot cap.
+        // Corner pylons: the ring's posts. Dark column, hot cap.
         var pylon = ArenaMaterials.Lit("brawl-pylon", new Color(0.06f, 0.08f, 0.11f), 0.4f);
         var cap = ArenaMaterials.Emissive("brawl-pylon-cap", EdgeCyan, 2.0f);
         foreach (float sx in new[] { -1f, 1f })
             foreach (float sz in new[] { -1f, 1f })
             {
-                float x = sx * (LaneHalf + 1.4f);
-                Box(root, "Pylon", new Vector3(x, 1.5f, sz * 2.7f),
+                float x = sx * (LaneHalf + 1.9f);
+                Box(root, "Pylon", new Vector3(x, 1.5f, sz * 6.4f),
                     new Vector3(0.35f, 3f, 0.35f), pylon);
-                Box(root, "PylonCap", new Vector3(x, 3.1f, sz * 2.7f),
+                Box(root, "PylonCap", new Vector3(x, 3.1f, sz * 6.4f),
                     new Vector3(0.45f, 0.2f, 0.45f), cap);
             }
 

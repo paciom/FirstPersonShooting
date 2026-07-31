@@ -23,9 +23,10 @@ public class BrawlBrain : MonoBehaviour
     float _flair;
 
     float _nextThink;
-    float _moveHeld;
+    Vector3 _moveHeld;          // world-space heading, magnitude ≤ 1
     float _blockUntil;
     float _retreatUntil;
+    float _orbitSign = 1f;      // which way this robot likes to circle
     bool _punchOnce, _kickOnce, _jumpOnce, _blastOnce;
     bool _flyKickQueued;
     BrawlFighter.State _lastPhase;
@@ -69,7 +70,7 @@ public class BrawlBrain : MonoBehaviour
 
         var intent = new BrawlFighter.Intent
         {
-            move = _moveHeld,
+            move = new Vector2(_moveHeld.x, _moveHeld.z),
             block = Time.time < _blockUntil,
             punch = _punchOnce,
             kick = _kickOnce,
@@ -90,10 +91,16 @@ public class BrawlBrain : MonoBehaviour
 
     void Think(BrawlFighter self, BrawlFighter foe)
     {
-        float toFoe = Mathf.Sign(foe.transform.position.x - self.transform.position.x);
-        if (toFoe == 0f)
-            toFoe = 1f;
-        float gap = Mathf.Abs(foe.transform.position.x - self.transform.position.x);
+        Vector3 offset = foe.transform.position - self.transform.position;
+        offset.y = 0f;
+        float gap = offset.magnitude;
+        Vector3 toFoe = gap > 1e-4f ? offset / gap : Vector3.right;
+        Vector3 orbit = Vector3.Cross(Vector3.up, toFoe) * _orbitSign;
+        // Circling is what makes an arena fight look like one — and every
+        // so often the robot changes its mind about which way around.
+        if (Random.value < 0.12f)
+            _orbitSign = -_orbitSign;
+
         // Spacing judgment scales the bands: a rookie swings from too far
         // and eats the whiff; a master steps in until the arm arrives.
         float punchBand = BrawlMoveSet.Table[BrawlMoveSet.Move.Punch].range
@@ -101,13 +108,14 @@ public class BrawlBrain : MonoBehaviour
         float kickBand = BrawlMoveSet.Table[BrawlMoveSet.Move.Kick].range
                          * 0.95f * _level.spacingError;
 
-        // Respect window after a knockdown: give ground, keep the guard up —
-        // unless the corner is already at our back, where retreat means pin.
+        // Respect window after a knockdown: give ground on an angle, keep
+        // the guard up — unless the ring's edge is already at our back.
         if (Time.time < _retreatUntil)
         {
-            bool cornered = Mathf.Abs(self.transform.position.x) > BrawlStage.CurrentLaneHalf - 1.2f
-                            && Mathf.Sign(self.transform.position.x) == -toFoe;
-            _moveHeld = cornered ? 0f : -toFoe * 0.8f;
+            Vector3 back = self.transform.position - toFoe * 1.2f;
+            var half = BrawlStage.BoundsHalf;
+            bool cornered = Mathf.Abs(back.x) > half.x - 0.5f || Mathf.Abs(back.z) > half.y - 0.5f;
+            _moveHeld = cornered ? orbit * 0.7f : (-toFoe * 0.7f + orbit * 0.4f);
             _blockUntil = Time.time + 0.25f;
             return;
         }
@@ -142,7 +150,7 @@ public class BrawlBrain : MonoBehaviour
                            || foe.Phase == BrawlFighter.State.AirAttack;
         if (foeSwinging && gap < kickBand + 0.5f && Random.value < _level.guardChance)
         {
-            _moveHeld = 0f;
+            _moveHeld = Vector3.zero;
             _blockUntil = Time.time + Random.Range(0.25f, 0.50f);
             return;
         }
@@ -151,7 +159,7 @@ public class BrawlBrain : MonoBehaviour
         if (self.Charge >= 1f && !foe.IsAirborne && gap > punchBand
             && Random.value < _level.blastChance * 0.7f)
         {
-            _moveHeld = 0f;
+            _moveHeld = Vector3.zero;
             _blastOnce = true;
             return;
         }
@@ -160,7 +168,7 @@ public class BrawlBrain : MonoBehaviour
         if (foe.IsAirborne && gap < punchBand + 0.4f
             && Random.value < 0.30f + _level.guardChance * 0.5f)
         {
-            _moveHeld = 0f;
+            _moveHeld = Vector3.zero;
             _punchOnce = true;
             return;
         }
@@ -169,14 +177,14 @@ public class BrawlBrain : MonoBehaviour
         {
             float roll = Random.value;
             if (roll < 0.40f + 0.22f * _aggression) { _punchOnce = true; _moveHeld = toFoe * 0.2f; }
-            else if (roll < 0.70f + 0.15f * _aggression) { _kickOnce = true; _moveHeld = 0f; }
-            else if (roll < 0.86f) _moveHeld = -toFoe * 0.9f;
-            else { _blockUntil = Time.time + 0.30f; _moveHeld = 0f; }
+            else if (roll < 0.70f + 0.15f * _aggression) { _kickOnce = true; _moveHeld = Vector3.zero; }
+            else if (roll < 0.86f) _moveHeld = -toFoe * 0.6f + orbit * 0.5f;
+            else { _blockUntil = Time.time + 0.30f; _moveHeld = Vector3.zero; }
         }
         else if (gap <= kickBand + 0.3f)
         {
             float roll = Random.value;
-            if (roll < 0.40f + 0.20f * _aggression) { _kickOnce = true; _moveHeld = 0f; }
+            if (roll < 0.40f + 0.20f * _aggression) { _kickOnce = true; _moveHeld = Vector3.zero; }
             else if (roll < 0.55f + 0.25f * _flair && gap > 1.4f)
             {
                 _jumpOnce = true;
@@ -184,19 +192,20 @@ public class BrawlBrain : MonoBehaviour
                 _moveHeld = toFoe;
             }
             else
-                _moveHeld = toFoe * 0.8f;
+                // The footsie dance: pressure on a curve, not a rail.
+                _moveHeld = toFoe * 0.6f + orbit * 0.55f;
         }
         else
         {
-            _moveHeld = toFoe * (0.7f + 0.3f * _aggression);
+            _moveHeld = toFoe * (0.7f + 0.3f * _aggression) + orbit * 0.3f;
             if (WallAhead(self, toFoe, out bool jumpable))
             {
-                // Scenery in the path: hop what's hoppable; lean patiently
-                // on the impassable (the referee breaks true checkmates).
+                // Scenery in the path: hop what's hoppable, or FLOW AROUND
+                // it — a plane has an 'around', the lane never did.
                 if (jumpable && !self.IsAirborne)
                     _jumpOnce = true;
-                else if (!jumpable)
-                    _moveHeld = toFoe * 0.2f;
+                else
+                    _moveHeld = toFoe * 0.25f + orbit * 0.9f;
             }
             else if (gap < 5.5f && Random.value < _flair * 0.35f)
             {
@@ -205,20 +214,21 @@ public class BrawlBrain : MonoBehaviour
                 _moveHeld = toFoe;
             }
         }
+        if (_moveHeld.sqrMagnitude > 1f)
+            _moveHeld.Normalize();
     }
 
     /// <summary>
-    /// Is a wall in the next stride? Horizontal rays, like the fighter's
-    /// own mover: one above step height (a wall exists), one above jump
-    /// reach (too tall to hop).
+    /// Is a wall in the next stride toward the foe? Horizontal rays, like
+    /// the fighter's own mover: one above step height (a wall exists),
+    /// one above jump reach (too tall to hop).
     /// </summary>
-    static bool WallAhead(BrawlFighter self, float toFoe, out bool jumpable)
+    static bool WallAhead(BrawlFighter self, Vector3 toFoe, out bool jumpable)
     {
         Vector3 feet = self.transform.position;
-        var direction = new Vector3(toFoe, 0f, 0f);
-        bool wall = Physics.Raycast(feet + Vector3.up * 0.8f, direction, 1.1f,
+        bool wall = Physics.Raycast(feet + Vector3.up * 0.8f, toFoe, 1.1f,
             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-        jumpable = wall && !Physics.Raycast(feet + Vector3.up * 1.55f, direction, 1.1f,
+        jumpable = wall && !Physics.Raycast(feet + Vector3.up * 1.55f, toFoe, 1.1f,
             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
         return wall;
     }

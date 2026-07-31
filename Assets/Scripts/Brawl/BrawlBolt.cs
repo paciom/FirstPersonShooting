@@ -15,7 +15,7 @@ public class BrawlBolt : MonoBehaviour
     BrawlFighter _shooter;
     BrawlFighter _target;
     Color _tint;
-    float _direction;
+    Vector3 _direction;
     float _life;
     bool _spent;
 
@@ -24,13 +24,13 @@ public class BrawlBolt : MonoBehaviour
         var go = new GameObject("PhotonBlast");
         go.transform.SetParent(shooter.transform.parent, false);
         go.transform.position = shooter.transform.position
-            + new Vector3(shooter.Facing * 0.7f, 1.15f, 0f);
+            + shooter.FacingDir * 0.7f + Vector3.up * 1.15f;
 
         var bolt = go.AddComponent<BrawlBolt>();
         bolt._shooter = shooter;
         bolt._target = target;
         bolt._tint = tint;
-        bolt._direction = shooter.Facing;
+        bolt._direction = shooter.FacingDir;
         bolt._life = LifeSeconds;
 
         // Energy weapon, so the glow may run hot (the bloom rule's one
@@ -39,7 +39,8 @@ public class BrawlBolt : MonoBehaviour
         core.name = "Core";
         Object.Destroy(core.GetComponent<Collider>());
         core.transform.SetParent(go.transform, false);
-        core.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        core.transform.rotation =
+            Quaternion.LookRotation(bolt._direction) * Quaternion.Euler(90f, 0f, 0f);
         core.transform.localScale = new Vector3(0.20f, 0.42f, 0.20f);
         core.GetComponent<MeshRenderer>().sharedMaterial =
             VfxUtil.MakeGlowMaterial(tint, 3.2f);
@@ -63,7 +64,7 @@ public class BrawlBolt : MonoBehaviour
             return;
         }
 
-        transform.position += new Vector3(_direction * Speed * dt, 0f, 0f);
+        transform.position += _direction * (Speed * dt);
 
         if (_spent || _target == null)
             return;
@@ -79,9 +80,10 @@ public class BrawlBolt : MonoBehaviour
         }
         else
         {
-            float gap = Mathf.Abs(_target.transform.position.x - transform.position.x);
-            bool inHeight = _target.transform.position.y < 1.3f;
-            if (gap > 0.55f || !inHeight)
+            Vector3 gap = _target.transform.position - transform.position;
+            float dy = gap.y;
+            gap.y = 0f;
+            if (gap.magnitude > 0.55f || dy < -1.3f || dy > 0.3f)
                 return;
         }
 
