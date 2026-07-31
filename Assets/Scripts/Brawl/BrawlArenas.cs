@@ -35,22 +35,22 @@ public static class BrawlArenas
     {
         if (_all != null)
             return;
-        _all = new List<BrawlArenaDef>
-        {
-            new BrawlArenaDef { name = "FRONTLINE", crates = true, dress = Frontline },
-            new BrawlArenaDef { name = "CARRIER DECK", balls = true, lifts = true, dress = CarrierDeck },
-            new BrawlArenaDef { name = "CRYSTAL QUARRY", crates = true, crystalCorners = true, dress = CrystalQuarry },
-        };
-        // Every FPS arena joins as a remix stage, alternating its toy.
+        _all = new List<BrawlArenaDef>();
+        // The FPS arenas lead — they ARE the brawl grounds of choice, the
+        // same places the shooter fights in. Each brings a toy.
         for (int i = 0; i < ArenaLibrary.Count; i++)
             _all.Add(new BrawlArenaDef
             {
-                name = "REMIX: " + ArenaLibrary.Get(i).DisplayName.ToUpperInvariant(),
+                name = ArenaLibrary.Get(i).DisplayName.ToUpperInvariant(),
                 remixArena = true,
                 arenaIndex = i,
                 crates = i % 2 == 0,
                 balls = i % 2 == 1,
             });
+        // The authored sets stay as explicit picks after the arenas.
+        _all.Add(new BrawlArenaDef { name = "FRONTLINE", crates = true, dress = Frontline });
+        _all.Add(new BrawlArenaDef { name = "CARRIER DECK", balls = true, lifts = true, dress = CarrierDeck });
+        _all.Add(new BrawlArenaDef { name = "CRYSTAL QUARRY", crates = true, crystalCorners = true, dress = CrystalQuarry });
     }
 
     // ---- selection memory (0 = RANDOM, 1.. = All[i-1]) ----
@@ -81,9 +81,17 @@ public static class BrawlArenas
     public static BrawlArenaDef Resolve(int selection)
     {
         EnsureBuilt();
-        if (selection <= 0 || selection > _all.Count)
-            return _all[Random.Range(0, _all.Count)];
-        return _all[selection - 1];
+        if (selection > 0 && selection <= _all.Count)
+            return _all[selection - 1];
+
+        // RANDOM rolls the FPS arenas only — the shooter's own grounds are
+        // the brawl's home turf; the authored sets are explicit picks.
+        var arenas = new List<BrawlArenaDef>();
+        foreach (var def in _all)
+            if (def.remixArena)
+                arenas.Add(def);
+        var pool = arenas.Count > 0 ? arenas : _all;
+        return pool[Random.Range(0, pool.Count)];
     }
 
     static string Key(GameMode mode)
