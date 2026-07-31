@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// The strikeable furniture registry: crates and balls sign up here, and a
+/// The strikeable furniture registry: crates sign up here, and a
 /// fighter's strike that found no robot asks whether it found a prop —
 /// kicking a crate across the lane goes through exactly the same fist-bone
 /// query as kicking a robot. Same static-lifetime rules as BrawlGround.

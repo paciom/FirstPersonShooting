@@ -9,7 +9,6 @@ public struct BrawlArenaDef
     public bool remixArena;
     public int arenaIndex;
     public bool crates;
-    public bool balls;
     public bool lifts;
     public bool crystalCorners;
     public System.Action<GameObject, RobotRoster> dress;
@@ -19,8 +18,8 @@ public struct BrawlArenaDef
 /// The Brawl stage roster and the remembered pick per mode. Three authored
 /// sets — the Commander frontline, a carrier deck, a crystal quarry — plus
 /// one remix entry for every FPS arena, each stage with its own toys:
-/// cargo rain, bouncer balls, lift pads, crystal corners. Selection 0 is
-/// RANDOM, the kid default.
+/// cargo rain, lift pads, crystal corners. Selection 0 is RANDOM, the
+/// kid default.
 /// </summary>
 public static class BrawlArenas
 {
@@ -44,12 +43,11 @@ public static class BrawlArenas
                 name = ArenaLibrary.Get(i).DisplayName.ToUpperInvariant(),
                 remixArena = true,
                 arenaIndex = i,
-                crates = i % 2 == 0,
-                balls = i % 2 == 1,
+                crates = true,
             });
         // The authored sets stay as explicit picks after the arenas.
         _all.Add(new BrawlArenaDef { name = "FRONTLINE", crates = true, dress = Frontline });
-        _all.Add(new BrawlArenaDef { name = "CARRIER DECK", balls = true, lifts = true, dress = CarrierDeck });
+        _all.Add(new BrawlArenaDef { name = "CARRIER DECK", crates = true, lifts = true, dress = CarrierDeck });
         _all.Add(new BrawlArenaDef { name = "CRYSTAL QUARRY", crates = true, crystalCorners = true, dress = CrystalQuarry });
     }
 
@@ -271,39 +269,22 @@ public class BrawlParade : MonoBehaviour
 public class BrawlHazards : MonoBehaviour
 {
     public bool crates;
-    public bool balls;
     public Transform stageRoot;
 
     float _crateTimer = 4f;
-    float _ballTimer = 6f;
 
     void Update()
     {
-        float dt = Time.deltaTime;
-        if (crates)
+        if (!crates)
+            return;
+        _crateTimer -= Time.deltaTime;
+        if (_crateTimer <= 0f)
         {
-            _crateTimer -= dt;
-            if (_crateTimer <= 0f)
+            _crateTimer = Random.Range(7f, 13f);
+            if (BrawlProps.Count<BrawlCrate>() < 3)
             {
-                _crateTimer = Random.Range(7f, 13f);
-                if (BrawlProps.Count<BrawlCrate>() < 3)
-                {
-                    var spot = NearTheFight(1.4f, 4.5f, 2f);
-                    BrawlCrate.Spawn(stageRoot, spot.x, spot.y);
-                }
-            }
-        }
-        if (balls)
-        {
-            _ballTimer -= dt;
-            if (_ballTimer <= 0f)
-            {
-                _ballTimer = Random.Range(14f, 22f);
-                if (BrawlProps.Count<BrawlBall>() < 1)
-                {
-                    var spot = NearTheFight(2.5f, 6f, 3f);
-                    BrawlBall.Spawn(stageRoot, spot.x, spot.y);
-                }
+                var spot = NearTheFight(1.4f, 4.5f, 2f);
+                BrawlCrate.Spawn(stageRoot, spot.x, spot.y);
             }
         }
     }

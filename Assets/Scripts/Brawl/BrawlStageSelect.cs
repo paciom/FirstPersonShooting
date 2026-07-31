@@ -169,7 +169,6 @@ public static class BrawlStageSelect
     {
         var parts = new System.Collections.Generic.List<string>();
         if (def.crates) parts.Add("CRATES");
-        if (def.balls) parts.Add("BALLS");
         if (def.lifts) parts.Add("LIFTS");
         if (def.crystalCorners) parts.Add("CRYSTALS");
         return string.Join(" · ", parts);

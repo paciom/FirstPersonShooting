@@ -601,7 +601,7 @@ public class BrawlFighter : MonoBehaviour
             BrawlMoveSet.StrikeRadius + 0.04f, target);
         if (part == null)
         {
-            // No robot in reach — maybe a crate or a ball was.
+            // No robot in reach — maybe a crate was.
             if (!_propHitThisMove
                 && BrawlProps.TryStrike(effector.position, BrawlMoveSet.StrikeRadius + 0.12f, this))
                 _propHitThisMove = true;

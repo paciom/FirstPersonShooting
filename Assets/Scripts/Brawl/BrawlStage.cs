@@ -163,11 +163,10 @@ public static class BrawlStage
             BrawlLift.Spawn(root.transform, -3.5f, 0f);
             BrawlLift.Spawn(root.transform, 3.5f, 0.5f);
         }
-        if (def.crates || def.balls)
+        if (def.crates)
         {
             var hazards = root.AddComponent<BrawlHazards>();
             hazards.crates = def.crates;
-            hazards.balls = def.balls;
             hazards.stageRoot = root.transform;
         }
     }
