@@ -43,8 +43,11 @@ public class BrawlController : MonoBehaviour
     /// <summary>The chosen BrawlDifficulty level (1-based) for every CPU corner.</summary>
     [SerializeField] int _difficulty = 3;
 
+    /// <summary>The stage pick (0 = RANDOM) — resolved to a def in Setup.</summary>
+    [SerializeField] int _stageSelection;
+
     public static BrawlController Begin(GameModeController owner, RobotRoster roster,
-        int cyanRobot, int magentaRobot, bool playerControls, int difficulty)
+        int cyanRobot, int magentaRobot, bool playerControls, int difficulty, int stageSelection)
     {
         var go = new GameObject("Brawl");
         go.transform.SetParent(owner.transform, false);
@@ -53,6 +56,7 @@ public class BrawlController : MonoBehaviour
         controller._magentaRobot = magentaRobot;
         controller._playerControls = playerControls;
         controller._difficulty = difficulty;
+        controller._stageSelection = stageSelection;
         controller.Setup(roster);
         return controller;
     }
@@ -84,9 +88,21 @@ public class BrawlController : MonoBehaviour
         if (_blockManager != null)
             _blockManager.enabled = false;
 
+        // Fresh terrain and prop registries every session.
+        BrawlGround.Clear();
+        BrawlProps.Clear();
+
+        var def = BrawlArenas.Resolve(_stageSelection);
+
         var surface = FindFirstObjectByType<NavMeshSurface>(FindObjectsInactive.Include);
         Transform environment = surface != null ? surface.transform : null;
-        if (environment != null)
+        if (def.remixArena)
+        {
+            // The remix fights INSIDE an arena: load it and leave its
+            // geometry standing — the strip drops into its middle.
+            ArenaRuntime.Load(def.arenaIndex);
+        }
+        else if (environment != null)
         {
             // Deactivate BEFORE building, so the stage itself is never on the
             // list of things we turned off.
@@ -94,7 +110,7 @@ public class BrawlController : MonoBehaviour
                 child.gameObject.SetActive(false);
         }
 
-        _stageRoot = BrawlStage.Build(environment);
+        _stageRoot = BrawlStage.Build(environment, def, roster);
 
         _cameraRig = BuildCameraRig();
         Camera = _cameraRig.GetComponent<BrawlCamera>();
@@ -138,6 +154,22 @@ public class BrawlController : MonoBehaviour
             _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
             _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");
 
+        // Crystal corners bite: a shove that slams the lane end sparks and
+        // stretches the stagger.
+        if (def.crystalCorners)
+        {
+            System.Action<BrawlFighter, float> slam = (victim, speed) =>
+            {
+                victim.AddStun(0.18f);
+                Vector3 wall = victim.transform.position + Vector3.up * 1.1f;
+                VfxUtil.ImpactBurst(wall, new Color(0.45f, 0.9f, 1f));
+                BrawlAudio.Play(BrawlAudio.Id.Graze, wall, 0.9f);
+                Camera.Kick(0.10f);
+            };
+            Cyan.OnWallSlam += slam;
+            Magenta.OnWallSlam += slam;
+        }
+
         // Every landed hit thumps the camera and freezes the world for a
         // few hundredths — the hit-stop that makes contact feel like contact.
         System.Action<BrawlFighter, int, bool> thump = (victim, damage, knockdown) =>
@@ -180,6 +212,9 @@ public class BrawlController : MonoBehaviour
     {
         // Never hand the menu a frozen world: Escape can land mid-hit-stop.
         Time.timeScale = 1f;
+
+        BrawlProps.DespawnAll();
+        BrawlGround.Clear();
 
         if (_cameraRig != null)
             Destroy(_cameraRig);

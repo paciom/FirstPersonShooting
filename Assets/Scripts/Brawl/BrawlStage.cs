@@ -26,6 +26,11 @@ public static class BrawlStage
 
     public static GameObject Build(Transform environment)
     {
+        return Build(environment, default, null);
+    }
+
+    public static GameObject Build(Transform environment, BrawlArenaDef def, RobotRoster roster)
+    {
         var root = new GameObject("BrawlStage");
         if (environment != null)
             root.transform.SetParent(environment, false);
@@ -60,9 +65,11 @@ public static class BrawlStage
             }
 
         // Backdrop wall, far enough to blur into scenery, wide enough that
-        // the camera never sees its edge at maximum pull-back.
-        Box(root, "Backdrop", new Vector3(0f, 8f, 16f), new Vector3(80f, 24f, 0.6f),
-            ArenaMaterials.Surface("brawl-backdrop", VoidColor * 1.8f, EdgeCyan * 0.6f, 10f, 0.25f));
+        // the camera never sees its edge at maximum pull-back. A remix
+        // stage skips it — the surrounding arena IS the scenery.
+        if (!def.remixArena)
+            Box(root, "Backdrop", new Vector3(0f, 8f, 16f), new Vector3(80f, 24f, 0.6f),
+                ArenaMaterials.Surface("brawl-backdrop", VoidColor * 1.8f, EdgeCyan * 0.6f, 10f, 0.25f));
 
         // Key from the camera's side of the lane, fill from behind — the
         // fighters' camera-facing surfaces are the ones that matter. Only the
@@ -70,6 +77,21 @@ public static class BrawlStage
         // second one silently wins or loses by intensity.
         Sun(root, "KeyLight", new Vector3(40f, 25f, 0f), 1.15f, new Color(1f, 0.97f, 0.92f), true);
         Sun(root, "FillLight", new Vector3(30f, 210f, 0f), 0.35f, new Color(0.55f, 0.75f, 1f), false);
+
+        // The stage's own personality: backdrop dressing and its toys.
+        def.dress?.Invoke(root, roster);
+        if (def.lifts)
+        {
+            BrawlLift.Spawn(root.transform, -3.5f, 0f);
+            BrawlLift.Spawn(root.transform, 3.5f, 0.5f);
+        }
+        if (def.crates || def.balls)
+        {
+            var hazards = root.AddComponent<BrawlHazards>();
+            hazards.crates = def.crates;
+            hazards.balls = def.balls;
+            hazards.stageRoot = root.transform;
+        }
 
         return root;
     }

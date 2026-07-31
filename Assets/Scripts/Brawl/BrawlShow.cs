@@ -80,7 +80,9 @@ public class BrawlShow : MonoBehaviour
             foreach (Transform child in environment)
                 child.gameObject.SetActive(false);
 
-        _stageRoot = BrawlStage.Build(environment);
+        BrawlGround.Clear();
+        BrawlProps.Clear();
+        _stageRoot = BrawlStage.Build(environment, default, roster);
 
         _fighter = BrawlFighter.Spawn(_stageRoot.transform, roster, _robot, 0);
         // Centre stage, angled toward the house, combat loop off — the show

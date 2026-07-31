@@ -40,6 +40,8 @@ public class BrawlMatch : MonoBehaviour
 
     void BeginRound()
     {
+        // A clean lane every round — leftover cargo despawns.
+        BrawlProps.DespawnAll();
         _cyan.ResetForRound();
         _magenta.ResetForRound();
         SetLocked(true);

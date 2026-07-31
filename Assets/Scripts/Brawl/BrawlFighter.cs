@@ -63,7 +63,16 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>+1 facing right (toward +X), -1 facing left.</summary>
     public float Facing { get; private set; } = 1f;
 
-    public bool IsAirborne => transform.position.y > 0.02f;
+    /// <summary>The tallest step a walking robot climbs without jumping.</summary>
+    const float StepUp = 0.6f;
+
+    /// <summary>The standable surface under this fighter right now.</summary>
+    public float Ground => BrawlGround.HeightAt(transform.position.x);
+
+    public bool IsAirborne => transform.position.y > Ground + 0.02f;
+
+    /// <summary>Raised when knockback drives the fighter into a lane end (speed passed).</summary>
+    public System.Action<BrawlFighter, float> OnWallSlam;
 
     /// <summary>Raised once when health reaches zero. BrawlMatch owns what happens next.</summary>
     public System.Action<BrawlFighter> OnKnockedOut;
@@ -106,6 +115,7 @@ public class BrawlFighter : MonoBehaviour
     bool _moveHasHit;
     bool _boltFired;
     bool _grazedThisMove;
+    bool _propHitThisMove;
 
     /// <summary>The face of the current move — display name, limb, trigger.</summary>
     public BrawlMoveSet.Variant CurrentVariant => _variant;
@@ -285,6 +295,8 @@ public class BrawlFighter : MonoBehaviour
     void TickNeutral(float dt)
     {
         FaceOpponent();
+        if (!FollowGround())
+            return;   // walked or was carried off an edge — now falling
         var intent = Live;
 
         if (intent.block)
@@ -310,7 +322,7 @@ public class BrawlFighter : MonoBehaviour
             return;
         }
 
-        Walk(intent.move, dt);
+        GroundWalk(intent.move * BrawlMoveSet.WalkSpeed * dt, dt);
     }
 
     void TickAir(float dt, bool hot)
@@ -342,9 +354,10 @@ public class BrawlFighter : MonoBehaviour
         _verticalVelocity -= BrawlMoveSet.Gravity * dt;
         Move(_airVelocityX * dt, _verticalVelocity * dt);
 
-        if (transform.position.y <= 0f && _verticalVelocity <= 0f)
+        float landing = Ground;
+        if (transform.position.y <= landing && _verticalVelocity <= 0f)
         {
-            SetY(0f);
+            SetY(landing);
             _verticalVelocity = 0f;
             if (hot)
             {
@@ -398,6 +411,11 @@ public class BrawlFighter : MonoBehaviour
     void TickBlocking()
     {
         FaceOpponent();
+        if (!FollowGround())
+        {
+            SetBlock(false);
+            return;
+        }
         if (!Live.block)
         {
             SetBlock(false);
@@ -410,6 +428,7 @@ public class BrawlFighter : MonoBehaviour
         _stunTime -= dt;
         Move(_knockbackVelocity * dt, 0f);
         _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 12f * dt);
+        SetY(Ground);   // a shove that leaves a crate drops with it
         if (_stunTime <= 0f)
             Phase = State.Neutral;
     }
@@ -420,6 +439,7 @@ public class BrawlFighter : MonoBehaviour
         // The slide: a knocked-down robot travels, it doesn't drop in place.
         Move(_knockbackVelocity * dt, 0f);
         _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 5f * dt);
+        SetY(Ground);
         // The rise is its own clip, cued so it completes as control returns.
         if (!_getUpFired && _floorTime <= BrawlMoveSet.GetUpTime)
         {
@@ -449,6 +469,7 @@ public class BrawlFighter : MonoBehaviour
         _moveHasHit = false;
         _boltFired = false;
         _grazedThisMove = false;
+        _propHitThisMove = false;
         BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position + Vector3.up * 1.2f, 0.35f);
         Trigger(_variant.trigger);
     }
@@ -515,7 +536,13 @@ public class BrawlFighter : MonoBehaviour
         var part = BrawlHurtboxes.Query(effector.position,
             BrawlMoveSet.StrikeRadius + 0.04f, target);
         if (part == null)
+        {
+            // No robot in reach — maybe a crate or a ball was.
+            if (!_propHitThisMove
+                && BrawlProps.TryStrike(effector.position, BrawlMoveSet.StrikeRadius + 0.12f, this))
+                _propHitThisMove = true;
             return;
+        }
         if (part.Vital)
         {
             _moveHasHit = true;
@@ -580,7 +607,7 @@ public class BrawlFighter : MonoBehaviour
         }
 
         _verticalVelocity = 0f;
-        SetY(0f);
+        SetY(Ground);
         if (knockdown)
         {
             Phase = State.Knockdown;
@@ -604,6 +631,15 @@ public class BrawlFighter : MonoBehaviour
         }
     }
 
+    /// <summary>A burst crate's gift: patched up or powered up, coin flip.</summary>
+    public void GrantPickup()
+    {
+        if (Random.value < 0.5f)
+            Health = Mathf.Min(BrawlMoveSet.MaxHealth, Health + 12f);
+        else
+            GainCharge(0.4f);
+    }
+
     void GainCharge(float amount)
     {
         bool wasReady = Charge >= 1f;
@@ -614,9 +650,51 @@ public class BrawlFighter : MonoBehaviour
 
     // -------------------------------------------------------------- motion
 
-    void Walk(float direction, float dt)
+    /// <summary>
+    /// Grounded fighters follow the surface under them — a rising lift
+    /// carries them up, a sinking one lowers them, a crate bursting
+    /// underfoot drops them into a fall. False = now airborne.
+    /// </summary>
+    bool FollowGround()
     {
-        Move(direction * BrawlMoveSet.WalkSpeed * dt, 0f);
+        float ground = Ground;
+        float y = transform.position.y;
+        if (y > ground + StepUp)
+        {
+            // The floor left (or never was): fall from here.
+            Phase = State.Air;
+            _verticalVelocity = 0f;
+            _airVelocityX = 0f;
+            return false;
+        }
+        if (!Mathf.Approximately(y, ground))
+            SetY(ground);
+        return true;
+    }
+
+    /// <summary>
+    /// Walking over terrain: small ledges are stepped onto, tall stacks
+    /// are walls, and edges are walked off into a fall.
+    /// </summary>
+    void GroundWalk(float dx, float dt)
+    {
+        if (dx == 0f)
+            return;
+        float newX = transform.position.x + dx;
+        float ahead = BrawlGround.HeightAt(newX);
+        float y = transform.position.y;
+        if (ahead > y + StepUp)
+            return;   // a wall of cargo — jump it instead
+        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+        if (ahead >= y - StepUp)
+            SetY(ahead);
+        else
+        {
+            // Walked off the edge: keep the stride as air momentum.
+            Phase = State.Air;
+            _verticalVelocity = 0f;
+            _airVelocityX = dx / Mathf.Max(dt, 1e-4f);
+        }
     }
 
     void Move(float dx, float dy)
@@ -652,7 +730,25 @@ public class BrawlFighter : MonoBehaviour
         var p = transform.position;
         float x = Mathf.Clamp(p.x, -BrawlStage.LaneHalf, BrawlStage.LaneHalf);
         if (x != p.x)
+        {
+            // Driven into the lane end by a shove — the crystal corners
+            // (and anything else watching) get to react.
+            if (Mathf.Abs(_knockbackVelocity) > 2f)
+            {
+                OnWallSlam?.Invoke(this, Mathf.Abs(_knockbackVelocity));
+                _knockbackVelocity = 0f;
+            }
             transform.position = new Vector3(x, p.y, p.z);
+        }
+    }
+
+    /// <summary>Extra stagger from stage hazards — only stretches an existing stun.</summary>
+    public void AddStun(float seconds)
+    {
+        if (Phase == State.HitStun)
+            _stunTime += seconds;
+        else if (Phase == State.Knockdown)
+            _floorTime += seconds * 0.5f;
     }
 
     void FaceOpponent()
