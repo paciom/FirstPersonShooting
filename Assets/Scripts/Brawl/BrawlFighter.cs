@@ -778,7 +778,7 @@ public class BrawlFighter : MonoBehaviour
     void ClampToLane()
     {
         var p = transform.position;
-        float x = Mathf.Clamp(p.x, -BrawlStage.LaneHalf, BrawlStage.LaneHalf);
+        float x = Mathf.Clamp(p.x, -BrawlStage.CurrentLaneHalf, BrawlStage.CurrentLaneHalf);
         if (x != p.x)
         {
             // Driven into the lane end by a shove — the crystal corners

@@ -105,7 +105,7 @@ public class BrawlBrain : MonoBehaviour
         // unless the corner is already at our back, where retreat means pin.
         if (Time.time < _retreatUntil)
         {
-            bool cornered = Mathf.Abs(self.transform.position.x) > BrawlStage.LaneHalf - 1.2f
+            bool cornered = Mathf.Abs(self.transform.position.x) > BrawlStage.CurrentLaneHalf - 1.2f
                             && Mathf.Sign(self.transform.position.x) == -toFoe;
             _moveHeld = cornered ? 0f : -toFoe * 0.8f;
             _blockUntil = Time.time + 0.25f;

@@ -10,12 +10,12 @@ public class BrawlCamera : MonoBehaviour
 {
     public const float Fov = 50f;
 
-    // How far the camera midpoint may chase the fighters — slightly inside
-    // the lane so the frame never slides off the stage ends.
-    const float TrackHalf = 6.5f;
-
     const float NearDistance = 8f;
     const float FarDistance = 14f;
+
+    // Viewing azimuths the director may cut between, degrees around the
+    // fight (0 = the classic side). Scored by line-of-sight every beat.
+    static readonly float[] Angles = { 0f, 28f, -28f, 56f, -56f, 180f };
 
     Transform _a, _b;
     float _x;
@@ -23,6 +23,12 @@ public class BrawlCamera : MonoBehaviour
     float _distance = NearDistance;
     float _shakeAmplitude;
     float _obstruction;
+    float _azimuth;
+    float _azimuthTarget;
+    float _rethink;
+
+    // Slightly inside the lane so the frame never slides off the ends.
+    static float TrackHalf => BrawlStage.CurrentLaneHalf - 1.5f;
 
     public void SetTargets(Transform a, Transform b)
     {
@@ -65,6 +71,17 @@ public class BrawlCamera : MonoBehaviour
         _y = Mathf.Lerp(_y, wantedY, ease);
         _distance = Mathf.Lerp(_distance, wantedDistance, ease);
 
+        // The director's beat: every so often, score the candidate angles
+        // by line-of-sight and swing to the clearest — remix arenas are
+        // full of pillars, and rotating around one beats zooming through.
+        _rethink -= Time.deltaTime;
+        if (_rethink <= 0f)
+        {
+            _rethink = 0.7f;
+            ChooseAzimuth();
+        }
+        _azimuth = Mathf.MoveTowardsAngle(_azimuth, _azimuthTarget, 45f * Time.deltaTime);
+
         _shakeAmplitude = Mathf.Lerp(_shakeAmplitude, 0f, 1f - Mathf.Exp(-8f * Time.deltaTime));
         Vector3 shake = _shakeAmplitude * new Vector3(
             Mathf.PerlinNoise(Time.time * 23f, 0.31f) - 0.5f,
@@ -74,13 +91,47 @@ public class BrawlCamera : MonoBehaviour
         Place(shake);
     }
 
+    static Vector3 AzimuthDirection(float degrees)
+    {
+        float radians = degrees * Mathf.Deg2Rad;
+        return new Vector3(Mathf.Sin(radians), 0f, -Mathf.Cos(radians));
+    }
+
+    void ChooseAzimuth()
+    {
+        Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f);
+        float bestScore = float.MinValue;
+        float best = _azimuthTarget;
+        foreach (var candidate in Angles)
+        {
+            Vector3 direction = (AzimuthDirection(candidate) * _distance
+                                 + Vector3.up * 1.2f).normalized;
+            float clear = _distance;
+            if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, _distance,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                clear = hit.distance;
+            // Clear sight wins; staying put and the classic side both get
+            // a thumb on the scale so the director doesn't fidget.
+            float score = clear
+                          - Mathf.Abs(Mathf.DeltaAngle(candidate, _azimuthTarget)) * 0.010f
+                          - Mathf.Abs(Mathf.DeltaAngle(candidate, 0f)) * 0.012f;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+        _azimuthTarget = best;
+    }
+
     void Place(Vector3 shake)
     {
         // The gaze point rides at chest height above the fighters' own
         // level; shake moves it at half strength so a thump reads as a
-        // jolt, not a pan.
+        // jolt, not a pan. A slow sway keeps even a standoff alive.
         Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f) + shake * 0.5f;
-        Vector3 desired = new Vector3(_x, _y + 2.3f, -_distance);
+        float swayed = _azimuth + 4f * Mathf.Sin(Time.time * 0.35f);
+        Vector3 desired = gaze + AzimuthDirection(swayed) * _distance + Vector3.up * 1.2f;
 
         // Auto-avoid: nothing gets to stand between the lens and the fight.
         // A sphere-cast from the fight toward the desired spot finds the

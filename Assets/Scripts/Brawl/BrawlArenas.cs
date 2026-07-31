@@ -274,8 +274,9 @@ public class BrawlHazards : MonoBehaviour
             if (_crateTimer <= 0f)
             {
                 _crateTimer = Random.Range(7f, 13f);
+                float reach = BrawlStage.CurrentLaneHalf - 2f;
                 if (BrawlProps.Count<BrawlCrate>() < 3)
-                    BrawlCrate.Spawn(stageRoot, Random.Range(-6f, 6f));
+                    BrawlCrate.Spawn(stageRoot, Random.Range(-reach, reach));
             }
         }
         if (balls)
@@ -284,8 +285,9 @@ public class BrawlHazards : MonoBehaviour
             if (_ballTimer <= 0f)
             {
                 _ballTimer = Random.Range(14f, 22f);
+                float reach = BrawlStage.CurrentLaneHalf - 3f;
                 if (BrawlProps.Count<BrawlBall>() < 1)
-                    BrawlBall.Spawn(stageRoot, Random.Range(-5f, 5f));
+                    BrawlBall.Spawn(stageRoot, Random.Range(-reach, reach));
             }
         }
     }

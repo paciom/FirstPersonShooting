@@ -12,8 +12,15 @@ using UnityEngine;
 /// </summary>
 public static class BrawlStage
 {
-    /// <summary>Half-length of the walkable lane in metres — the corners.</summary>
+    /// <summary>Half-length of the authored stage's lane — the corners.</summary>
     public const float LaneHalf = 8f;
+
+    /// <summary>
+    /// The ACTIVE lane bounds. Authored stages fence at ±8; remix stages
+    /// open to ±14 — the arena is the stage, and the fight ranges across
+    /// its whole terrain.
+    /// </summary>
+    public static float CurrentLaneHalf { get; private set; } = LaneHalf;
 
     /// <summary>Where each fighter starts, either side of centre.</summary>
     public const float StartOffset = 3f;
@@ -34,6 +41,17 @@ public static class BrawlStage
         var root = new GameObject("BrawlStage");
         if (environment != null)
             root.transform.SetParent(environment, false);
+
+        // A remix stage builds NO strip at all — no deck, rails or
+        // backdrop merging awkwardly into arena floors. The root is just
+        // the container for the stage's toys; the arena is the stage.
+        if (def.remixArena)
+        {
+            CurrentLaneHalf = 14f;
+            FinishFeatures(root, def, roster);
+            return root;
+        }
+        CurrentLaneHalf = LaneHalf;
 
         // The deck: top surface at exactly y = 0, where the fighters stand.
         // Panel-seam surface rather than flat lit, so lateral motion reads
@@ -65,11 +83,9 @@ public static class BrawlStage
             }
 
         // Backdrop wall, far enough to blur into scenery, wide enough that
-        // the camera never sees its edge at maximum pull-back. A remix
-        // stage skips it — the surrounding arena IS the scenery.
-        if (!def.remixArena)
-            Box(root, "Backdrop", new Vector3(0f, 8f, 16f), new Vector3(80f, 24f, 0.6f),
-                ArenaMaterials.Surface("brawl-backdrop", VoidColor * 1.8f, EdgeCyan * 0.6f, 10f, 0.25f));
+        // the camera never sees its edge at maximum pull-back.
+        Box(root, "Backdrop", new Vector3(0f, 8f, 16f), new Vector3(80f, 24f, 0.6f),
+            ArenaMaterials.Surface("brawl-backdrop", VoidColor * 1.8f, EdgeCyan * 0.6f, 10f, 0.25f));
 
         // Key from the camera's side of the lane, fill from behind — the
         // fighters' camera-facing surfaces are the ones that matter. Only the
@@ -78,7 +94,13 @@ public static class BrawlStage
         Sun(root, "KeyLight", new Vector3(40f, 25f, 0f), 1.15f, new Color(1f, 0.97f, 0.92f), true);
         Sun(root, "FillLight", new Vector3(30f, 210f, 0f), 0.35f, new Color(0.55f, 0.75f, 1f), false);
 
-        // The stage's own personality: backdrop dressing and its toys.
+        FinishFeatures(root, def, roster);
+        return root;
+    }
+
+    /// <summary>Dressing and toys — shared by authored and remix stages.</summary>
+    static void FinishFeatures(GameObject root, BrawlArenaDef def, RobotRoster roster)
+    {
         def.dress?.Invoke(root, roster);
         if (def.lifts)
         {
@@ -92,8 +114,6 @@ public static class BrawlStage
             hazards.balls = def.balls;
             hazards.stageRoot = root.transform;
         }
-
-        return root;
     }
 
     static GameObject Box(GameObject root, string name, Vector3 position, Vector3 size, Material material)

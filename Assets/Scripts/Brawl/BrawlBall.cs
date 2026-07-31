@@ -60,9 +60,10 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
 
         // The lane ends and the floor are its walls; energy fades back to
         // the lazy bounce whether it was kicked hard or not.
-        if (p.x < -BrawlStage.LaneHalf + Radius || p.x > BrawlStage.LaneHalf - Radius)
+        float half = BrawlStage.CurrentLaneHalf;
+        if (p.x < -half + Radius || p.x > half - Radius)
         {
-            p.x = Mathf.Clamp(p.x, -BrawlStage.LaneHalf + Radius, BrawlStage.LaneHalf - Radius);
+            p.x = Mathf.Clamp(p.x, -half + Radius, half - Radius);
             _vx = -_vx * 0.85f;
         }
         float floor = BrawlGround.HeightAt(p.x) + Radius;
