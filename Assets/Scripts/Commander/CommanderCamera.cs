@@ -34,6 +34,12 @@ public class CommanderCamera : MonoBehaviour
     /// </summary>
     public bool primaryDragPans;
 
+    /// <summary>
+    /// Half-width of the world the pan clamps guard. Commander's map size by
+    /// default; Tower Defense plays on a smaller board and sets its own.
+    /// </summary>
+    public float worldHalfExtent = CommanderMap.HalfExtent;
+
     float _height = 45f;
     Vector3 _focus;
     Vector3 _lastDragMouse;
@@ -44,10 +50,17 @@ public class CommanderCamera : MonoBehaviour
     /// <summary>Where the camera is looking, on the ground — the minimap's view marker.</summary>
     public Vector3 Focus => _focus;
 
-    /// <summary>Jump the view so <paramref name="focus"/> is centre-screen.</summary>
-    public void SnapTo(Vector3 focus)
+    /// <summary>
+    /// Jump the view so <paramref name="focus"/> is centre-screen — at
+    /// <paramref name="height"/>, when the caller wants a framing the
+    /// default cruising altitude can't give (a small map's south end sits
+    /// inside the cliff clamp at full height). Negative keeps the current.
+    /// </summary>
+    public void SnapTo(Vector3 focus, float height = -1f)
     {
         _focus = focus;
+        if (height > 0f)
+            _height = Mathf.Clamp(height, MinHeight, MaxHeight);
         _lastManualAt = Time.unscaledTime;   // a jump is a human act — director yields
         Apply();
     }
@@ -168,10 +181,10 @@ public class CommanderCamera : MonoBehaviour
         // the camera stands `back` metres south of the focus, so a symmetric
         // clamp would walk the camera itself out past the cliff ring on a
         // full-south pan and fill the lower screen with void.
-        float extent = CommanderMap.HalfExtent - 6f;
+        float extent = worldHalfExtent - 6f;
         float back = _height / Mathf.Tan(Pitch * Mathf.Deg2Rad);
         _focus.x = Mathf.Clamp(_focus.x, -extent, extent);
-        _focus.z = Mathf.Clamp(_focus.z, back - (CommanderMap.HalfExtent + 4f), extent);
+        _focus.z = Mathf.Clamp(_focus.z, back - (worldHalfExtent + 4f), extent);
 
         Apply();
     }

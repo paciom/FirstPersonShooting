@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -51,6 +51,7 @@ public class GameModeController : MonoBehaviour
     TreasureSpawner _treasureSpawner;
     GameObject _spectatorRig;
     CommanderController _commander;
+    TDController _towerDefense;
     BrawlController _brawl;
     BrawlShow _brawlShow;
     GameObject _brawlStageSelect;
@@ -106,6 +107,10 @@ public class GameModeController : MonoBehaviour
                 if (_commander.Selection != null && _commander.Selection.CancelPendingOrder())
                     return;
             }
+            // Tower Defense has one intent to unwind: an armed tower ghost.
+            if (Mode == GameMode.TowerDefense && _towerDefense != null
+                && _towerDefense.Placer != null && _towerDefense.Placer.CancelPending())
+                return;
             EnterMenu();
             return;
         }
@@ -235,6 +240,13 @@ public class GameModeController : MonoBehaviour
         {
             _commander.Teardown();
             _commander = null;
+        }
+        // Tower Defense holds the world the same way Commander does, and
+        // hands it back through the same one-shot Teardown.
+        if (_towerDefense != null)
+        {
+            _towerDefense.Teardown();
+            _towerDefense = null;
         }
         // Same contract as Commander: Teardown swaps the arena world back in
         // before anything touches the characters.
@@ -680,6 +692,30 @@ public class GameModeController : MonoBehaviour
             ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting — " +
                 "drag / WASD / wheel to take it   ·   ESC — Menu",
                 $"AI WAR — MAP #{seed}   ·   drag — pan   ·   pinch — zoom   ·   MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The Tower Defense siege: raiders pour through a warp gate and march
+    /// a canyon toward the Photon Core; the player builds the towers that
+    /// say otherwise. Its battlefield rolls from the same MAP CODE box
+    /// Commander reads — one code vocabulary for both strategy modes.
+    /// </summary>
+    public void StartTowerDefense()
+    {
+        Mode = GameMode.TowerDefense;
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        int seed = MainMenu.RequestedSeed ?? Random.Range(1, 1000000);
+        _towerDefense = TDController.Begin(this, seed);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay($"MAP #{seed}   ·   Click a tower, click a pad — build   ·   " +
+            "RMB tower — Sell   ·   WASD / Wheel — Camera   ·   H — Core   ·   ESC — Menu",
+            $"MAP #{seed}   ·   tap tower button, tap a pad — build   ·   drag — pan   ·   pinch — zoom");
         LockCursor(false);
     }
 

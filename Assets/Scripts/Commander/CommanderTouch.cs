@@ -42,9 +42,10 @@ public class CommanderTouch : MonoBehaviour
         if (!TouchControls.Active || _camera == null)
             return;
 
-        // While a build ghost is up, the finger belongs to BuildPlacer's own
-        // touch path — same yield the mouse selection makes.
-        if (BuildPlacer.Active)
+        // While a build ghost is up, the finger belongs to the placer's own
+        // touch path — same yield the mouse selection makes. Either placer:
+        // this component serves both strategy modes.
+        if (BuildPlacer.Active || TDPlacer.Active)
         {
             _fingerId = -1;
             return;

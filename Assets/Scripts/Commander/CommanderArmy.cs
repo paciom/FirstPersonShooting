@@ -78,5 +78,11 @@ public static class CommanderArmy
         // would raycast against robots that were never in this fight.
         foreach (var bolt in Object.FindObjectsByType<LaserBolt>(FindObjectsSortMode.None))
             Object.DestroyImmediate(bolt.gameObject);
+
+        // Plasma orbs outlive their launchers by design (units carry plasma
+        // secondaries, TD mortars lob them) — a survivor would detonate on
+        // whatever arena robot walks under its arc after the swap back.
+        foreach (var orb in Object.FindObjectsByType<PlasmaOrb>(FindObjectsSortMode.None))
+            Object.DestroyImmediate(orb.gameObject);
     }
 }

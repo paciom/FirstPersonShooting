@@ -108,7 +108,8 @@ public class Building : MonoBehaviour
         // Resources rather than a scene-serialized roster: Commander owns no
         // scene data, and Resources.Load works identically in editor Play
         // and the WebGL player with zero ArenaBuilder involvement.
-        var modelPrefab = Resources.Load<GameObject>($"Buildings/{def.key}-building");
+        var modelPrefab = Resources.Load<GameObject>(
+            $"Buildings/{def.modelKey ?? def.key}-building");
         if (modelPrefab != null)
         {
             BuildFromMeshyModel(body, modelPrefab, def, tint);

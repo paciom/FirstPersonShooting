@@ -13,6 +13,15 @@ public class BuildingDefinition
 {
     public string key;
     public string displayName;
+
+    /// <summary>
+    /// Which Resources/Buildings GLB this structure wears, when that differs
+    /// from <see cref="key"/>. Null means the key IS the model name — true
+    /// for every Commander building. Tower Defense reuses the same six
+    /// models under its own keys, which is the whole reason this exists.
+    /// </summary>
+    public string modelKey;
+
     public int cost;
     /// <summary>Positive supplies the grid, negative draws from it.</summary>
     public int power;

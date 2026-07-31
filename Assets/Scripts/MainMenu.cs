@@ -18,9 +18,10 @@ public static class MainMenu
     static InputField _seedField;
 
     /// <summary>
-    /// The MAP CODE the player typed for Commander, or null for "roll one".
-    /// Codes are how a map is revisited: every battlefield prints its code
-    /// in the overlay, and typing it here rebuilds that exact map.
+    /// The MAP CODE the player typed for Commander or Tower Defense, or null
+    /// for "roll one". Codes are how a map is revisited: every battlefield
+    /// prints its code in the overlay, and typing it here rebuilds that
+    /// exact map — in whichever strategy mode is launched next.
     /// </summary>
     public static int? RequestedSeed
     {
@@ -42,8 +43,8 @@ public static class MainMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
-        // Nine buttons on an 80 px pitch run 240 down to -400 — bottom edge
-        // -437, inside the -444 extent the old six-button layout proved safe
+        // Ten buttons on a 68 px pitch run 240 down to -372 — bottom edge
+        // -403, inside the -444 extent the old six-button layout proved safe
         // on ultrawide, where match-width scaling shrinks the reference
         // height and clips anything lower.
         scaler.matchWidthOrHeight = 0.5f;
@@ -63,14 +64,15 @@ public static class MainMenu
 
         // The AI modes and the whole Brawl family route through robot select.
         MakeButton(canvasGo.transform, "AI  v  AI", 240, () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeButton(canvasGo.transform, "PLAYER  v  AI", 160, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeButton(canvasGo.transform, "BRAWL", 80, () => controller.OpenRobotSelect(GameMode.Brawl));
-        MakeButton(canvasGo.transform, "BRAWL:  AI  v  AI", 0, () => controller.OpenRobotSelect(GameMode.BrawlWar));
-        MakeButton(canvasGo.transform, "MARTIAL  ARTS  SHOW", -80, () => controller.OpenRobotSelect(GameMode.BrawlShow));
-        MakeButton(canvasGo.transform, "ONLINE  PVP", -160, () => OnlineMenu.Open(controller, canvasGo));
-        MakeButton(canvasGo.transform, "COMMANDER", -240, controller.StartCommander);
-        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -320, controller.StartCommanderWar);
-        MakeButton(canvasGo.transform, "ARENA  BUILDER", -400, controller.StartArenaPreview);
+        MakeButton(canvasGo.transform, "PLAYER  v  AI", 172, () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
+        MakeButton(canvasGo.transform, "BRAWL", 104, () => controller.OpenRobotSelect(GameMode.Brawl));
+        MakeButton(canvasGo.transform, "BRAWL:  AI  v  AI", 36, () => controller.OpenRobotSelect(GameMode.BrawlWar));
+        MakeButton(canvasGo.transform, "MARTIAL  ARTS  SHOW", -32, () => controller.OpenRobotSelect(GameMode.BrawlShow));
+        MakeButton(canvasGo.transform, "ONLINE  PVP", -100, () => OnlineMenu.Open(controller, canvasGo));
+        MakeButton(canvasGo.transform, "COMMANDER", -168, controller.StartCommander);
+        MakeButton(canvasGo.transform, "COMMANDER:  AI  WAR", -236, controller.StartCommanderWar);
+        MakeButton(canvasGo.transform, "TOWER  DEFENSE", -304, controller.StartTowerDefense);
+        MakeButton(canvasGo.transform, "ARENA  BUILDER", -372, controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
             20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
@@ -82,12 +84,13 @@ public static class MainMenu
     }
 
     /// <summary>
-    /// The Commander MAP CODE entry, tucked into the bottom-right corner:
-    /// blank rolls a fresh battlefield, a code rebuilds a known one.
+    /// The MAP CODE entry, tucked into the bottom-right corner: blank rolls
+    /// a fresh battlefield, a code rebuilds a known one. Read by Commander
+    /// and Tower Defense both.
     /// </summary>
     static void MakeSeedBox(Transform parent)
     {
-        MakeText(parent, "SeedLabel", "COMMANDER  MAP  CODE", 16,
+        MakeText(parent, "SeedLabel", "MAP  CODE", 16,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
             new Vector2(1f, 0f), new Vector2(-118, 128), new Vector2(220, 22));
 
@@ -138,8 +141,8 @@ public static class MainMenu
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0, y);
-        // 74 tall on the 80 px pitch: nine rows, 6 px apart, no clipping.
-        rect.sizeDelta = new Vector2(460, 74);
+        // 62 tall on the 68 px pitch: ten rows, 6 px apart, no clipping.
+        rect.sizeDelta = new Vector2(460, 62);
 
         var button = image.gameObject.AddComponent<Button>();
         button.targetGraphic = image;
@@ -157,7 +160,7 @@ public static class MainMenu
         underline.rectTransform.offsetMax = new Vector2(-8, 3);
 
         MakeText(image.transform, "Label", label, 30, Color.white, FontStyle.Bold,
-            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(440, 66));
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(440, 56));
     }
 
     static Image MakeImage(Transform parent, string name, Color color)

@@ -79,7 +79,9 @@ public class CommanderUnit : MonoBehaviour
 
     /// <summary>Travel further than this and the robot folds into its vehicle.</summary>
     const float TransformDistance = 32f;
-    const float VehicleSpeedFactor = 1.55f;
+
+    /// <summary>Public: Tower Defense's pace-keeper composes speeds around the fold.</summary>
+    public const float VehicleSpeedFactor = 1.55f;
 
     /// <summary>
     /// Per-team permission for idle fighters to work the mines. Asserted
@@ -125,6 +127,13 @@ public class CommanderUnit : MonoBehaviour
 
     /// <summary>Mid-fight right now — what the spectator camera hunts for.</summary>
     public bool InCombat => _order == OrderKind.Attack && _target != null;
+
+    /// <summary>
+    /// Folded for travel right now. Read by TDPace, which owns agent speed
+    /// in Tower Defense and must fold the vehicle bonus into its formula
+    /// rather than fight Morph's own writes.
+    /// </summary>
+    public bool InVehicleForm => _vehicleForm;
 
     // ------------------------------------------------------------- factory
 
