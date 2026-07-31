@@ -117,9 +117,37 @@ public class BrawlCamera : MonoBehaviour
         return clear;
     }
 
+    /// <summary>
+    /// The midpoint gaze can be INSIDE solid terrain — two fighters on
+    /// opposite slopes of a ziggurat put it deep in the pyramid, and every
+    /// ray cast from inside a collider ignores it: all angles read clear,
+    /// and the camera flies outside to stare at the mountain. When the
+    /// midpoint is buried, slide toward whichever fighter has open air.
+    /// </summary>
+    Vector3 RescueGaze(Vector3 gaze)
+    {
+        if (!Physics.CheckSphere(gaze, 0.3f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return gaze;
+        foreach (var target in new[] { _a, _b })
+        {
+            if (target == null)
+                continue;
+            Vector3 chest = target.position + Vector3.up * 1.1f;
+            for (float t = 0.3f; t <= 1.01f; t += 0.35f)
+            {
+                Vector3 candidate = Vector3.Lerp(gaze, chest, t);
+                if (!Physics.CheckSphere(candidate, 0.3f,
+                        Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    return candidate;
+            }
+        }
+        return _a != null ? _a.position + Vector3.up * 1.1f : gaze;
+    }
+
     void ChooseAzimuth()
     {
-        Vector3 gaze = new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ);
+        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ));
         float bestScore = float.MinValue;
         float best = _azimuthTarget;
         foreach (var candidate in Angles)
@@ -150,7 +178,7 @@ public class BrawlCamera : MonoBehaviour
         // The gaze point rides at chest height above the fighters' own
         // level; shake moves it at half strength so a thump reads as a
         // jolt, not a pan. A slow sway keeps even a standoff alive.
-        Vector3 gaze = new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ) + shake * 0.5f;
+        Vector3 gaze = RescueGaze(new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ)) + shake * 0.5f;
         float swayed = _azimuth + 4f * Mathf.Sin(Time.time * 0.35f);
         Vector3 desired = gaze + AzimuthDirection(swayed) * _distance + Vector3.up * 1.2f;
 
