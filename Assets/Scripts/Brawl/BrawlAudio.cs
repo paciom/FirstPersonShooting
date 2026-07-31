@@ -110,17 +110,20 @@ public static class BrawlAudio
                     return punches;
                 return Variants("graze", 2, v => Clang($"graze{v}", 420f + 90f * v, 0.16f, 0.45f, seed: 30 + v));
             }
+            // Nothing below carries a sustained tone: the shield hum and
+            // the FM laser zaps were the last beeps standing.
             case Id.Block:
-                return One("block", ShieldZap());
+                return One("block", NoiseBurst("block", 0.22f, 0.45f, 0.10f, 5f));
             case Id.Whoosh:
                 return One("whoosh", Whoosh());
             // A jump is just air — the servo wheep read as cartoon.
             case Id.Jump:
                 return One("jump", Whoosh());
             case Id.BlastFire:
-                return One("blastfire", Zap(760f, 140f, 0.35f));
+                return One("blastfire", NoiseBurst("blastfire", 0.30f, 0.55f, 0.06f, 4f));
             case Id.BlastHit:
-                return One("blasthit", Zap(500f, 80f, 0.4f));
+                return One("blasthit",
+                    Layer(NoiseBurst("blasthit", 0.30f, 0.50f, 0.08f, 4.5f), Boom(75f, 0.45f)));
             case Id.KO:
                 return One("ko", Clang("ko", 72f, 1.4f, 1.1f, seed: 50));
             // No melodies anywhere below: sine dings and arpeggios are the
@@ -196,15 +199,21 @@ public static class BrawlAudio
         });
     }
 
-    /// <summary>The guard eating a hit: a hum with ring-modulated fizz.</summary>
-    static AudioClip ShieldZap()
+    /// <summary>
+    /// A tone-free energy crack: filtered noise whose colour falls from
+    /// bright to dark as it decays. Blocks, blaster fire, blaster impact —
+    /// all static and air, no hum to read as a beep.
+    /// </summary>
+    static AudioClip NoiseBurst(string name, float seconds, float cutoffStart,
+        float cutoffEnd, float punch)
     {
-        return Bake("block", 0.28f, (t, noise) =>
+        float[] lowpass = new float[1];
+        return Bake(name, seconds, (t, noise) =>
         {
-            float envelope = Mathf.Exp(-11f * t);
-            float hum = Mathf.Sin(2f * Mathf.PI * 210f * t) * 0.8f;
-            float fizz = noise * Mathf.Sin(2f * Mathf.PI * 95f * t);
-            return (hum + fizz * 0.9f) * envelope * 0.45f;
+            float u = Mathf.Clamp01(t / seconds);
+            lowpass[0] += Mathf.Lerp(cutoffStart, cutoffEnd, u) * (noise - lowpass[0]);
+            float envelope = Mathf.Exp(-punch * u) * Mathf.Min(1f, t * 500f);
+            return lowpass[0] * envelope * 2f;
         });
     }
 
@@ -248,20 +257,6 @@ public static class BrawlAudio
             float envelope = Mathf.Sin(u * Mathf.PI);
             lowpass[0] += (0.04f + 0.30f * u) * (noise - lowpass[0]);
             return lowpass[0] * envelope * 2.2f * 0.55f;
-        });
-    }
-
-    /// <summary>Energy discharge: falling FM sweep over noise.</summary>
-    static AudioClip Zap(float fromHz, float toHz, float seconds)
-    {
-        return Bake("zap", seconds, (t, noise) =>
-        {
-            float u = t / seconds;
-            float hz = Mathf.Lerp(fromHz, toHz, u * u);
-            float body = Mathf.Sin(2f * Mathf.PI * hz * t
-                + 2.5f * Mathf.Sin(2f * Mathf.PI * hz * 1.5f * t));
-            float envelope = Mathf.Exp(-6f * u) * Mathf.Min(1f, t * 200f);
-            return (body + noise * 0.25f) * envelope * 0.5f;
         });
     }
 

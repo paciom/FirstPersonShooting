@@ -540,7 +540,7 @@ public class BrawlFighter : MonoBehaviour
         // a shove instead of a stagger.
         if (Phase == State.Blocking && !IsAirborne)
         {
-            _knockbackVelocity = away * BrawlMoveSet.HitKnockback * 1.2f;
+            _knockbackVelocity = away * 2.5f;
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
             VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
@@ -591,7 +591,10 @@ public class BrawlFighter : MonoBehaviour
         {
             Phase = State.HitStun;
             _stunTime = BrawlMoveSet.HitStun;
-            _knockbackVelocity = away * (BrawlMoveSet.HitKnockback / BrawlMoveSet.HitStun);
+            // The visible shove: ~1 m of ground given along the attack
+            // direction. The old 0.4 m vanished under hit-stop and the
+            // attacker's own advance, and hits read as no reaction at all.
+            _knockbackVelocity = away * 4.8f;
             Trigger(BrawlAnim.Hit);
         }
     }
