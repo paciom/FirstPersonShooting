@@ -104,12 +104,18 @@ public class BrawlCamera : MonoBehaviour
         float best = _azimuthTarget;
         foreach (var candidate in Angles)
         {
-            Vector3 direction = (AzimuthDirection(candidate) * _distance
-                                 + Vector3.up * 1.2f).normalized;
+            Vector3 offset = AzimuthDirection(candidate) * _distance + Vector3.up * 1.2f;
+            Vector3 end = gaze + offset;
             float clear = _distance;
-            if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, _distance,
+            if (Physics.SphereCast(gaze, 0.35f, offset.normalized, out var hit, _distance,
                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 clear = hit.distance;
+            // A sphere-cast IGNORES colliders it starts inside — a fight
+            // pressed against a wall reports through-wall angles as clear.
+            // An end position embedded in geometry is the tell: veto it.
+            if (Physics.CheckSphere(end, 0.32f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                clear -= 100f;
             // Clear sight wins; staying put and the classic side both get
             // a thumb on the scale so the director doesn't fidget.
             float score = clear
@@ -144,13 +150,24 @@ public class BrawlCamera : MonoBehaviour
         float wantedPullIn = 0f;
         if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, length,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            wantedPullIn = length - Mathf.Max(3.5f, hit.distance - 0.45f);
+            // Close-up beats blind: 1.8 m floor, not a wall-embedding 3.5.
+            wantedPullIn = length - Mathf.Max(1.8f, hit.distance - 0.45f);
         float ease = wantedPullIn > _obstruction ? 14f : 2.5f;
         _obstruction = Mathf.Lerp(_obstruction, wantedPullIn,
             1f - Mathf.Exp(-ease * Time.deltaTime));
 
         Vector3 position = gaze + direction * (length - _obstruction) + shake;
         position.y += _obstruction * 0.30f;
+
+        // The final guarantee, catching every cast blind spot at once: if
+        // the lens still ends inside geometry, walk it toward the fight
+        // until it provably isn't. Extreme close-up beats a wall interior.
+        for (int guard = 0;
+             guard < 8 && Physics.CheckSphere(position, 0.32f,
+                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+             guard++)
+            position = Vector3.Lerp(position, gaze + Vector3.up * 0.4f, 0.3f);
+
         transform.position = position;
         transform.rotation = Quaternion.LookRotation(gaze - position, Vector3.up);
     }
