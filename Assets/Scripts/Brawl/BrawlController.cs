@@ -149,7 +149,7 @@ public class BrawlController : MonoBehaviour
         string magentaName = DisplayName(roster, _magentaRobot, _playerControls ? "CPU" : "MAGENTA");
         var hud = BrawlHud.Build(transform,
             _playerControls ? cyanName : cyanName + levelTag,
-            magentaName + levelTag);
+            magentaName + levelTag, def.name);
         gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud,
             _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
             _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");

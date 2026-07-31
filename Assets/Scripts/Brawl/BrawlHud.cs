@@ -27,7 +27,8 @@ public class BrawlHud : MonoBehaviour
     float _announceUntil;
     GameObject _endPanel;
 
-    public static BrawlHud Build(Transform parent, string cyanName, string magentaName)
+    public static BrawlHud Build(Transform parent, string cyanName, string magentaName,
+        string stageName = null)
     {
         var go = new GameObject("BrawlHud");
         go.transform.SetParent(parent, false);
@@ -49,6 +50,18 @@ public class BrawlHud : MonoBehaviour
         hud.BuildAnnouncement(canvasGo.transform);
         hud.BuildChargeMeters(canvasGo.transform);
         hud.BuildHelpButton(canvasGo.transform);
+
+        // Which stage the roll landed on — RANDOM made it a mystery.
+        if (!string.IsNullOrEmpty(stageName))
+        {
+            var stage = MakeText(canvasGo.transform, "StageName", stageName, 18,
+                new Color(1f, 1f, 1f, 0.45f), FontStyle.Bold);
+            var rect = stage.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -88f);
+            rect.sizeDelta = new Vector2(600f, 24f);
+        }
         return hud;
     }
 
