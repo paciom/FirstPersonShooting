@@ -272,19 +272,66 @@ public class BrawlHazards : MonoBehaviour
     public Transform stageRoot;
 
     float _crateTimer = 4f;
+    // The universal toys — every stage drops these regardless of its def:
+    // the arena itself is a player now.
+    float _kitTimer = 14f;
+    float _mineTimer = 9f;
+    float _fireTimer = 11f;
 
     void Update()
     {
-        if (!crates)
-            return;
-        _crateTimer -= Time.deltaTime;
-        if (_crateTimer <= 0f)
+        float dt = Time.deltaTime;
+
+        if (crates)
         {
-            _crateTimer = Random.Range(7f, 13f);
-            if (BrawlProps.Count<BrawlCrate>() < 3)
+            _crateTimer -= dt;
+            if (_crateTimer <= 0f)
             {
-                var spot = NearTheFight(1.4f, 4.5f, 2f);
-                BrawlCrate.Spawn(stageRoot, spot.x, spot.y);
+                _crateTimer = Random.Range(7f, 13f);
+                if (BrawlProps.Count<BrawlCrate>() < 3)
+                {
+                    var spot = NearTheFight(1.4f, 4.5f, 2f);
+                    BrawlCrate.Spawn(stageRoot, spot.x, spot.y);
+                }
+            }
+        }
+
+        // Repair kit: one at a time, and only once somebody actually needs
+        // it — a drop at full health is scenery.
+        _kitTimer -= dt;
+        if (_kitTimer <= 0f)
+        {
+            _kitTimer = Random.Range(16f, 26f);
+            var controller = BrawlController.Instance;
+            bool someoneHurt = controller != null
+                && ((controller.Cyan != null && controller.Cyan.Health < 70f)
+                    || (controller.Magenta != null && controller.Magenta.Health < 70f));
+            if (someoneHurt && BrawlRepairKit.Active == null)
+            {
+                var spot = NearTheFight(2.2f, 5.5f, 2f);
+                BrawlRepairKit.Spawn(stageRoot, spot.x, spot.y);
+            }
+        }
+
+        _mineTimer -= dt;
+        if (_mineTimer <= 0f)
+        {
+            _mineTimer = Random.Range(12f, 20f);
+            if (BrawlProps.Count<BrawlMine>() < 2)
+            {
+                var spot = NearTheFight(1.6f, 5f, 2f);
+                BrawlMine.Spawn(stageRoot, spot.x, spot.y);
+            }
+        }
+
+        _fireTimer -= dt;
+        if (_fireTimer <= 0f)
+        {
+            _fireTimer = Random.Range(13f, 22f);
+            if (BrawlProps.Count<BrawlFire>() < 2)
+            {
+                var spot = NearTheFight(1.2f, 4.5f, 2f);
+                BrawlFire.Spawn(stageRoot, spot.x, spot.y);
             }
         }
     }

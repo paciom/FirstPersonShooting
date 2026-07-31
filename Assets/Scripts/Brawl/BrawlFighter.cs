@@ -740,6 +740,95 @@ public class BrawlFighter : MonoBehaviour
             GainCharge(0.4f);
     }
 
+    /// <summary>The repair kit's patch-up: a real chunk of health, green fizz.</summary>
+    public void Heal(float amount)
+    {
+        Health = Mathf.Min(BrawlMoveSet.MaxHealth, Health + amount);
+        VfxUtil.SpawnBurst(transform.position + Vector3.up * 1.2f,
+            new Color(0.35f, 1f, 0.55f), 12, 2.8f, 0.13f);
+    }
+
+    /// <summary>
+    /// Environmental damage — a mine, a fire — radiating from a POINT with
+    /// no attacker to credit: both sides eat it the same. Blocking still
+    /// works (kid rules hold), knockback runs away from the point, and a
+    /// zeroed bar still ends the round properly.
+    /// </summary>
+    public void TakeAreaHit(int damage, Vector3 fromPoint, bool heavy)
+    {
+        if (Phase == State.Knockdown || Phase == State.KO || Phase == State.Celebrating)
+            return;
+
+        Vector3 away = transform.position - fromPoint;
+        away.y = 0f;
+        away = away.sqrMagnitude > 1e-4f ? away.normalized : -FacingDir;
+        Vector3 chest = transform.position + Vector3.up * 1.2f;
+
+        if (Phase == State.Blocking && !IsAirborne)
+        {
+            _knockback = away * 3f;
+            _stunTime = BrawlMoveSet.HitStun * 0.6f;
+            Phase = State.HitStun;
+            VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
+            BrawlAudio.Play(BrawlAudio.Id.Block, chest, 0.8f);
+            return;
+        }
+
+        Health = Mathf.Max(0f, Health - damage);
+        SetBlock(false);
+        VfxUtil.ImpactBurst(chest, new Color(1f, 0.75f, 0.4f));
+        GainCharge(damage / 130f);   // absorbing still trickles the comeback
+        BrawlAudio.Play(heavy ? BrawlAudio.Id.HitHeavy : BrawlAudio.Id.Hit, chest, 0.9f);
+
+        if (Health <= 0f)
+        {
+            KnockOut();
+            VfxUtil.Explosion(transform.position + Vector3.up, _tint, 0.7f);
+            BrawlAudio.Play(BrawlAudio.Id.KO, transform.position + Vector3.up);
+            OnKnockedOut?.Invoke(this);
+            return;
+        }
+
+        _verticalVelocity = 0f;
+        SetY(Ground);
+        if (heavy)
+        {
+            Phase = State.Knockdown;
+            _floorTime = BrawlMoveSet.KnockdownTime + BrawlMoveSet.GetUpTime;
+            _getUpFired = false;
+            _knockback = away * (BrawlMoveSet.HitKnockback * 6f);
+            Trigger(BrawlAnim.Knockdown);
+        }
+        else
+        {
+            Phase = State.HitStun;
+            _stunTime = BrawlMoveSet.HitStun;
+            _knockback = away * 4.8f;
+            Trigger(BrawlAnim.Hit);
+        }
+    }
+
+    /// <summary>
+    /// A geyser's pop: straight up, no damage. Only interrupts states where
+    /// leaving the ground makes sense — mid-attack and floored robots keep
+    /// their choreography.
+    /// </summary>
+    public void LaunchUp(float velocity)
+    {
+        if (Phase == State.Neutral || Phase == State.HitStun || Phase == State.Blocking)
+        {
+            SetBlock(false);
+            Phase = State.Air;
+            _airVelocity = Vector3.zero;
+            _verticalVelocity = velocity;
+            BrawlAudio.Play(BrawlAudio.Id.Jump, transform.position, 0.5f);
+        }
+        else if (Phase == State.Air || Phase == State.AirAttack)
+        {
+            _verticalVelocity = Mathf.Max(_verticalVelocity, velocity);
+        }
+    }
+
     void GainCharge(float amount)
     {
         bool wasReady = Charge >= 1f;

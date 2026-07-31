@@ -120,6 +120,31 @@ public class BrawlBrain : MonoBehaviour
             return;
         }
 
+        // A repair kit on the floor while we're hurting rewrites the errand
+        // list: go GET it. The opponent may be sprinting for the same box,
+        // and that race is arena drama all by itself.
+        var kit = BrawlRepairKit.Active;
+        if (kit != null && self.Health < 60f)
+        {
+            Vector3 toKit = kit.transform.position - self.transform.position;
+            toKit.y = 0f;
+            float kitGap = toKit.magnitude;
+            if (kitGap > 1e-3f && kitGap < 8f)
+            {
+                Vector3 heading = toKit / kitGap;
+                _moveHeld = heading;
+                if (WallAhead(self, heading, out bool hop))
+                {
+                    if (hop && !self.IsAirborne)
+                        _jumpOnce = true;
+                    else
+                        _moveHeld = heading * 0.3f
+                                    + Vector3.Cross(Vector3.up, heading) * (_orbitSign * 0.9f);
+                }
+                return;
+            }
+        }
+
         // Different floors: swinging across a metre of elevation is how a
         // CPU flails forever at someone it can't reach. Close the height
         // gap first — jump up to them, or walk off the ledge onto them.

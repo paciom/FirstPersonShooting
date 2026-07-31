@@ -300,6 +300,8 @@ public class BrawlHud : MonoBehaviour
             "\n" +
             "Landing hits fills your BLAST meter. Getting hit fills it a little too.\n" +
             "Every move calls its name under the fighter's health bar.\n" +
+            "The arena fights too: geysers launch you, mines and fire hurt EVERYONE,\n" +
+            "and the green repair kit heals whoever grabs it first.\n" +
             "Win the round: empty their health, or lead when time runs out.\n" +
             "\n" +
             "=  —  show the buttons     F3  —  hitboxes     ESC  —  menu",

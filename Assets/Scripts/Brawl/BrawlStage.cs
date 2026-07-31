@@ -163,11 +163,47 @@ public static class BrawlStage
             BrawlLift.Spawn(root.transform, -3.5f, 0f);
             BrawlLift.Spawn(root.transform, 3.5f, 0.5f);
         }
-        if (def.crates)
+        // Every stage runs the hazard scheduler now — repair kits, mines
+        // and falling fire are universal; only the cargo rain is a per-def
+        // toy.
+        var hazards = root.AddComponent<BrawlHazards>();
+        hazards.crates = def.crates;
+        hazards.stageRoot = root.transform;
+
+        SpawnGeysers(root.transform);
+    }
+
+    /// <summary>
+    /// Two steam vents per stage, planted on clear flat ground near the
+    /// fight line — far enough apart to matter, never inside a wall or on
+    /// a ledge lip.
+    /// </summary>
+    static void SpawnGeysers(Transform stageRoot)
+    {
+        int placed = 0;
+        for (int attempt = 0; attempt < 24 && placed < 2; attempt++)
         {
-            var hazards = root.AddComponent<BrawlHazards>();
-            hazards.crates = def.crates;
-            hazards.stageRoot = root.transform;
+            float x = (placed == 0 ? -1f : 1f) * Random.Range(2.5f, 6f);
+            float z = SpawnZ + Random.Range(-3f, 3f);
+            var half = BoundsHalf;
+            x = Mathf.Clamp(x, -(half.x - 2f), half.x - 2f);
+            z = Mathf.Clamp(z, -(half.y - 2f), half.y - 2f);
+
+            float ground = BrawlGround.HeightAt(x, z, aboveY: 30f);
+            // Clear air at body height, and genuinely flat around the vent.
+            if (Physics.CheckSphere(new Vector3(x, ground + 1.1f, z), 0.45f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                continue;
+            bool flat = true;
+            for (float dx = -0.9f; dx <= 0.9f && flat; dx += 0.9f)
+                for (float dz = -0.9f; dz <= 0.9f && flat; dz += 0.9f)
+                    if (Mathf.Abs(BrawlGround.HeightAt(x + dx, z + dz, aboveY: 30f) - ground) > 0.25f)
+                        flat = false;
+            if (!flat)
+                continue;
+
+            BrawlGeyser.Spawn(stageRoot, x, z, placed * 0.5f);
+            placed++;
         }
     }
 
