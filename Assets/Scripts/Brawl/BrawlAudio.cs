@@ -56,6 +56,13 @@ public static class BrawlAudio
         source.clip = clip;
         source.volume = Mathf.Clamp01(volume) * Master;
         source.pitch = Random.Range(0.94f, 1.06f);
+        // The heavy hit is the same punch family dropped a fourth and
+        // pushed — one recording set, two weights.
+        if (id == Id.HitHeavy)
+        {
+            source.pitch *= 0.8f;
+            source.volume = Mathf.Min(1f, source.volume * 1.2f);
+        }
         source.spatialBlend = spatial;
         source.dopplerLevel = 0f;
         source.Play();
@@ -75,10 +82,19 @@ public static class BrawlAudio
     {
         switch (id)
         {
+            // Real recordings first: every Resources/BrawlSfx/punch*.wav
+            // joins the random pool (ExternalData/Punch, converted). The
+            // synth clang is only the no-files fallback.
             case Id.Hit:
-                return Variants("hit", 3, v => Clang($"hit{v}", 150f + 40f * v, 0.34f, 0.9f, seed: 10 + v));
             case Id.HitHeavy:
-                return Variants("hitheavy", 2, v => Clang($"hitheavy{v}", 95f + 25f * v, 0.55f, 1.0f, seed: 20 + v));
+            {
+                var punches = LoadFamily("punch");
+                if (punches.Length > 0)
+                    return punches;
+                return id == Id.Hit
+                    ? Variants("hit", 3, v => Clang($"hit{v}", 150f + 40f * v, 0.34f, 0.9f, seed: 10 + v))
+                    : Variants("hitheavy", 2, v => Clang($"hitheavy{v}", 95f + 25f * v, 0.55f, 1.0f, seed: 20 + v));
+            }
             case Id.Graze:
                 return Variants("graze", 2, v => Clang($"graze{v}", 420f + 90f * v, 0.16f, 0.45f, seed: 30 + v));
             case Id.Block:
@@ -105,6 +121,16 @@ public static class BrawlAudio
             default:
                 return new AudioClip[0];
         }
+    }
+
+    /// <summary>Every BrawlSfx clip whose name starts with the prefix.</summary>
+    static AudioClip[] LoadFamily(string prefix)
+    {
+        var found = new List<AudioClip>();
+        foreach (var clip in Resources.LoadAll<AudioClip>("BrawlSfx"))
+            if (clip != null && clip.name.StartsWith(prefix))
+                found.Add(clip);
+        return found.ToArray();
     }
 
     static AudioClip[] Variants(string name, int count, System.Func<int, AudioClip> make)
