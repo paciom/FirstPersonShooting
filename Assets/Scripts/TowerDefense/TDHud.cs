@@ -20,11 +20,14 @@ public class TDHud : MonoBehaviour
     Text _credits;
     Text _core;
     Text _wave;
+    Text _robots;
     Text _waveButtonLabel;
     Button _waveButton;
 
     readonly System.Collections.Generic.List<(TDTowerDefinition def, Button button, Text label)>
         _towerButtons = new System.Collections.Generic.List<(TDTowerDefinition, Button, Text)>();
+    readonly System.Collections.Generic.List<(TDDefenderDefinition def, Button button, Text label)>
+        _robotButtons = new System.Collections.Generic.List<(TDDefenderDefinition, Button, Text)>();
     float _nextRefresh;
 
     void Awake()
@@ -47,6 +50,8 @@ public class TDHud : MonoBehaviour
             new Vector2(-28f, -58f), new Vector2(360f, 32f));
         _wave = MakeReadout(canvasGo.transform, "Wave", 20, new Color(1f, 1f, 1f, 0.8f),
             new Vector2(-28f, -92f), new Vector2(360f, 28f));
+        _robots = MakeReadout(canvasGo.transform, "Robots", 20, new Color(1f, 1f, 1f, 0.8f),
+            new Vector2(-28f, -122f), new Vector2(360f, 28f));
 
         BuildBar(canvasGo.transform);
         BuildWaveButton(canvasGo.transform);
@@ -72,21 +77,45 @@ public class TDHud : MonoBehaviour
         return text;
     }
 
-    /// <summary>The tower column, right edge, vertically centred — the Commander hand position.</summary>
+    /// <summary>
+    /// The build column, right edge, vertically centred — the Commander
+    /// hand position, and Commander's two-section layout too: structures
+    /// on top, a gap, the robot hires below, and the rally flag under them.
+    /// </summary>
     void BuildBar(Transform parent)
     {
-        var defs = TDTowerCatalog.All;
+        var towers = TDTowerCatalog.All;
+        var robots = TDDefenderCatalog.All;
         const float rowHeight = 64f;
-        float top = (defs.Length - 1) * rowHeight * 0.5f;
+        const float sectionGap = 24f;
+        int rows = towers.Length + robots.Length + 1;   // +1: the rally flag
+        float top = ((rows - 1) * rowHeight + 2f * sectionGap) * 0.5f;
 
-        for (int i = 0; i < defs.Length; i++)
+        for (int i = 0; i < towers.Length; i++)
         {
-            var def = defs[i];
+            var def = towers[i];
             var (button, label) = BarButton(parent, $"Tower_{def.key}", def.accent,
                 top - i * rowHeight,
                 () => TDController.Instance?.Placer?.Arm(def));
             _towerButtons.Add((def, button, label));
         }
+
+        float robotTop = top - towers.Length * rowHeight - sectionGap;
+        for (int i = 0; i < robots.Length; i++)
+        {
+            var def = robots[i];
+            var (button, label) = BarButton(parent, $"Hire_{def.key}", CoreCyan,
+                robotTop - i * rowHeight,
+                () => TDGarrison.Instance?.TryHire(def));
+            _robotButtons.Add((def, button, label));
+        }
+
+        float rallyY = robotTop - robots.Length * rowHeight - sectionGap;
+        var (rallyButton, rallyLabel) = BarButton(parent, "RallyFlag", Color.white, rallyY,
+            () => TDController.Instance?.Placer?.ArmRally());
+        rallyButton.interactable = true;
+        rallyLabel.text = "RALLY FLAG\nmove the defense line";
+        rallyLabel.color = Color.white;
     }
 
     /// <summary>
@@ -219,12 +248,28 @@ public class TDHud : MonoBehaviour
             RefreshWaveButton(waves, match);
         }
 
+        int corps = TDGarrison.DefenderCount;
+        _robots.text = $"ROBOTS  {corps} / {TDGarrison.MaxDefenders}";
+
         foreach (var (def, button, label) in _towerButtons)
         {
             bool affordable = TDEconomy.Credits >= def.cost;
             button.interactable = affordable;
             label.text = Describe(def);
             label.color = affordable ? Color.white : new Color(1f, 1f, 1f, 0.35f);
+        }
+
+        bool roomInCorps = corps < TDGarrison.MaxDefenders;
+        foreach (var (def, button, label) in _robotButtons)
+        {
+            bool affordable = TDEconomy.Credits >= def.cost;
+            button.interactable = affordable && roomInCorps;
+            label.text = roomInCorps
+                ? $"{def.displayName}\n{def.cost} cr   ·   {def.role}"
+                : $"{def.displayName}\ncorps full — {TDGarrison.MaxDefenders} robots";
+            label.color = affordable && roomInCorps
+                ? Color.white
+                : new Color(1f, 1f, 1f, 0.35f);
         }
     }
 

@@ -2,15 +2,18 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// One raider in the wave: a CommanderUnit that has taken a vow — march on
-/// the Photon Core and touch it, answering nothing on the way. All the rig
-/// (roster model, shield, agent, vehicle-fold travel, de-rez death) is
-/// inherited; what this subclass adds is the vow.
+/// One raider in the wave: a CommanderUnit under marching orders — take the
+/// canyon, shoot whatever robot stands in the lane, and touch the Photon
+/// Core. All the rig (roster model, shield, agent, laser, vehicle-fold
+/// travel, de-rez death) is inherited; what this subclass adds is the
+/// destination and the discipline.
 ///
-/// Raiders carry no gun and never retaliate — a tower defense where the
-/// wave shoots back is a war, and Commander already is one. Their whole
-/// threat is arithmetic: shield points versus tower fire over the length
-/// of the canyon.
+/// The march is an ATTACK-MOVE, so the fight with the defender corps comes
+/// free from the base brain: see a defender, close to range, trade fire,
+/// resume the march over the wreckage. Two things never distract a raider:
+/// TOWERS — rim fire is weather to them, not a target, which is what keeps
+/// the towers' half of the game a tower defense — and distance: a raider
+/// fights what blocks the lane, it does not go hunting.
 ///
 /// Reaching the Core LEAKS: the raider drains core energy and folds into
 /// light on the spot — the same de-rez exit a kill gets, so the ending
@@ -33,17 +36,18 @@ public class TDCreep : CommanderUnit
     public int Bounty => _bounty;
 
     public static TDCreep Spawn(RobotRoster.Entry entry, Vector3 position, float hp,
-        float speed, int bounty, int leakDamage, float visualScale)
+        float speed, float damage, int bounty, int leakDamage, float visualScale)
     {
         var creep = Build<TDCreep>("TDRaider", entry.modelPrefab, entry.vehiclePrefab,
-            teamId: 1, position, yaw: 180f, armed: false, secondaryWeapon: null,
+            teamId: 1, position, yaw: 180f, armed: true, secondaryWeapon: null,
             transformStages: entry.transformStages, paintAnchorHue: entry.paintAnchorHue);
 
         creep._bounty = bounty;
         creep._leakDamage = leakDamage;
-        // A marcher, not a hunter — and blind on purpose: sight is what
-        // makes an idle CommanderUnit pick fights.
-        creep.sightRange = 0f;
+        // Short eyes and a short gun: raiders answer what's in the lane
+        // ahead, they don't wander off the march to hunt.
+        creep.sightRange = 18f;
+        creep.attackRange = 16f;
 
         var shield = creep.GetComponent<EnergyShield>();
         shield.maxShield = hp;
@@ -51,6 +55,9 @@ public class TDCreep : CommanderUnit
         // every tower gap on the lane silently refunds the towers before it.
         shield.regenPerSecond = 0f;
         shield.Rematerialize();   // resync Current after the change, as ever
+
+        foreach (var weapon in creep.GetComponentsInChildren<Weapon>())
+            weapon.damage = damage;
 
         // TDPace owns the agent's speed from here on (slow fields and the
         // vehicle-form bonus compose there); this seed value is its base.
@@ -63,21 +70,29 @@ public class TDCreep : CommanderUnit
         if (!Mathf.Approximately(visualScale, 1f))
             creep.transform.localScale = Vector3.one * visualScale;
 
-        creep.IssueMove(TDMap.CoreSite);
+        creep.IssueAttackMove(TDMap.CoreSite);
         return creep;
     }
 
-    /// <summary>The vow, part one: no target is ever worth stopping for.</summary>
-    protected override void OnUnderAttack(CommanderUnit attacker) { }
-
-    /// <summary>The vow, part two: nobody re-tasks a raider.</summary>
-    public override void IssueAttack(CommanderUnit target) { }
+    /// <summary>
+    /// Shot by a defender: turn and fight — the base brain already knows
+    /// how, and the attack-move's resume point survives the detour. Shot by
+    /// a TOWER (no unit attacker to resolve): shrug and keep marching — the
+    /// base behavior would break toward "home", and this map's home for
+    /// team 1 is a Commander coordinate that doesn't exist here.
+    /// </summary>
+    protected override void OnUnderAttack(CommanderUnit attacker)
+    {
+        if (attacker != null)
+            base.OnUnderAttack(attacker);
+    }
 
     /// <summary>
     /// An idle raider is either AT the Core — leak — or was jostled off its
-    /// march (crowd shoves, arrival slack) and re-swears it. This tick is
-    /// also what turns "arrived at the pocket" into the drain: Arrived()
-    /// lands the unit Idle a stride short of the Core, inside LeakRadius.
+    /// march (crowd shoves, arrival slack, a won fight with no resume) and
+    /// re-swears it. This tick is also what turns "arrived at the pocket"
+    /// into the drain: Arrived() lands the unit Idle a stride short of the
+    /// Core, inside LeakRadius.
     /// </summary>
     protected override void ThinkIdle()
     {
@@ -88,7 +103,7 @@ public class TDCreep : CommanderUnit
             Leak();
             return;
         }
-        IssueMove(TDMap.CoreSite);
+        IssueAttackMove(TDMap.CoreSite);
     }
 
     /// <summary>

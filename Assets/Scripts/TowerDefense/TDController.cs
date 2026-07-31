@@ -115,6 +115,7 @@ public class TDController : MonoBehaviour
             TDMap.CoreSite + Vector3.up * 0.12f);
 
         Placer = gameObject.AddComponent<TDPlacer>();
+        gameObject.AddComponent<TDGarrison>();
         gameObject.AddComponent<TDHud>();
         gameObject.AddComponent<TDWaves>();
         gameObject.AddComponent<TDMatch>();

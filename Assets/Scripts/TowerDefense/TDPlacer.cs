@@ -3,21 +3,23 @@ using UnityEngine;
 /// <summary>
 /// The build cursor: a holographic ghost that follows the mouse anywhere on
 /// the high ground, judges the footing under it, and raises a real Building
-/// plus its TDTower on a valid click.
+/// plus its TDTower on a valid click. Also carries the RALLY FLAG the same
+/// way: arm it, click the lane, and the defender corps re-forms there.
 ///
-/// Placement law: anywhere on the RIM — the plateau standing 1.2 m over the
-/// lane. That one rule is the whole safety argument: the raiders' route runs
-/// below the buildable surface, so no tower, anywhere, can ever block it —
-/// free placement without free-placement's classic soft-lock. Footing is
-/// judged by probing the ground itself (five down-rays: centre and corners),
-/// so a footprint can't hang over the canyon or squat on a boulder.
+/// Placement law: towers anywhere on the RIM — the plateau standing 1.2 m
+/// over the lane. That one rule is the whole safety argument: the raiders'
+/// route runs below the buildable surface, so no tower, anywhere, can ever
+/// block it — free placement without free-placement's classic soft-lock.
+/// The flag is the mirror image: anywhere on the LANE, where the robots
+/// can actually walk. Both judged by probing the ground itself, so a
+/// footprint can't hang over the canyon and a flag can't stand on a roof.
 ///
 /// Right-click with no ghost armed points the other way: sell the tower
 /// under the cursor for most of its price back.
 /// </summary>
 public class TDPlacer : MonoBehaviour
 {
-    /// <summary>How far off rim height a footing probe may read and still count.</summary>
+    /// <summary>How far off the target height a footing probe may read and still count.</summary>
     const float FootingTolerance = 0.3f;
 
     /// <summary>Sold towers refund this share — mistakes cheap, shuffling not free.</summary>
@@ -27,6 +29,7 @@ public class TDPlacer : MonoBehaviour
     public static bool Active { get; private set; }
 
     TDTowerDefinition _pending;
+    bool _rallyMode;
     GameObject _ghost;
     GameObject _rangeRing;
     Material _validMat;
@@ -73,6 +76,20 @@ public class TDPlacer : MonoBehaviour
         Active = true;
     }
 
+    /// <summary>
+    /// The flag on the cursor: click the lane and the corps re-rallies.
+    /// Rides the same ghost machinery as a tower, minus the price tag.
+    /// </summary>
+    public void ArmRally()
+    {
+        Cancel();
+        _rallyMode = true;
+        _ghost = new GameObject("Ghost_rally");
+        GhostBlock(_ghost.transform, new Vector3(0f, 1.1f, 0f), new Vector3(0.12f, 2.2f, 0.12f));
+        GhostBlock(_ghost.transform, new Vector3(0.42f, 1.85f, 0f), new Vector3(0.72f, 0.5f, 0.06f));
+        Active = true;
+    }
+
     /// <summary>Put the ghost away. Safe to call armed or not.</summary>
     public void Cancel()
     {
@@ -81,6 +98,7 @@ public class TDPlacer : MonoBehaviour
         _ghost = null;
         _rangeRing = null;
         _pending = null;
+        _rallyMode = false;
         Active = false;
     }
 
@@ -147,11 +165,14 @@ public class TDPlacer : MonoBehaviour
 
         // Whole-metre grid, as Commander places: a defense line built one
         // click at a time still ends up LOOKING like a line.
-        var center = new Vector3(Mathf.Round(hit.point.x), TDMap.PlateauY,
+        var center = new Vector3(Mathf.Round(hit.point.x),
+                                 _rallyMode ? TDMap.GroundY : TDMap.PlateauY,
                                  Mathf.Round(hit.point.z));
         _ghost.transform.position = center;
 
-        _valid = Judge(center) && TDEconomy.Credits >= _pending.cost;
+        _valid = _rallyMode
+            ? OnFooting(center, TDMap.GroundY)
+            : Judge(center) && TDEconomy.Credits >= _pending.cost;
         var mat = _valid ? _validMat : _invalidMat;
         foreach (var renderer in _ghost.GetComponentsInChildren<MeshRenderer>())
         {
@@ -160,7 +181,15 @@ public class TDPlacer : MonoBehaviour
             renderer.sharedMaterial = mat;
         }
 
-        if (placeClick && _valid && TDEconomy.Spend(_pending.cost))
+        if (!placeClick || !_valid)
+            return;
+
+        if (_rallyMode)
+        {
+            TDGarrison.Instance?.SetRally(center);
+            Cancel();
+        }
+        else if (TDEconomy.Spend(_pending.cost))
         {
             var building = Building.Construct(_pending.building, 0, center);
             building.gameObject.AddComponent<TDTower>().Configure(_pending);
@@ -182,11 +211,11 @@ public class TDPlacer : MonoBehaviour
             return false;
 
         float halfW = def.footprint.x * 0.5f, halfD = def.footprint.y * 0.5f;
-        if (!OnRim(center)
-            || !OnRim(center + new Vector3(halfW, 0f, halfD))
-            || !OnRim(center + new Vector3(halfW, 0f, -halfD))
-            || !OnRim(center + new Vector3(-halfW, 0f, halfD))
-            || !OnRim(center + new Vector3(-halfW, 0f, -halfD)))
+        if (!OnFooting(center, TDMap.PlateauY)
+            || !OnFooting(center + new Vector3(halfW, 0f, halfD), TDMap.PlateauY)
+            || !OnFooting(center + new Vector3(halfW, 0f, -halfD), TDMap.PlateauY)
+            || !OnFooting(center + new Vector3(-halfW, 0f, halfD), TDMap.PlateauY)
+            || !OnFooting(center + new Vector3(-halfW, 0f, -halfD), TDMap.PlateauY))
             return false;
 
         // Nothing already standing in the footprint. The box starts just
@@ -199,17 +228,31 @@ public class TDPlacer : MonoBehaviour
     }
 
     /// <summary>
-    /// One footing probe: does the ground under this point read as the rim?
-    /// A physics question rather than a map-grid lookup on purpose — it
-    /// needs no static layout data, so a recompile during Play can never
-    /// leave the placer approving lane floor.
+    /// One footing probe: does the ground under this point read as the
+    /// given height — rim for towers, lane floor for the flag? A physics
+    /// question rather than a map-grid lookup on purpose — it needs no
+    /// static layout data, so a recompile during Play can never leave the
+    /// placer approving the wrong level. Robots passing under the cursor
+    /// are not ground: their capsules are skipped, or a marching wave
+    /// could block the very flag being planted in front of it.
     /// </summary>
-    static bool OnRim(Vector3 point)
+    static bool OnFooting(Vector3 point, float floorY)
     {
-        if (!Physics.Raycast(point + Vector3.up * 8f, Vector3.down, out RaycastHit hit, 16f,
-                ~0, QueryTriggerInteraction.Ignore))
-            return false;
-        return Mathf.Abs(hit.point.y - TDMap.PlateauY) <= FootingTolerance;
+        var hits = Physics.RaycastAll(point + Vector3.up * 8f, Vector3.down, 16f,
+            ~0, QueryTriggerInteraction.Ignore);
+        float bestDistance = float.MaxValue;
+        float groundY = float.MinValue;
+        foreach (var hit in hits)
+        {
+            if (hit.distance >= bestDistance)
+                continue;
+            if (hit.transform.root.GetComponent<CommanderUnit>() != null)
+                continue;
+            bestDistance = hit.distance;
+            groundY = hit.point.y;
+        }
+        return bestDistance < float.MaxValue
+            && Mathf.Abs(groundY - floorY) <= FootingTolerance;
     }
 
     /// <summary>

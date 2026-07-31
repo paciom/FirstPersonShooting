@@ -28,6 +28,19 @@ public class TDWaves : MonoBehaviour
     /// <summary>Early-call reward per banked second — patience priced against tempo.</summary>
     const int RushBonusPerSecond = 2;
 
+    /// <summary>Everything one wave is made of. Rolled fresh from the wave number.</summary>
+    struct Recipe
+    {
+        public int count;
+        public float interval;
+        public float hp;
+        public float speed;
+        public float damage;
+        public int bounty;
+        public int leak;
+        public string robotName;
+    }
+
     [SerializeField] int _wave;              // 0 = before the first wave
     [SerializeField] bool _waveActive;
     [SerializeField] float _phaseEndsAt;     // build-phase deadline while !_waveActive
@@ -129,9 +142,9 @@ public class TDWaves : MonoBehaviour
     {
         _wave++;
         _waveActive = true;
-        Theme(_wave, out int count, out float interval, out _, out _, out _, out _, out _);
-        _toSpawn = count;
-        _spawnInterval = interval;
+        var recipe = ThemeFor(_wave);
+        _toSpawn = recipe.count;
+        _spawnInterval = recipe.interval;
         _nextSpawnAt = Time.time;   // first raider steps through immediately
         VfxUtil.Explosion(TDMap.PortalSite + Vector3.up * 2.5f, new Color(1f, 0.3f, 0.9f), 1.4f);
     }
@@ -152,25 +165,26 @@ public class TDWaves : MonoBehaviour
 
     void SpawnOne(bool isBoss)
     {
-        Theme(_wave, out _, out _, out float hp, out float speed, out int bounty,
-            out int leak, out string robotName);
+        var recipe = ThemeFor(_wave);
 
         float scale = 1f;
         if (isBoss)
         {
             // The finale walks in at half speed and half a head taller,
-            // with a whole wave's shield on its own back.
-            hp *= 12f;
-            speed = 2.3f;
-            bounty = 150;
-            leak = 5;
+            // with a whole wave's shield on its own back and a gun to match.
+            recipe.hp *= 12f;
+            recipe.speed = 2.3f;
+            recipe.damage *= 2f;
+            recipe.bounty = 150;
+            recipe.leak = 5;
+            recipe.robotName = "titan";
             scale = 1.5f;
-            robotName = "titan";
         }
 
-        var entry = UnitCatalog.EntryOf(_roster, robotName);
+        var entry = UnitCatalog.EntryOf(_roster, recipe.robotName);
         var pos = TDMap.PortalSite + new Vector3(Random.Range(-1.5f, 1.5f), 0f, 0f);
-        var creep = TDCreep.Spawn(entry, pos, hp, speed, bounty, leak, scale);
+        var creep = TDCreep.Spawn(entry, pos, recipe.hp, recipe.speed, recipe.damage,
+            recipe.bounty, recipe.leak, scale);
         _alive.Add(creep);
 
         // Bounty on the kill, event-driven so it pays at the moment of the
@@ -187,51 +201,57 @@ public class TDWaves : MonoBehaviour
 
     /// <summary>
     /// The wave recipe — every number the invasion runs on, in one place.
-    /// Shield growth is the difficulty curve; everything else is flavour
-    /// spread across the roster.
+    /// Shield growth is the difficulty curve; gun growth keeps the defender
+    /// corps mortal; everything else is flavour spread across the roster.
     /// </summary>
-    static void Theme(int wave, out int count, out float interval, out float hp,
-        out float speed, out int bounty, out int leak, out string robotName)
+    static Recipe ThemeFor(int wave)
     {
         float baseHp = 55f * Mathf.Pow(1.22f, wave - 1);
-        count = 8 + 2 * wave;
-        interval = 0.9f;
-        hp = baseHp;
-        speed = 3.5f;
-        bounty = 10 + 2 * wave;
-        leak = 1;
+        var recipe = new Recipe
+        {
+            count = 8 + 2 * wave,
+            interval = 0.9f,
+            hp = baseHp,
+            speed = 3.5f,
+            damage = 5f + 0.7f * wave,
+            bounty = 10 + 2 * wave,
+            leak = 1,
+        };
 
         if (wave == TotalWaves)
         {
             // The escort ahead of the boss: a thin line wave (the boss
             // itself is rolled in SpawnOne, as the last one through).
-            count = 9;
-            robotName = "ranger";
-            return;
+            recipe.count = 9;
+            recipe.robotName = "ranger";
+            return recipe;
         }
         if (wave % 4 == 0)
         {
-            // ARMORED: fewer, slower, nearly double the shield.
-            count = Mathf.Max(5, Mathf.RoundToInt(count * 0.6f));
-            hp = baseHp * 1.9f;
-            speed = 2.7f;
-            bounty = Mathf.RoundToInt(bounty * 1.6f);
-            interval = 1.4f;
-            robotName = "titan";
-            return;
+            // ARMORED: fewer, slower, nearly double the shield, heavier gun.
+            recipe.count = Mathf.Max(5, Mathf.RoundToInt(recipe.count * 0.6f));
+            recipe.hp = baseHp * 1.9f;
+            recipe.speed = 2.7f;
+            recipe.damage *= 1.3f;
+            recipe.bounty = Mathf.RoundToInt(recipe.bounty * 1.6f);
+            recipe.interval = 1.4f;
+            recipe.robotName = "titan";
+            return recipe;
         }
         if (wave % 3 == 0)
         {
-            // SWIFT: a scout rush — thin shields at half again the pace.
-            count = Mathf.RoundToInt(count * 1.2f);
-            hp = baseHp * 0.6f;
-            speed = 5.2f;
-            interval = 0.65f;
-            robotName = "scout";
-            return;
+            // SWIFT: a scout rush — thin shields and light guns at pace.
+            recipe.count = Mathf.RoundToInt(recipe.count * 1.2f);
+            recipe.hp = baseHp * 0.6f;
+            recipe.speed = 5.2f;
+            recipe.damage *= 0.8f;
+            recipe.interval = 0.65f;
+            recipe.robotName = "scout";
+            return recipe;
         }
         // The line: cycle the roster so every wave wears a different robot.
         string[] line = { "ranger", "panther", "hawk", "knight", "samurai", "racer", "bolt" };
-        robotName = line[wave % line.Length];
+        recipe.robotName = line[wave % line.Length];
+        return recipe;
     }
 }
