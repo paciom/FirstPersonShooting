@@ -42,7 +42,7 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         var go = new GameObject("BrawlCrate");
         go.layer = IgnoreRaycastLayer;   // not terrain until it settles
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 9f, 0f);
+        go.transform.localPosition = new Vector3(x, 9f, BrawlStage.LaneZ);
         go.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-10f, 10f));
 
         var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -85,7 +85,8 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         ring.name = "DropWarning";
         Destroy(ring.GetComponent<Collider>());
         ring.transform.SetParent(stageRoot, false);
-        ring.transform.localPosition = new Vector3(x, BrawlGround.HeightAt(x) + 0.03f, 0f);
+        ring.transform.localPosition =
+            new Vector3(x, BrawlGround.HeightAt(x) + 0.03f, BrawlStage.LaneZ);
         ring.transform.localScale = new Vector3(Size * 1.3f, 0.012f, Size * 1.3f);
         ring.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Emissive("brawl-crate-warning", new Color(1f, 0.55f, 0.15f), 2.2f);

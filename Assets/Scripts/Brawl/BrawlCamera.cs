@@ -119,7 +119,7 @@ public class BrawlCamera : MonoBehaviour
 
     void ChooseAzimuth()
     {
-        Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f);
+        Vector3 gaze = new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ);
         float bestScore = float.MinValue;
         float best = _azimuthTarget;
         foreach (var candidate in Angles)
@@ -150,7 +150,7 @@ public class BrawlCamera : MonoBehaviour
         // The gaze point rides at chest height above the fighters' own
         // level; shake moves it at half strength so a thump reads as a
         // jolt, not a pan. A slow sway keeps even a standoff alive.
-        Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f) + shake * 0.5f;
+        Vector3 gaze = new Vector3(_x, _y + 1.1f, BrawlStage.LaneZ) + shake * 0.5f;
         float swayed = _azimuth + 4f * Mathf.Sin(Time.time * 0.35f);
         Vector3 desired = gaze + AzimuthDirection(swayed) * _distance + Vector3.up * 1.2f;
 

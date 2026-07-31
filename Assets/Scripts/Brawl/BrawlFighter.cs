@@ -130,9 +130,10 @@ public class BrawlFighter : MonoBehaviour
     {
         var go = new GameObject(teamId == 0 ? "BrawlFighter_P1" : "BrawlFighter_P2");
         go.transform.SetParent(stageRoot, false);
-        // Cyan opens on the left, the classic P1 side.
+        // Cyan opens on the left, the classic P1 side, on the fight line.
         float side = teamId == 0 ? -1f : 1f;
-        go.transform.localPosition = new Vector3(side * BrawlStage.StartOffset, 0f, 0f);
+        go.transform.localPosition =
+            new Vector3(side * BrawlStage.StartOffset, 0f, BrawlStage.LaneZ);
 
         var fighter = go.AddComponent<BrawlFighter>();
         fighter.TeamId = teamId;
@@ -252,7 +253,7 @@ public class BrawlFighter : MonoBehaviour
         _stunTime = 0f;
         _floorTime = 0f;
         _getUpFired = false;
-        transform.localPosition = new Vector3(_spawnX, 0f, 0f);
+        transform.localPosition = new Vector3(_spawnX, 0f, BrawlStage.LaneZ);
         // Remix corners can sit on raised arena tiles — spawn ON them.
         SetY(BrawlGround.HeightAt(transform.position.x));
         if (_animator != null)
@@ -269,13 +270,19 @@ public class BrawlFighter : MonoBehaviour
     /// </summary>
     public void Reposition()
     {
+        Reposition(_spawnX);
+    }
+
+    /// <summary>The referee points at a spot; the fighter stands there.</summary>
+    public void Reposition(float x)
+    {
         Phase = State.Neutral;
         Driven = default;
         _verticalVelocity = 0f;
         _airVelocityX = 0f;
         _knockbackVelocity = 0f;
         SetBlock(false);
-        transform.localPosition = new Vector3(_spawnX, 0f, 0f);
+        transform.localPosition = new Vector3(x, 0f, BrawlStage.LaneZ);
         SetY(BrawlGround.HeightAt(transform.position.x));
     }
 

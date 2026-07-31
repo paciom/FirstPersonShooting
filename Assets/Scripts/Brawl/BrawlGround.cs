@@ -56,8 +56,9 @@ public static class BrawlGround
     {
         float best = 0f;
         // DefaultRaycastLayers skips Ignore Raycast — where fighters'
-        // bumper capsules and still-bouncing crates live.
-        if (Physics.Raycast(new Vector3(x, ProbeTop, 0f), Vector3.down, out var hit,
+        // bumper capsules and still-bouncing crates live. The probe runs
+        // on the ACTIVE fight line, wherever the stage put it.
+        if (Physics.Raycast(new Vector3(x, ProbeTop, BrawlStage.LaneZ), Vector3.down, out var hit,
                 ProbeTop + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             float top = hit.point.y;

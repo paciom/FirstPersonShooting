@@ -23,7 +23,7 @@ public class BrawlBall : MonoBehaviour, BrawlProps.IStrikeable
     {
         var go = new GameObject("BrawlBall");
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 7.5f, 0f);
+        go.transform.localPosition = new Vector3(x, 7.5f, BrawlStage.LaneZ);
 
         var shell = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         shell.name = "Shell";

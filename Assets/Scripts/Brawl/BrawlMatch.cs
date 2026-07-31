@@ -121,14 +121,16 @@ public class BrawlMatch : MonoBehaviour
                 _hud.SetHealth(_cyan.Health / BrawlMoveSet.MaxHealth,
                                _magenta.Health / BrawlMoveSet.MaxHealth);
                 _hud.SetCharge(_cyan.Charge, _magenta.Charge);
-                // Ten silent seconds means the terrain checkmated them (a
-                // lane wall has no 'around') — the referee separates and
-                // restarts from the corners, everything else kept.
-                if (Time.time - _lastContact > 10f)
+                // Six silent seconds means the terrain checkmated them (a
+                // lane wall has no 'around') — the referee moves BOTH
+                // fighters to one clear span, everything else kept.
+                // Corners alone would re-split them across the same pillar.
+                if (Time.time - _lastContact > 6f)
                 {
                     _lastContact = Time.time;
-                    _cyan.Reposition();
-                    _magenta.Reposition();
+                    float centre = FindClearSpan();
+                    _cyan.Reposition(centre - 1.2f);
+                    _magenta.Reposition(centre + 1.2f);
                     _hud.Announce("BREAK!", 0.9f, Color.white);
                     BrawlAudio.PlayFlat(BrawlAudio.Id.RoundDing, 0.7f);
                 }
@@ -158,6 +160,36 @@ public class BrawlMatch : MonoBehaviour
             case Stage.MatchEnd:
                 break;
         }
+    }
+
+    /// <summary>
+    /// The flattest 3.6 m window on the fight line, nearest the centre:
+    /// where the referee restarts a checkmated bout. Heights come from the
+    /// same terrain authority the fighters walk on.
+    /// </summary>
+    static float FindClearSpan()
+    {
+        float half = BrawlStage.CurrentLaneHalf - 2f;
+        float bestCentre = 0f;
+        float bestScore = float.MinValue;
+        for (float centre = -half; centre <= half; centre += 1f)
+        {
+            float low = float.MaxValue;
+            float high = float.MinValue;
+            for (float offset = -1.8f; offset <= 1.8f; offset += 0.6f)
+            {
+                float height = BrawlGround.HeightAt(centre + offset);
+                low = Mathf.Min(low, height);
+                high = Mathf.Max(high, height);
+            }
+            float score = -(high - low) * 10f - Mathf.Abs(centre) * 0.1f - high * 0.5f;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestCentre = centre;
+            }
+        }
+        return bestCentre;
     }
 
     void FinishMatch(string result)

@@ -22,6 +22,13 @@ public static class BrawlStage
     /// </summary>
     public static float CurrentLaneHalf { get; private set; } = LaneHalf;
 
+    /// <summary>
+    /// WHERE the fight line runs (world z). Authored stages use 0; remix
+    /// stages scan candidate lines and pick the most traversable one, so
+    /// the lane threads between pillars instead of through them.
+    /// </summary>
+    public static float LaneZ { get; private set; }
+
     /// <summary>Where each fighter starts, either side of centre.</summary>
     public const float StartOffset = 3f;
 
@@ -48,10 +55,12 @@ public static class BrawlStage
         if (def.remixArena)
         {
             CurrentLaneHalf = 14f;
+            LaneZ = PickFightLine();
             FinishFeatures(root, def, roster);
             return root;
         }
         CurrentLaneHalf = LaneHalf;
+        LaneZ = 0f;
 
         // The deck: top surface at exactly y = 0, where the fighters stand.
         // Panel-seam surface rather than flat lit, so lateral motion reads
@@ -96,6 +105,51 @@ public static class BrawlStage
 
         FinishFeatures(root, def, roster);
         return root;
+    }
+
+    /// <summary>
+    /// Scan candidate fight lines across the arena and take the one with
+    /// the fewest impassable steps. Tall solids read as height 99 via an
+    /// embedded-sphere check — the vertical ray alone is blind to
+    /// anything rising past its start, which is exactly a pillar.
+    /// </summary>
+    static float PickFightLine()
+    {
+        float bestZ = 0f;
+        float bestScore = float.MinValue;
+        for (float z = -8f; z <= 8f; z += 2f)
+        {
+            int breaks = 0;
+            float roughness = 0f;
+            float previous = SampleLine(-14f, z);
+            for (float x = -13f; x <= 14f; x += 1f)
+            {
+                float height = SampleLine(x, z);
+                float step = Mathf.Abs(height - previous);
+                if (step > 1.2f)
+                    breaks++;
+                roughness += Mathf.Min(step, 2f);
+                previous = height;
+            }
+            float score = -breaks * 10f - roughness - Mathf.Abs(z) * 0.3f;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestZ = z;
+            }
+        }
+        return bestZ;
+    }
+
+    static float SampleLine(float x, float z)
+    {
+        if (Physics.CheckSphere(new Vector3(x, 2.6f, z), 0.35f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return 99f;   // a tall solid stands here
+        if (Physics.Raycast(new Vector3(x, 3.4f, z), Vector3.down, out var hit, 4.4f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return Mathf.Max(0f, hit.point.y);
+        return 0f;
     }
 
     /// <summary>Dressing and toys — shared by authored and remix stages.</summary>

@@ -18,7 +18,7 @@ public class BrawlLift : MonoBehaviour
     {
         var go = new GameObject("BrawlLift");
         go.transform.SetParent(stageRoot, false);
-        go.transform.localPosition = new Vector3(x, 0f, 0f);
+        go.transform.localPosition = new Vector3(x, 0f, BrawlStage.LaneZ);
 
         var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
         pad.name = "Pad";
