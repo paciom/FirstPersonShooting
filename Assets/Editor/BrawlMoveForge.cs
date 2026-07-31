@@ -62,7 +62,7 @@ public static class BrawlMoveForge
     ///     pins Y too) — Variant.lunge moves the root instead. Ends the
     ///     mid-move body drift that snapped home at every state seam.
     /// </summary>
-    const int TemplateVersion = 10;
+    const int TemplateVersion = 11;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
