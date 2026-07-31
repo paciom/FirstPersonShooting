@@ -121,16 +121,24 @@ public class BrawlMatch : MonoBehaviour
                 _hud.SetHealth(_cyan.Health / BrawlMoveSet.MaxHealth,
                                _magenta.Health / BrawlMoveSet.MaxHealth);
                 _hud.SetCharge(_cyan.Charge, _magenta.Charge);
-                // Six silent seconds means the terrain checkmated them (a
-                // lane wall has no 'around') — the referee moves BOTH
-                // fighters to one clear span, everything else kept.
-                // Corners alone would re-split them across the same pillar.
-                if (Time.time - _lastContact > 6f)
+                // The referee only counts silence while the fighters
+                // genuinely CAN'T engage — solid terrain between their
+                // chests, or a real distance apart. Trading whiffs and
+                // blocks at close range is a fight, not a stall, and must
+                // never trigger the break (it teleported live bouts).
+                if (CanEngage())
+                    _lastContact = Time.time;
+                if (Time.time - _lastContact > 8f)
                 {
                     _lastContact = Time.time;
-                    float centre = FindClearSpan();
+                    float centre = FindClearSpan(
+                        (_cyan.transform.position.x + _magenta.transform.position.x) * 0.5f);
+                    RefereeFlash(_cyan);
+                    RefereeFlash(_magenta);
                     _cyan.Reposition(centre - 1.2f);
                     _magenta.Reposition(centre + 1.2f);
+                    RefereeFlash(_cyan);
+                    RefereeFlash(_magenta);
                     _hud.Announce("BREAK!", 0.9f, Color.white);
                     BrawlAudio.PlayFlat(BrawlAudio.Id.RoundDing, 0.7f);
                 }
@@ -163,11 +171,34 @@ public class BrawlMatch : MonoBehaviour
     }
 
     /// <summary>
-    /// The flattest 3.6 m window on the fight line, nearest the centre:
-    /// where the referee restarts a checkmated bout. Heights come from the
-    /// same terrain authority the fighters walk on.
+    /// True when nothing stops the fight: chests see each other and the
+    /// gap is a fighting distance. A wall or a pillar between them (or a
+    /// long chase) is what the referee's patience is FOR.
     /// </summary>
-    static float FindClearSpan()
+    bool CanEngage()
+    {
+        Vector3 a = _cyan.transform.position + Vector3.up * 1.1f;
+        Vector3 b = _magenta.transform.position + Vector3.up * 1.1f;
+        if ((b - a).magnitude > 3.5f)
+            return false;
+        return !Physics.Linecast(a, b,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+    }
+
+    static void RefereeFlash(BrawlFighter fighter)
+    {
+        VfxUtil.SpawnBurst(fighter.transform.position + Vector3.up,
+            MatchAnnouncer.TeamColor(fighter.TeamId), 10, 3f, 0.12f);
+    }
+
+    /// <summary>
+    /// The flattest 3.6 m window on the fight line, nearest the FIGHTERS:
+    /// where the referee restarts a checkmated bout. Probed from high
+    /// above (aboveY) so tall structures read as their true summits — the
+    /// blind probe once scored the pyramid's interior as 'flat ground'
+    /// and the break teleported both fighters onto its peak.
+    /// </summary>
+    static float FindClearSpan(float near)
     {
         float half = BrawlStage.CurrentLaneHalf - 2f;
         float bestCentre = 0f;
@@ -178,11 +209,13 @@ public class BrawlMatch : MonoBehaviour
             float high = float.MinValue;
             for (float offset = -1.8f; offset <= 1.8f; offset += 0.6f)
             {
-                float height = BrawlGround.HeightAt(centre + offset);
+                float height = BrawlGround.HeightAt(centre + offset, aboveY: 30f);
                 low = Mathf.Min(low, height);
                 high = Mathf.Max(high, height);
             }
-            float score = -(high - low) * 10f - Mathf.Abs(centre) * 0.1f - high * 0.5f;
+            float score = -(high - low) * 10f
+                          - Mathf.Abs(centre - near) * 0.15f
+                          - high * 0.8f;
             if (score > bestScore)
             {
                 bestScore = score;
