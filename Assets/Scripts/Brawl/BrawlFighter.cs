@@ -323,13 +323,40 @@ public class BrawlFighter : MonoBehaviour
         // The self-heal: embedded in solid terrain by ANY path — a spawn
         // inside a tier, a slide the blind probe mis-set — every ray-based
         // sense fails from inside a collider, so the one working sensor is
-        // this overlap check. Surface on top of whatever swallowed us.
-        if (Physics.CheckSphere(transform.position + Vector3.up * 0.9f, 0.25f,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
-            && Physics.Raycast(new Vector3(transform.position.x, 40f, transform.position.z),
-                Vector3.down, out var surface, 45f,
+        // this overlap check. Swallowed by a COLUMN (a stalk, a pillar):
+        // escape sideways, away from its axis — surfacing on top of a tree
+        // trunk is not a rescue. Anything else: surface on top of it.
+        Vector3 chest = transform.position + Vector3.up * 0.9f;
+        if (Physics.CheckSphere(chest, 0.25f,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            SetY(surface.point.y);
+        {
+            ArenaColumn column = null;
+            foreach (var overlap in Physics.OverlapSphere(chest, 0.25f,
+                         Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                column = overlap.GetComponent<ArenaColumn>();
+                if (column != null)
+                    break;
+            }
+            if (column != null)
+            {
+                Vector3 away = transform.position - column.transform.position;
+                away.y = 0f;
+                away = away.sqrMagnitude > 1e-4f ? away.normalized : -FacingDir;
+                for (int step = 0; step < 14; step++)
+                {
+                    transform.position += away * 0.3f;
+                    if (!Physics.CheckSphere(transform.position + Vector3.up * 0.9f, 0.25f,
+                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                        break;
+                }
+                SetY(Ground);
+            }
+            else if (Physics.Raycast(new Vector3(transform.position.x, 40f, transform.position.z),
+                         Vector3.down, out var surface, 45f,
+                         Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                SetY(surface.point.y);
+        }
 
         switch (Phase)
         {

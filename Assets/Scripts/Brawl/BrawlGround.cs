@@ -63,13 +63,27 @@ public static class BrawlGround
         float probeStart = Mathf.Max(ProbeTop, aboveY + 2.4f);
         // DefaultRaycastLayers skips Ignore Raycast — where fighters'
         // bumper capsules and still-bouncing crates live. The fight is a
-        // PLANE now, so the probe takes both coordinates.
-        if (Physics.Raycast(new Vector3(x, probeStart, z), Vector3.down, out var hit,
-                probeStart + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        // PLANE now, so the probe takes both coordinates. Columns (stalks,
+        // pillars) are walls, never floors — the ray looks straight through
+        // their tops to whatever honest ground lies beneath, else a spawn
+        // or a BREAK could stand a robot on a tree trunk.
+        float rayFrom = probeStart;
+        for (int guard = 0; guard < 6; guard++)
         {
+            if (!Physics.Raycast(new Vector3(x, rayFrom, z), Vector3.down, out var hit,
+                    rayFrom + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                break;
+            if (hit.collider.GetComponent<ArenaColumn>() != null)
+            {
+                rayFrom = hit.point.y - 0.05f;
+                if (rayFrom <= 0f)
+                    break;
+                continue;
+            }
             float top = hit.point.y;
             if (top > best && top <= below + 0.3f)
                 best = top;
+            break;
         }
 
         for (int i = Platforms.Count - 1; i >= 0; i--)

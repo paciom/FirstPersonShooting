@@ -209,15 +209,22 @@ public class BrawlMatch : MonoBehaviour
         {
             float low = float.MaxValue;
             float high = float.MinValue;
+            bool blocked = false;
             for (float offset = -1.8f; offset <= 1.8f; offset += 0.6f)
             {
                 float height = BrawlGround.HeightAt(centre + offset, atZ, aboveY: 30f);
                 low = Mathf.Min(low, height);
                 high = Mathf.Max(high, height);
+                // Flat ground is not enough — the ground under a tree trunk
+                // reads flat. The AIR has to be clear at body height too.
+                if (Physics.CheckSphere(new Vector3(centre + offset, height + 1.1f, atZ),
+                        0.35f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    blocked = true;
             }
             float score = -(high - low) * 10f
                           - Mathf.Abs(centre - near) * 0.15f
-                          - high * 0.8f;
+                          - high * 0.8f
+                          - (blocked ? 1000f : 0f);
             if (score > bestScore)
             {
                 bestScore = score;
