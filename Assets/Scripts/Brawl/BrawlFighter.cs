@@ -66,8 +66,13 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>The tallest step a walking robot climbs without jumping.</summary>
     const float StepUp = 0.6f;
 
-    /// <summary>The standable surface under this fighter right now.</summary>
-    public float Ground => BrawlGround.HeightAt(transform.position.x);
+    /// <summary>
+    /// The standable surface under this fighter right now — probed from
+    /// the fighter's own height, so a robot atop a tall tier reads the
+    /// tier, not the ground floor beneath it.
+    /// </summary>
+    public float Ground => BrawlGround.HeightAt(transform.position.x,
+        aboveY: transform.position.y);
 
     public bool IsAirborne => transform.position.y > Ground + 0.02f;
 
@@ -254,8 +259,9 @@ public class BrawlFighter : MonoBehaviour
         _floorTime = 0f;
         _getUpFired = false;
         transform.localPosition = new Vector3(_spawnX, 0f, BrawlStage.LaneZ);
-        // Remix corners can sit on raised arena tiles — spawn ON them.
-        SetY(BrawlGround.HeightAt(transform.position.x));
+        // Spawn ON whatever stands here — raised tiles, tall tiers — never
+        // inside it: the probe runs from high above.
+        SetY(BrawlGround.HeightAt(transform.position.x, aboveY: 30f));
         if (_animator != null)
         {
             _animator.Rebind();
@@ -283,7 +289,7 @@ public class BrawlFighter : MonoBehaviour
         _knockbackVelocity = 0f;
         SetBlock(false);
         transform.localPosition = new Vector3(x, 0f, BrawlStage.LaneZ);
-        SetY(BrawlGround.HeightAt(transform.position.x));
+        SetY(BrawlGround.HeightAt(transform.position.x, aboveY: 30f));
     }
 
     /// <summary>Round lost: fall and stay down. Fires no further events.</summary>
@@ -307,6 +313,17 @@ public class BrawlFighter : MonoBehaviour
         float dt = Time.deltaTime;
         if (dt <= 0f)
             return;
+
+        // The self-heal: embedded in solid terrain by ANY path — a spawn
+        // inside a tier, a slide the blind probe mis-set — every ray-based
+        // sense fails from inside a collider, so the one working sensor is
+        // this overlap check. Surface on top of whatever swallowed us.
+        if (Physics.CheckSphere(transform.position + Vector3.up * 0.9f, 0.25f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            && Physics.Raycast(new Vector3(transform.position.x, 40f, transform.position.z),
+                Vector3.down, out var surface, 45f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            SetY(surface.point.y);
 
         switch (Phase)
         {

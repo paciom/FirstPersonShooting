@@ -51,15 +51,21 @@ public static class BrawlGround
     /// <paramref name="below"/> ignores anything above that height + 0.3 —
     /// a falling crate asks what it will land ON, not where its own top is;
     /// <paramref name="exclude"/> keeps it from standing on itself.
+    /// <paramref name="aboveY"/> raises the probe start relative to the
+    /// ASKER: a robot standing on a five-metre ziggurat tier probes from
+    /// its own head height, so tall structures are real floors instead of
+    /// surfaces the fixed-height probe was born inside of (and blind to).
     /// </summary>
-    public static float HeightAt(float x, float below = float.PositiveInfinity, Component exclude = null)
+    public static float HeightAt(float x, float below = float.PositiveInfinity,
+        Component exclude = null, float aboveY = float.NegativeInfinity)
     {
         float best = 0f;
+        float probeStart = Mathf.Max(ProbeTop, aboveY + 2.4f);
         // DefaultRaycastLayers skips Ignore Raycast — where fighters'
         // bumper capsules and still-bouncing crates live. The probe runs
         // on the ACTIVE fight line, wherever the stage put it.
-        if (Physics.Raycast(new Vector3(x, ProbeTop, BrawlStage.LaneZ), Vector3.down, out var hit,
-                ProbeTop + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(new Vector3(x, probeStart, BrawlStage.LaneZ), Vector3.down, out var hit,
+                probeStart + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             float top = hit.point.y;
             if (top > best && top <= below + 0.3f)
