@@ -691,21 +691,27 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
-    /// The one horizontal mover everything routes through. Walls are
-    /// sampled at the LEADING SHOULDER, not the centre — a robot is half
-    /// a metre wide, and centre-only checks let that half sink into any
-    /// block face before the centre arrived (the half-embedded robots).
-    /// False = a wall at shoulder height stopped the move.
+    /// The one horizontal mover everything routes through. Walls are found
+    /// by HORIZONTAL rays from the body toward the move, at knee-plus and
+    /// chest height — the old vertical probe couldn't see any block whose
+    /// top rose above its start (a ray born inside a collider hits
+    /// nothing), which is exactly how tall blocks kept swallowing robots
+    /// on raised terrain. Two heights: above StepUp so ledges still step,
+    /// below the head so every real wall blocks. False = wall.
     /// </summary>
     bool TryMoveX(float dx)
     {
         if (dx == 0f)
             return true;
-        float newX = transform.position.x + dx;
-        float shoulder = newX + Mathf.Sign(dx) * BrawlMoveSet.BodyHalfWidth;
-        if (BrawlGround.HeightAt(shoulder) > transform.position.y + StepUp)
+        Vector3 direction = new Vector3(Mathf.Sign(dx), 0f, 0f);
+        float reach = Mathf.Abs(dx) + BrawlMoveSet.BodyHalfWidth;
+        Vector3 feet = transform.position;
+        if (Physics.Raycast(feet + Vector3.up * (StepUp + 0.15f), direction, reach,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+            || Physics.Raycast(feet + Vector3.up * 1.4f, direction, reach,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             return false;
-        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+        transform.position = new Vector3(feet.x + dx, feet.y, feet.z);
         return true;
     }
 
