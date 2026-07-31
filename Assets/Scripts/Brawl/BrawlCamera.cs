@@ -97,6 +97,26 @@ public class BrawlCamera : MonoBehaviour
         return new Vector3(Mathf.Sin(radians), 0f, -Mathf.Cos(radians));
     }
 
+    /// <summary>
+    /// How far the view is clear from the gaze along a direction. Sphere
+    /// AND plain ray, nearer hit wins: the sphere alone skips any wall it
+    /// starts touching — which is precisely a fight pressed against one —
+    /// and that blind spot parked the camera OUTSIDE the building while
+    /// the robots fought inside. The gaze itself is always in open air, so
+    /// the zero-radius ray never starts inside anything.
+    /// </summary>
+    static float Occlusion(Vector3 gaze, Vector3 direction, float length)
+    {
+        float clear = length;
+        if (Physics.SphereCast(gaze, 0.35f, direction, out var sphereHit, length,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            clear = sphereHit.distance;
+        if (Physics.Raycast(gaze, direction, out var rayHit, length,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            clear = Mathf.Min(clear, rayHit.distance);
+        return clear;
+    }
+
     void ChooseAzimuth()
     {
         Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f);
@@ -106,13 +126,8 @@ public class BrawlCamera : MonoBehaviour
         {
             Vector3 offset = AzimuthDirection(candidate) * _distance + Vector3.up * 1.2f;
             Vector3 end = gaze + offset;
-            float clear = _distance;
-            if (Physics.SphereCast(gaze, 0.35f, offset.normalized, out var hit, _distance,
-                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-                clear = hit.distance;
-            // A sphere-cast IGNORES colliders it starts inside — a fight
-            // pressed against a wall reports through-wall angles as clear.
-            // An end position embedded in geometry is the tell: veto it.
+            float clear = Occlusion(gaze, offset.normalized, _distance);
+            // An end position embedded in geometry can't be a shot at all.
             if (Physics.CheckSphere(end, 0.32f,
                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 clear -= 100f;
@@ -147,11 +162,11 @@ public class BrawlCamera : MonoBehaviour
         Vector3 line = desired - gaze;
         float length = line.magnitude;
         Vector3 direction = line / Mathf.Max(length, 1e-4f);
+        float clearAlong = Occlusion(gaze, direction, length);
         float wantedPullIn = 0f;
-        if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, length,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        if (clearAlong < length)
             // Close-up beats blind: 1.8 m floor, not a wall-embedding 3.5.
-            wantedPullIn = length - Mathf.Max(1.8f, hit.distance - 0.45f);
+            wantedPullIn = length - Mathf.Max(1.8f, clearAlong - 0.45f);
         float ease = wantedPullIn > _obstruction ? 14f : 2.5f;
         _obstruction = Mathf.Lerp(_obstruction, wantedPullIn,
             1f - Mathf.Exp(-ease * Time.deltaTime));
