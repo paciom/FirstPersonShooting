@@ -365,17 +365,12 @@ public class BrawlFighter : MonoBehaviour
         }
 
         _verticalVelocity -= BrawlMoveSet.Gravity * dt;
-        // A wall at body height stops horizontal flight — without this, a
-        // jump into an arena block enters it and then pops on top when the
-        // landing check reads the block's lid as the ground.
-        if (_airVelocityX != 0f)
-        {
-            float aheadGround = BrawlGround.HeightAt(
-                transform.position.x + _airVelocityX * dt);
-            if (aheadGround > transform.position.y + 0.2f)
-                _airVelocityX = 0f;
-        }
-        Move(_airVelocityX * dt, _verticalVelocity * dt);
+        // Horizontal flight goes through the shoulder-sampled mover: a
+        // wall stops it dead instead of letting the body enter and pop
+        // out on the block's lid.
+        if (_airVelocityX != 0f && !TryMoveX(_airVelocityX * dt))
+            _airVelocityX = 0f;
+        Move(0f, _verticalVelocity * dt);
 
         float landing = Ground;
         if (transform.position.y <= landing && _verticalVelocity <= 0f)
@@ -413,10 +408,12 @@ public class BrawlFighter : MonoBehaviour
         else
         {
             // The lunge: the ROOT carries the move's forward commitment
-            // (clips are in place), stopping when the window closes.
+            // (clips are in place), stopping when the window closes — or at
+            // a wall. Raw lunging was the drill that sank punching robots
+            // into block faces one press at a time.
             float window = _move.startup + _move.active;
             if (_variant.lunge > 0f && _moveTime <= window)
-                Move(Facing * (_variant.lunge / window) * dt, 0f);
+                TryMoveX(Facing * (_variant.lunge / window) * dt);
 
             bool active = _moveTime >= _move.startup && _moveTime <= window;
             if (active && !_moveHasHit)
@@ -694,27 +691,42 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
+    /// The one horizontal mover everything routes through. Walls are
+    /// sampled at the LEADING SHOULDER, not the centre — a robot is half
+    /// a metre wide, and centre-only checks let that half sink into any
+    /// block face before the centre arrived (the half-embedded robots).
+    /// False = a wall at shoulder height stopped the move.
+    /// </summary>
+    bool TryMoveX(float dx)
+    {
+        if (dx == 0f)
+            return true;
+        float newX = transform.position.x + dx;
+        float shoulder = newX + Mathf.Sign(dx) * BrawlMoveSet.BodyHalfWidth;
+        if (BrawlGround.HeightAt(shoulder) > transform.position.y + StepUp)
+            return false;
+        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+        return true;
+    }
+
+    /// <summary>
     /// Knockback travel over terrain: follows the ground down and over
     /// small steps, but a wall — an arena block, a cargo stack — stops the
-    /// shove dead instead of teleporting the robot on top of (or inside)
-    /// the obstacle. Hard stops ring the wall-slam bell.
+    /// shove dead instead of embedding the robot. Hard stops ring the
+    /// wall-slam bell.
     /// </summary>
     void SlideAlongGround(float dx)
     {
         if (dx == 0f)
             return;
-        float newX = transform.position.x + dx;
-        float ahead = BrawlGround.HeightAt(newX);
-        float y = transform.position.y;
-        if (ahead > y + StepUp)
+        if (!TryMoveX(dx))
         {
             if (Mathf.Abs(_knockbackVelocity) > 2f)
                 OnWallSlam?.Invoke(this, Mathf.Abs(_knockbackVelocity));
             _knockbackVelocity = 0f;
             return;
         }
-        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
-        SetY(ahead);
+        SetY(Ground);
     }
 
     /// <summary>
@@ -725,14 +737,12 @@ public class BrawlFighter : MonoBehaviour
     {
         if (dx == 0f)
             return;
-        float newX = transform.position.x + dx;
-        float ahead = BrawlGround.HeightAt(newX);
         float y = transform.position.y;
-        if (ahead > y + StepUp)
-            return;   // a wall of cargo — jump it instead
-        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
-        if (ahead >= y - StepUp)
-            SetY(ahead);
+        if (!TryMoveX(dx))
+            return;   // a wall at the shoulder — jump it instead
+        float floor = Ground;   // what's under the CENTRE decides footing
+        if (floor >= y - StepUp)
+            SetY(floor);
         else
         {
             // Walked off the edge: keep the stride as air momentum.
@@ -767,12 +777,9 @@ public class BrawlFighter : MonoBehaviour
         if (overlap <= 0f)
             return;
         float push = (gap >= 0f ? 1f : -1f) * overlap * 0.5f;
-        // Never push a fighter into a wall face — the opponent's own
-        // Separate carries the spacing when one side is against cargo.
-        if (BrawlGround.HeightAt(transform.position.x + push)
-            > transform.position.y + StepUp)
-            return;
-        Move(push, 0f);
+        // Shoulder-checked: never squeezed into a wall face — the
+        // opponent's own Separate carries the spacing at cargo walls.
+        TryMoveX(push);
     }
 
     void ClampToLane()
