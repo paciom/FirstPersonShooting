@@ -209,8 +209,13 @@ public class TDController : MonoBehaviour
         data.renderPostProcessing = true;
 
         var rts = rig.AddComponent<CommanderCamera>();
-        // This map is half Commander's size; the pan clamps must know.
+        // This map is half Commander's size; the pan clamps must know. The
+        // south grace goes high enough that the height-aware body clamp
+        // never governs — on a 90 m board it would otherwise pin the focus
+        // at mid-map and eat every southward drag; the skirt covers what
+        // the camera overhangs.
         rts.worldHalfExtent = TDMap.HalfExtent;
+        rts.southClampGrace = 60f;
         // No selection in this mode, so the left button may as well pan —
         // the placer takes the mouse only while a ghost is up.
         rts.primaryDragPans = true;

@@ -713,9 +713,9 @@ public class GameModeController : MonoBehaviour
         _towerDefense = TDController.Begin(this, seed);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay($"MAP #{seed}   ·   Click a tower, click a pad — build   ·   " +
-            "RMB tower — Sell   ·   WASD / Wheel — Camera   ·   H — Core   ·   ESC — Menu",
-            $"MAP #{seed}   ·   tap tower button, tap a pad — build   ·   drag — pan   ·   pinch — zoom");
+        ShowOverlay($"MAP #{seed}   ·   Pick a tower, click the high ground — Build   ·   " +
+            "RMB tower — Sell   ·   Drag / WASD — Pan   ·   Wheel — Zoom   ·   H — Core   ·   ESC — Menu",
+            $"MAP #{seed}   ·   tap a tower button, tap the high ground — build   ·   drag — pan   ·   pinch — zoom");
         LockCursor(false);
     }
 

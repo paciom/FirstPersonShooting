@@ -40,6 +40,16 @@ public class CommanderCamera : MonoBehaviour
     /// </summary>
     public float worldHalfExtent = CommanderMap.HalfExtent;
 
+    /// <summary>
+    /// How far past the south edge the camera BODY may stand. At Commander's
+    /// default 4 the height-aware clamp keeps the lower screen void-free —
+    /// but on a small map that same clamp pins the focus well short of the
+    /// south end at working zooms, and every southward drag dies against it.
+    /// Tower Defense sets this high and lets the fogged skirt (whose whole
+    /// job is covering frustum overshoot) absorb the difference.
+    /// </summary>
+    public float southClampGrace = 4f;
+
     float _height = 45f;
     Vector3 _focus;
     Vector3 _lastDragMouse;
@@ -180,11 +190,14 @@ public class CommanderCamera : MonoBehaviour
         // in a border cliff at full pan. The southern limit is height-aware:
         // the camera stands `back` metres south of the focus, so a symmetric
         // clamp would walk the camera itself out past the cliff ring on a
-        // full-south pan and fill the lower screen with void.
+        // full-south pan and fill the lower screen with void — how far out
+        // it may walk is southClampGrace's call. The focus itself never
+        // leaves the map: the symmetric bound backstops the body bound.
         float extent = worldHalfExtent - 6f;
         float back = _height / Mathf.Tan(Pitch * Mathf.Deg2Rad);
         _focus.x = Mathf.Clamp(_focus.x, -extent, extent);
-        _focus.z = Mathf.Clamp(_focus.z, back - (worldHalfExtent + 4f), extent);
+        _focus.z = Mathf.Clamp(_focus.z,
+            Mathf.Max(-extent, back - (worldHalfExtent + southClampGrace)), extent);
 
         Apply();
     }

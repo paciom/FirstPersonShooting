@@ -1,19 +1,24 @@
 using UnityEngine;
 
 /// <summary>
-/// The build cursor for socket country: a holographic ghost that snaps to
-/// the nearest free foundation, judges only occupancy and price — the
-/// sockets already settled every placement question Commander's free-ground
-/// law exists to answer — and raises a real Building plus its TDTower on a
-/// valid click.
+/// The build cursor: a holographic ghost that follows the mouse anywhere on
+/// the high ground, judges the footing under it, and raises a real Building
+/// plus its TDTower on a valid click.
+///
+/// Placement law: anywhere on the RIM — the plateau standing 1.2 m over the
+/// lane. That one rule is the whole safety argument: the raiders' route runs
+/// below the buildable surface, so no tower, anywhere, can ever block it —
+/// free placement without free-placement's classic soft-lock. Footing is
+/// judged by probing the ground itself (five down-rays: centre and corners),
+/// so a footprint can't hang over the canyon or squat on a boulder.
 ///
 /// Right-click with no ghost armed points the other way: sell the tower
 /// under the cursor for most of its price back.
 /// </summary>
 public class TDPlacer : MonoBehaviour
 {
-    /// <summary>How far the cursor may miss a socket and still mean it.</summary>
-    const float SnapRange = 7f;
+    /// <summary>How far off rim height a footing probe may read and still count.</summary>
+    const float FootingTolerance = 0.3f;
 
     /// <summary>Sold towers refund this share — mistakes cheap, shuffling not free.</summary>
     const float RefundShare = 0.7f;
@@ -26,7 +31,7 @@ public class TDPlacer : MonoBehaviour
     GameObject _rangeRing;
     Material _validMat;
     Material _invalidMat;
-    TDSocket _socket;
+    bool _valid;
     Camera _camera;
     Vector2 _touchDownAt;
 
@@ -76,7 +81,6 @@ public class TDPlacer : MonoBehaviour
         _ghost = null;
         _rangeRing = null;
         _pending = null;
-        _socket = null;
         Active = false;
     }
 
@@ -141,15 +145,14 @@ public class TDPlacer : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit hit, 600f))
             return;
 
-        // Snap to the nearest free foundation; past snap range the ghost
-        // rides the cursor, red, saying "not here — find a pad".
-        _socket = TDSocket.NearestFree(hit.point, SnapRange);
-        Vector3 at = _socket != null ? _socket.Center
-            : new Vector3(hit.point.x, TDMap.PlateauY + 0.08f, hit.point.z);
-        _ghost.transform.position = at;
+        // Whole-metre grid, as Commander places: a defense line built one
+        // click at a time still ends up LOOKING like a line.
+        var center = new Vector3(Mathf.Round(hit.point.x), TDMap.PlateauY,
+                                 Mathf.Round(hit.point.z));
+        _ghost.transform.position = center;
 
-        bool valid = _socket != null && TDEconomy.Credits >= _pending.cost;
-        var mat = valid ? _validMat : _invalidMat;
+        _valid = Judge(center) && TDEconomy.Credits >= _pending.cost;
+        var mat = _valid ? _validMat : _invalidMat;
         foreach (var renderer in _ghost.GetComponentsInChildren<MeshRenderer>())
         {
             if (_rangeRing != null && renderer.transform == _rangeRing.transform)
@@ -157,12 +160,56 @@ public class TDPlacer : MonoBehaviour
             renderer.sharedMaterial = mat;
         }
 
-        if (placeClick && valid && TDEconomy.Spend(_pending.cost))
+        if (placeClick && _valid && TDEconomy.Spend(_pending.cost))
         {
-            var building = Building.Construct(_pending.building, 0, _socket.Center);
+            var building = Building.Construct(_pending.building, 0, center);
             building.gameObject.AddComponent<TDTower>().Configure(_pending);
             Cancel();
         }
+    }
+
+    /// <summary>
+    /// The placement law. Bounds first, then footing (centre and all four
+    /// footprint corners stand on rim-height ground — not the lane, not a
+    /// boulder, not thin air past the cliff edge), then a clear footprint.
+    /// </summary>
+    bool Judge(Vector3 center)
+    {
+        var def = _pending.building;
+        float margin = Mathf.Max(def.footprint.x, def.footprint.y) * 0.5f + 2f;
+        if (Mathf.Abs(center.x) > TDMap.HalfExtent - margin ||
+            Mathf.Abs(center.z) > TDMap.HalfExtent - margin)
+            return false;
+
+        float halfW = def.footprint.x * 0.5f, halfD = def.footprint.y * 0.5f;
+        if (!OnRim(center)
+            || !OnRim(center + new Vector3(halfW, 0f, halfD))
+            || !OnRim(center + new Vector3(halfW, 0f, -halfD))
+            || !OnRim(center + new Vector3(-halfW, 0f, halfD))
+            || !OnRim(center + new Vector3(-halfW, 0f, -halfD)))
+            return false;
+
+        // Nothing already standing in the footprint. The box starts just
+        // above the plateau surface, so the plateau itself never trips it —
+        // rocks, crystals, vents and other towers all do.
+        var half = new Vector3(halfW, def.height * 0.5f, halfD);
+        var box = Physics.OverlapBox(center + Vector3.up * (def.height * 0.5f + 0.05f), half,
+            Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+        return box.Length == 0;
+    }
+
+    /// <summary>
+    /// One footing probe: does the ground under this point read as the rim?
+    /// A physics question rather than a map-grid lookup on purpose — it
+    /// needs no static layout data, so a recompile during Play can never
+    /// leave the placer approving lane floor.
+    /// </summary>
+    static bool OnRim(Vector3 point)
+    {
+        if (!Physics.Raycast(point + Vector3.up * 8f, Vector3.down, out RaycastHit hit, 16f,
+                ~0, QueryTriggerInteraction.Ignore))
+            return false;
+        return Mathf.Abs(hit.point.y - TDMap.PlateauY) <= FootingTolerance;
     }
 
     /// <summary>
@@ -188,7 +235,7 @@ public class TDPlacer : MonoBehaviour
             shield.TakeHit(999999f, building.transform.position + Vector3.up);
     }
 
-    /// <summary>Renderer-only silhouette of the pending tower, pad-sized.</summary>
+    /// <summary>Renderer-only silhouette of the pending tower.</summary>
     GameObject BuildGhost(TDTowerDefinition def)
     {
         var ghost = new GameObject($"Ghost_{def.key}");

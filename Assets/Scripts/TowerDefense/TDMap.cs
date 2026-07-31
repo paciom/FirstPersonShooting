@@ -1,18 +1,17 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Builds the Tower Defense battlefield: a 90 m plateau with a sunken canyon
 /// lane snaking from a warp gate at the north edge down to the Photon Core
-/// in a walled pocket at the south, tower sockets surveyed along the rim,
-/// and enough rocks, vents and crystal to make the tableland look lived-on.
+/// in a walled pocket at the south, and enough rocks, vents and crystal to
+/// make the tableland look lived-on.
 ///
 /// The canyon IS the pathing model. Raiders get exactly one order — march
 /// to the Core — and the NavMesh bake can only route them down the lane,
-/// because the plateau walls are taller than any agent can step. No
-/// waypoints to follow, no path to un-block, nothing for a mis-placed
-/// tower to strand: sockets live on the rim, so the lane is unblockable
-/// by construction.
+/// because the plateau walls are taller than any agent can step. That is
+/// also the whole placement law: towers build FREELY anywhere on the rim
+/// (TDPlacer probes the footing), and because the buildable surface stands
+/// above the route, no tower anywhere can ever block it.
 ///
 /// Seeded like CommanderMap and under the same contract: one System.Random,
 /// one fixed draw order, so a MAP CODE always rebuilds the same canyon.
@@ -86,15 +85,7 @@ public static class TDMap
         int coreCol = NextInt(7, 10);
 
         var isPath = new bool[Cells, Cells];
-        var pathOrder = new List<Vector2Int>();
-        void Carve(int col, int row)
-        {
-            if (!isPath[col, row])
-            {
-                isPath[col, row] = true;
-                pathOrder.Add(new Vector2Int(col, row));
-            }
-        }
+        void Carve(int col, int row) => isPath[col, row] = true;
         void CarveCol(int col, int rowFrom, int rowTo)
         {
             for (int r = Mathf.Max(rowFrom, rowTo); r >= Mathf.Min(rowFrom, rowTo); r--)
@@ -125,7 +116,6 @@ public static class TDMap
         BuildPlateau(kit, rock, isPath);
         BuildLaneFloor(kit, lane, isPath);
         BuildRimTrim(kit, isPath);
-        BuildSockets(root.transform, kit, isPath, pathOrder, Next);
         BuildPortal(root.transform, kit);
         BuildCorePad(kit);
         ScatterDressing(root.transform, kit, rock, isPath, Next);
@@ -221,63 +211,6 @@ public static class TDMap
             }
     }
 
-    // ------------------------------------------------------------- sockets
-
-    /// <summary>
-    /// Survey the tower foundations: rim cells that overlook the lane,
-    /// picked every few lane-cells in march order so coverage spreads along
-    /// the whole route instead of clumping at the gate. Each is a pad with
-    /// a soft ring — buildable ground you can see before you can afford it.
-    /// </summary>
-    static void BuildSockets(Transform mapRoot, ArenaKit kit, bool[,] isPath,
-        List<Vector2Int> pathOrder, System.Func<float, float, float> next)
-    {
-        var pad = ArenaMaterials.Style("TD_Pad", ArenaMaterials.SurfaceStyle.Tread,
-            new Color(0.22f, 0.24f, 0.28f), new Color(0.12f, 0.13f, 0.16f), 1.2f, 0.5f);
-        var claimed = new HashSet<Vector2Int>();
-        var offsets = new[]
-        {
-            new Vector2Int(1, 0), new Vector2Int(-1, 0),
-            new Vector2Int(0, 1), new Vector2Int(0, -1),
-        };
-
-        int sinceLast = 99;
-        int placed = 0;
-        foreach (var cell in pathOrder)
-        {
-            sinceLast++;
-            // Every ~3rd lane cell offers its rim, with a seeded stagger so
-            // two maps with the same lane length still socket differently.
-            if (sinceLast < 3 || next(0f, 1f) < 0.25f || placed >= 16)
-                continue;
-
-            foreach (var offset in offsets)
-            {
-                var rim = cell + offset;
-                if (rim.x < 0 || rim.x >= Cells || rim.y < 0 || rim.y >= Cells)
-                    continue;
-                if (isPath[rim.x, rim.y] || claimed.Contains(rim))
-                    continue;
-
-                claimed.Add(rim);
-                sinceLast = 0;
-                placed++;
-
-                var center = new Vector3(CellCenter(rim.x), 0f, CellCenter(rim.y));
-                kit.Platform($"Socket{placed}", new Vector2(center.x, center.z),
-                    new Vector2(3.6f, 3.6f), PlateauY + 0.08f, pad);
-
-                var socketGo = new GameObject($"TDSocket{placed}");
-                socketGo.transform.SetParent(mapRoot, false);
-                socketGo.transform.position = new Vector3(center.x, PlateauY + 0.08f, center.z);
-                socketGo.AddComponent<TDSocket>();
-                CommanderUnit.GlowQuad(socketGo.transform, "PadRing", "VFX/ring",
-                    new Color(0.2f, 0.9f, 1f), 0.7f, 3.2f, 0.06f);
-                break;
-            }
-        }
-    }
-
     // ------------------------------------------------------------- set pieces
 
     /// <summary>
@@ -347,9 +280,6 @@ public static class TDMap
     {
         bool NearSomething(Vector3 pos)
         {
-            foreach (var socket in TDSocket.All)
-                if (socket != null && (socket.Center - pos).sqrMagnitude < 5f * 5f)
-                    return true;
             Vector3 gate = new Vector3(PortalSite.x, 0f, HalfExtent - 1.5f);
             return (pos - gate).sqrMagnitude < 8f * 8f
                 || (pos - CoreSite).sqrMagnitude < 10f * 10f;
