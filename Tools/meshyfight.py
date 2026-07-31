@@ -73,6 +73,10 @@ MOVES = {
     "getup2":    345,   # Stand Up 2           -> spare rise, judged in the Show
     "blast":     125,   # Charged Spell Cast   -> PHOTON BLAST cast
     "victory":   59,    # Victory Cheer
+    "kneestrike": 211,  # Boxing Guard Step Knee Strike — the only one of the
+                        # eight 2026-08-01 template moves with a library
+                        # preset (no backfist/hammerfist/palm/chop/axe/
+                        # crescent/back kick exists; those stay template).
 }
 
 
@@ -286,6 +290,9 @@ EFFECTOR = {
     "kick": "RightFoot", "highkick": "RightFoot", "sidekick": "RightFoot",
     "lowkick": "RightFoot", "spinkick": "RightFoot", "flykick": "RightFoot",
     "blast": "RightHand",
+    # The shin bone's origin IS the knee joint — same convention as
+    # BrawlFighter's Limb.RightKnee.
+    "kneestrike": "RightLeg",
 }
 
 # Where the CONTACT MOMENT must sit inside the trimmed clip, as a fraction:
@@ -299,6 +306,7 @@ PEAK_FRACTION = {
     "jab": 0.42, "hook": 0.42, "uppercut": 0.42, "elbow": 0.42,
     "kick": 0.44,      # (0.20 + 0.16/2) / 0.64
     "highkick": 0.44, "sidekick": 0.44, "lowkick": 0.44, "spinkick": 0.44,
+    "kneestrike": 0.44,
     "flykick": 0.39,   # early in the long airborne window
     "blast": 0.50,
 }
