@@ -30,11 +30,21 @@ public class BrawlTouch : MonoBehaviour
 
     GameObject _canvas;
     bool _leftHeld, _rightHeld;
+    bool _forced;
 
     void Update()
     {
-        if (_canvas == null && TouchControls.Active)
+        // "=" summons the pads on a mouse-and-keyboard machine — the
+        // buttons are ordinary uGUI, so clicks drive them fine. Toggles.
+        if (Input.GetKeyDown(KeyCode.Equals))
+            _forced = !_forced;
+
+        bool wanted = _forced || TouchControls.Active;
+        if (_canvas == null && wanted)
             Build();
+        if (_canvas != null && _canvas.activeSelf != wanted)
+            _canvas.SetActive(wanted);
+
         Move = (_rightHeld ? 1f : 0f) - (_leftHeld ? 1f : 0f);
     }
 

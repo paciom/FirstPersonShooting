@@ -720,9 +720,9 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         if (playerControls)
-            ShowOverlay("A / D — Move   ·   SPACE — Jump   ·   J — Punch   ·   K — Kick   ·   " +
-                        "S — Block   ·   L — Blast   ·   F3 — Hitboxes   ·   ESC — Menu",
-                        "BRAWL   ·   tap MENU to go back");
+            ShowOverlay("J — Punch   ·   K — Kick   ·   S — Block   ·   L — Blast   ·   " +
+                        "? — How to play   ·   = — Buttons   ·   ESC — Menu",
+                        "BRAWL   ·   tap ? for help   ·   tap MENU to go back");
         else
             ShowOverlay("BRAWL: AI v AI — F3 for Hitboxes — ESC for Menu",
                         "BRAWL: AI v AI — tap MENU to go back");

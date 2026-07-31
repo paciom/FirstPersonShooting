@@ -48,6 +48,7 @@ public class BrawlHud : MonoBehaviour
         hud.BuildTimer(canvasGo.transform);
         hud.BuildAnnouncement(canvasGo.transform);
         hud.BuildChargeMeters(canvasGo.transform);
+        hud.BuildHelpButton(canvasGo.transform);
         return hud;
     }
 
@@ -174,6 +175,89 @@ public class BrawlHud : MonoBehaviour
     {
         _cyanChargeValue = cyan;
         _magentaChargeValue = magenta;
+    }
+
+    GameObject _helpPanel;
+
+    void BuildHelpButton(Transform parent)
+    {
+        var image = MakeImage(parent, "HelpButton", BarBack);
+        var rect = image.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.anchoredPosition = new Vector2(-40f, -116f);
+        rect.sizeDelta = new Vector2(46f, 46f);
+
+        var button = image.gameObject.AddComponent<Button>();
+        button.targetGraphic = image;
+        button.onClick.AddListener(ToggleHelp);
+
+        var mark = MakeText(image.transform, "Mark", "?", 28, HoloCyan, FontStyle.Bold);
+        var markRect = mark.rectTransform;
+        markRect.anchorMin = Vector2.zero;
+        markRect.anchorMax = Vector2.one;
+        markRect.offsetMin = markRect.offsetMax = Vector2.zero;
+    }
+
+    void ToggleHelp()
+    {
+        if (_helpPanel == null)
+            BuildHelpPanel();
+        else
+            _helpPanel.SetActive(!_helpPanel.activeSelf);
+    }
+
+    /// <summary>
+    /// The HOW TO PLAY card. Deliberately no pause behind it — the hit-stop
+    /// restorer resets any timeScale below 1, so a paused overlay would
+    /// silently unpause itself; reading between rounds works fine.
+    /// </summary>
+    void BuildHelpPanel()
+    {
+        _helpPanel = new GameObject("HelpPanel");
+        _helpPanel.transform.SetParent(_canvas.transform, false);
+        var stretch = _helpPanel.AddComponent<RectTransform>();
+        stretch.anchorMin = Vector2.zero;
+        stretch.anchorMax = Vector2.one;
+        stretch.offsetMin = stretch.offsetMax = Vector2.zero;
+
+        var dim = MakeImage(_helpPanel.transform, "Dim", new Color(0.01f, 0.03f, 0.06f, 0.85f));
+        dim.rectTransform.anchorMin = Vector2.zero;
+        dim.rectTransform.anchorMax = Vector2.one;
+        dim.rectTransform.offsetMin = dim.rectTransform.offsetMax = Vector2.zero;
+        // The dim itself closes the card, so a tap anywhere gets back to
+        // the fight — no hunting for the button on a tablet.
+        var dimButton = dim.gameObject.AddComponent<Button>();
+        dimButton.targetGraphic = dim;
+        dimButton.onClick.AddListener(ToggleHelp);
+
+        var title = MakeText(_helpPanel.transform, "Title", "HOW  TO  PLAY", 54, HoloCyan, FontStyle.Bold);
+        var titleRect = title.rectTransform;
+        titleRect.anchorMin = titleRect.anchorMax = new Vector2(0.5f, 0.5f);
+        titleRect.anchoredPosition = new Vector2(0f, 250f);
+        titleRect.sizeDelta = new Vector2(900f, 70f);
+
+        var body = MakeText(_helpPanel.transform, "Body",
+            "MOVE  —  A / D   (or the ◀ ▶ pads)\n" +
+            "JUMP  —  SPACE   (or JUMP)\n" +
+            "PUNCH  —  J   ·   a different kung fu punch every press\n" +
+            "KICK  —  K   ·   a different kick every press — in the air: FLYING KICK\n" +
+            "BLOCK  —  hold S   ·   a guard takes no damage\n" +
+            "PHOTON BLAST  —  L when the meter below your bar is full\n" +
+            "\n" +
+            "Landing hits fills your BLAST meter. Getting hit fills it a little too.\n" +
+            "Win the round: empty their health, or lead when time runs out.\n" +
+            "Win the match: take two rounds.\n" +
+            "\n" +
+            "=  —  show the buttons     F3  —  hitboxes     ESC  —  menu",
+            26, new Color(1f, 1f, 1f, 0.92f), FontStyle.Normal);
+        body.alignment = TextAnchor.UpperLeft;
+        var bodyRect = body.rectTransform;
+        bodyRect.anchorMin = bodyRect.anchorMax = new Vector2(0.5f, 0.5f);
+        bodyRect.anchoredPosition = new Vector2(0f, -40f);
+        bodyRect.sizeDelta = new Vector2(980f, 480f);
+
+        MakeButton(_helpPanel.transform, "GOT  IT", -290, ToggleHelp);
     }
 
     // ---------------------------------------------------------------- API
