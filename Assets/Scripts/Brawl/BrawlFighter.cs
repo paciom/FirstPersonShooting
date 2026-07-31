@@ -262,6 +262,23 @@ public class BrawlFighter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The referee's break: back to the corner, everything ELSE kept —
+    /// health, charge, the animator's stride. For untangling soft-locks
+    /// (a lane wall neither side can cross), not for round resets.
+    /// </summary>
+    public void Reposition()
+    {
+        Phase = State.Neutral;
+        Driven = default;
+        _verticalVelocity = 0f;
+        _airVelocityX = 0f;
+        _knockbackVelocity = 0f;
+        SetBlock(false);
+        transform.localPosition = new Vector3(_spawnX, 0f, 0f);
+        SetY(BrawlGround.HeightAt(transform.position.x));
+    }
+
     /// <summary>Round lost: fall and stay down. Fires no further events.</summary>
     public void KnockOut()
     {

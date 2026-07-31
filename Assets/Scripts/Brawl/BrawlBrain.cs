@@ -189,12 +189,37 @@ public class BrawlBrain : MonoBehaviour
         else
         {
             _moveHeld = toFoe * (0.7f + 0.3f * _aggression);
-            if (gap < 5.5f && Random.value < _flair * 0.35f)
+            if (WallAhead(self, toFoe, out bool jumpable))
+            {
+                // Scenery in the path: hop what's hoppable; lean patiently
+                // on the impassable (the referee breaks true checkmates).
+                if (jumpable && !self.IsAirborne)
+                    _jumpOnce = true;
+                else if (!jumpable)
+                    _moveHeld = toFoe * 0.2f;
+            }
+            else if (gap < 5.5f && Random.value < _flair * 0.35f)
             {
                 _jumpOnce = true;
                 _flyKickQueued = true;
                 _moveHeld = toFoe;
             }
         }
+    }
+
+    /// <summary>
+    /// Is a wall in the next stride? Horizontal rays, like the fighter's
+    /// own mover: one above step height (a wall exists), one above jump
+    /// reach (too tall to hop).
+    /// </summary>
+    static bool WallAhead(BrawlFighter self, float toFoe, out bool jumpable)
+    {
+        Vector3 feet = self.transform.position;
+        var direction = new Vector3(toFoe, 0f, 0f);
+        bool wall = Physics.Raycast(feet + Vector3.up * 0.8f, direction, 1.1f,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        jumpable = wall && !Physics.Raycast(feet + Vector3.up * 1.55f, direction, 1.1f,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        return wall;
     }
 }

@@ -24,6 +24,8 @@ public class BrawlMatch : MonoBehaviour
     int _cyanPips, _magentaPips;
     // Who fell this round: 0 cyan, 1 magenta, -1 timeout/draw pending judge.
     int _fallen = -1;
+    // The referee's patience: last moment any hit landed or was blocked.
+    float _lastContact;
 
     public void Bind(BrawlFighter cyan, BrawlFighter magenta, BrawlHud hud,
         string cyanWinLabel, string magentaWinLabel)
@@ -35,6 +37,13 @@ public class BrawlMatch : MonoBehaviour
         _magentaWinLabel = magentaWinLabel;
         _cyan.OnKnockedOut += OnKnockedOut;
         _magenta.OnKnockedOut += OnKnockedOut;
+        // Any contact resets the referee's patience.
+        System.Action<BrawlFighter, int, bool> landed = (v, d, k) => _lastContact = Time.time;
+        System.Action<BrawlFighter, BrawlMoveSet.Move> blocked = (v, m) => _lastContact = Time.time;
+        _cyan.OnHitLanded += landed;
+        _magenta.OnHitLanded += landed;
+        _cyan.OnHitBlocked += blocked;
+        _magenta.OnHitBlocked += blocked;
         BeginRound();
     }
 
@@ -49,6 +58,7 @@ public class BrawlMatch : MonoBehaviour
         _fallen = -1;
         _stage = Stage.Intro;
         _stageTime = 0f;
+        _lastContact = Time.time;
         _hud.SetHealth(1f, 1f);
         _hud.SetTimer(BrawlMoveSet.RoundSeconds);
         _hud.SetPips(_cyanPips, _magentaPips);
@@ -111,6 +121,17 @@ public class BrawlMatch : MonoBehaviour
                 _hud.SetHealth(_cyan.Health / BrawlMoveSet.MaxHealth,
                                _magenta.Health / BrawlMoveSet.MaxHealth);
                 _hud.SetCharge(_cyan.Charge, _magenta.Charge);
+                // Ten silent seconds means the terrain checkmated them (a
+                // lane wall has no 'around') — the referee separates and
+                // restarts from the corners, everything else kept.
+                if (Time.time - _lastContact > 10f)
+                {
+                    _lastContact = Time.time;
+                    _cyan.Reposition();
+                    _magenta.Reposition();
+                    _hud.Announce("BREAK!", 0.9f, Color.white);
+                    BrawlAudio.PlayFlat(BrawlAudio.Id.RoundDing, 0.7f);
+                }
                 if (_clock <= 0f)
                 {
                     _fallen = -1;
