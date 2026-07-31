@@ -352,6 +352,16 @@ public class BrawlFighter : MonoBehaviour
         }
 
         _verticalVelocity -= BrawlMoveSet.Gravity * dt;
+        // A wall at body height stops horizontal flight — without this, a
+        // jump into an arena block enters it and then pops on top when the
+        // landing check reads the block's lid as the ground.
+        if (_airVelocityX != 0f)
+        {
+            float aheadGround = BrawlGround.HeightAt(
+                transform.position.x + _airVelocityX * dt);
+            if (aheadGround > transform.position.y + 0.2f)
+                _airVelocityX = 0f;
+        }
         Move(_airVelocityX * dt, _verticalVelocity * dt);
 
         float landing = Ground;
@@ -426,9 +436,8 @@ public class BrawlFighter : MonoBehaviour
     void TickHitStun(float dt)
     {
         _stunTime -= dt;
-        Move(_knockbackVelocity * dt, 0f);
+        SlideAlongGround(_knockbackVelocity * dt);
         _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 12f * dt);
-        SetY(Ground);   // a shove that leaves a crate drops with it
         if (_stunTime <= 0f)
             Phase = State.Neutral;
     }
@@ -437,9 +446,8 @@ public class BrawlFighter : MonoBehaviour
     {
         _floorTime -= dt;
         // The slide: a knocked-down robot travels, it doesn't drop in place.
-        Move(_knockbackVelocity * dt, 0f);
+        SlideAlongGround(_knockbackVelocity * dt);
         _knockbackVelocity = Mathf.MoveTowards(_knockbackVelocity, 0f, 5f * dt);
-        SetY(Ground);
         // The rise is its own clip, cued so it completes as control returns.
         if (!_getUpFired && _floorTime <= BrawlMoveSet.GetUpTime)
         {
@@ -673,6 +681,30 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
+    /// Knockback travel over terrain: follows the ground down and over
+    /// small steps, but a wall — an arena block, a cargo stack — stops the
+    /// shove dead instead of teleporting the robot on top of (or inside)
+    /// the obstacle. Hard stops ring the wall-slam bell.
+    /// </summary>
+    void SlideAlongGround(float dx)
+    {
+        if (dx == 0f)
+            return;
+        float newX = transform.position.x + dx;
+        float ahead = BrawlGround.HeightAt(newX);
+        float y = transform.position.y;
+        if (ahead > y + StepUp)
+        {
+            if (Mathf.Abs(_knockbackVelocity) > 2f)
+                OnWallSlam?.Invoke(this, Mathf.Abs(_knockbackVelocity));
+            _knockbackVelocity = 0f;
+            return;
+        }
+        transform.position = new Vector3(newX, transform.position.y, transform.position.z);
+        SetY(ahead);
+    }
+
+    /// <summary>
     /// Walking over terrain: small ledges are stepped onto, tall stacks
     /// are walls, and edges are walked off into a fall.
     /// </summary>
@@ -722,6 +754,11 @@ public class BrawlFighter : MonoBehaviour
         if (overlap <= 0f)
             return;
         float push = (gap >= 0f ? 1f : -1f) * overlap * 0.5f;
+        // Never push a fighter into a wall face — the opponent's own
+        // Separate carries the spacing when one side is against cargo.
+        if (BrawlGround.HeightAt(transform.position.x + push)
+            > transform.position.y + StepUp)
+            return;
         Move(push, 0f);
     }
 

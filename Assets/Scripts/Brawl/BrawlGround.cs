@@ -37,8 +37,17 @@ public static class BrawlGround
                 Platforms.RemoveAt(i);
     }
 
+    // The physics probe starts just above jump apex + head height: remix
+    // arenas have catwalks and arches overhead, and a probe from higher up
+    // would report THEM as the ground — turning everything underneath into
+    // an impassable wall.
+    const float ProbeTop = 3.4f;
+
     /// <summary>
     /// The highest standable surface at x (the base stage floor is 0).
+    /// Real scene colliders count too — remix stages leave the arena's
+    /// cover blocks standing, and those are honest platforms and walls,
+    /// not decoration to clip through. Hurtboxes are triggers and ignored.
     /// <paramref name="below"/> ignores anything above that height + 0.3 —
     /// a falling crate asks what it will land ON, not where its own top is;
     /// <paramref name="exclude"/> keeps it from standing on itself.
@@ -46,6 +55,14 @@ public static class BrawlGround
     public static float HeightAt(float x, float below = float.PositiveInfinity, Component exclude = null)
     {
         float best = 0f;
+        if (Physics.Raycast(new Vector3(x, ProbeTop, 0f), Vector3.down, out var hit,
+                ProbeTop + 1f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            float top = hit.point.y;
+            if (top > best && top <= below + 0.3f)
+                best = top;
+        }
+
         for (int i = Platforms.Count - 1; i >= 0; i--)
         {
             var platform = Platforms[i];
