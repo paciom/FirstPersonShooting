@@ -1,40 +1,58 @@
 using UnityEngine;
 
 /// <summary>
-/// The Cargo Rain crate: falls out of the sky onto the lane (its landing
-/// ring warns first), then becomes terrain — stand on it, stack them, or
-/// kick it. A kick skids it away from the kicker, bonking anyone in its
-/// path; three kicks burst it, sometimes leaving a gift for the one who
-/// broke it. Built from primitives in the stage's own materials.
+/// The Cargo Rain crate, now an honest Rigidbody: it drops, BOUNCES,
+/// tumbles off robots and other crates (constrained to the fight plane —
+/// z locked, spin around z only), and only once it settles does it become
+/// standable terrain. A kick is an impulse with spin; three kicks burst
+/// it, sometimes leaving a gift for the breaker. Robots carry a solid
+/// bumper capsule for it to carom off — clonking one costs a little
+/// health, whichever direction the crate arrived from.
 /// </summary>
 public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
 {
     public const float Size = 1.1f;
     const int Hits = 3;
-    const float SlideDamage = 5f;
+    const int BonkDamage = 5;
+    const int IgnoreRaycastLayer = 2;
 
-    float _fallVelocity;
-    float _slideVelocity;
-    bool _resting;
+    static PhysicsMaterial _bouncy;
+
+    Rigidbody _body;
+    Collider _box;
     int _hitsLeft = Hits;
     BrawlFighter _kicker;
+    float _kickerGrace;
+    float _bonkCooldown;
+    float _settleTimer;
+    bool _settled;
     GameObject _warning;
 
     public static void Spawn(Transform stageRoot, float x)
     {
+        if (_bouncy == null)
+            _bouncy = new PhysicsMaterial("brawl-crate")
+            {
+                bounciness = 0.42f,
+                dynamicFriction = 0.55f,
+                staticFriction = 0.6f,
+                bounceCombine = PhysicsMaterialCombine.Maximum,
+            };
+
         var go = new GameObject("BrawlCrate");
+        go.layer = IgnoreRaycastLayer;   // not terrain until it settles
         go.transform.SetParent(stageRoot, false);
         go.transform.localPosition = new Vector3(x, 9f, 0f);
+        go.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-10f, 10f));
 
-        var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        body.name = "Body";
-        Object.Destroy(body.GetComponent<Collider>());
-        body.transform.SetParent(go.transform, false);
-        body.transform.localScale = Vector3.one * Size;
-        body.GetComponent<MeshRenderer>().sharedMaterial =
+        var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        visual.name = "Body";
+        Object.Destroy(visual.GetComponent<Collider>());
+        visual.transform.SetParent(go.transform, false);
+        visual.transform.localScale = Vector3.one * Size;
+        visual.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Surface("brawl-crate", new Color(0.16f, 0.13f, 0.07f),
                 new Color(1f, 0.75f, 0.25f), 1.2f, 0.9f);
-
         var band = GameObject.CreatePrimitive(PrimitiveType.Cube);
         band.name = "Band";
         Object.Destroy(band.GetComponent<Collider>());
@@ -43,7 +61,20 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         band.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Emissive("brawl-crate-band", new Color(1f, 0.75f, 0.25f), 1.8f);
 
+        var box = go.AddComponent<BoxCollider>();
+        box.size = Vector3.one * Size;
+        box.material = _bouncy;
+
+        var body = go.AddComponent<Rigidbody>();
+        body.mass = 3f;
+        body.constraints = RigidbodyConstraints.FreezePositionZ
+                           | RigidbodyConstraints.FreezeRotationX
+                           | RigidbodyConstraints.FreezeRotationY;
+        body.angularVelocity = new Vector3(0f, 0f, Random.Range(-2f, 2f));
+
         var crate = go.AddComponent<BrawlCrate>();
+        crate._body = body;
+        crate._box = box;
         crate._warning = crate.BuildWarningRing(stageRoot, x);
         BrawlProps.Register(crate);
     }
@@ -61,100 +92,81 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
         return ring;
     }
 
-    /// <summary>Centre-bottom of the crate in world space.</summary>
-    float BottomY => transform.position.y - Size * 0.5f;
-
     void Update()
     {
         float dt = Time.deltaTime;
-        var p = transform.position;
+        _kickerGrace -= dt;
+        _bonkCooldown -= dt;
 
-        if (!_resting)
+        // Settled = slow enough for long enough. Only a settled crate is
+        // on the default layer, where the terrain probe (and the camera)
+        // can see it — nobody stands on a box mid-bounce.
+        float agitation = _body.linearVelocity.magnitude
+                          + _body.angularVelocity.magnitude * 0.3f;
+        _settleTimer = agitation < 0.25f ? _settleTimer + dt : 0f;
+        bool settled = _settleTimer > 0.35f;
+        if (settled != _settled)
         {
-            _fallVelocity += BrawlMoveSet.Gravity * dt;
-            float floor = BrawlGround.HeightAt(p.x, BottomY, this);
-            float newBottom = BottomY - _fallVelocity * dt;
-            if (newBottom <= floor)
+            _settled = settled;
+            gameObject.layer = settled ? 0 : IgnoreRaycastLayer;
+        }
+
+        // Fell off the world somehow: retire quietly.
+        if (transform.position.y < -4f)
+            Despawn();
+    }
+
+    void OnCollisionEnter(Collision collision)
+    {
+        float impact = collision.relativeVelocity.magnitude;
+
+        var bumper = collision.collider.GetComponentInParent<BrawlBodyBumper>();
+        if (bumper != null && bumper.Owner != null)
+        {
+            // Clonk: a crate arriving with real speed costs a little
+            // health — whether it fell out of the sky or got kicked over.
+            bool isProtectedKicker = bumper.Owner == _kicker && _kickerGrace > 0f;
+            if (impact > 2.5f && _bonkCooldown <= 0f && !isProtectedKicker)
             {
-                transform.position = new Vector3(p.x, floor + Size * 0.5f, p.z);
-                _resting = true;
-                _fallVelocity = 0f;
-                if (_warning != null)
-                    Destroy(_warning);
-                VfxUtil.SpawnBurst(transform.position - Vector3.up * (Size * 0.4f),
-                    new Color(1f, 0.8f, 0.4f), 8, 3f, 0.10f);
-                BrawlAudio.Play(BrawlAudio.Id.HitHeavy, transform.position, 0.5f);
-                // Terrain now: fighters can stand on the lid.
-                BrawlGround.Register(this, WalkableTop);
-            }
-            else
-            {
-                transform.position = new Vector3(p.x, newBottom + Size * 0.5f, p.z);
+                _bonkCooldown = 0.7f;
+                var hit = BrawlMoveSet.Table[BrawlMoveSet.Move.Punch];
+                hit.damage = BonkDamage;
+                bumper.Owner.TakeHit(hit,
+                    _kicker != null && _kicker != bumper.Owner ? _kicker : bumper.Owner.Opponent);
             }
             return;
         }
 
-        // A kicked crate skids, bonking whoever it reaches.
-        if (Mathf.Abs(_slideVelocity) > 0.05f)
+        // First touchdown clears the warning and puffs the dust.
+        if (_warning != null)
         {
-            float newX = Mathf.Clamp(p.x + _slideVelocity * dt,
-                -BrawlStage.LaneHalf, BrawlStage.LaneHalf);
-            transform.position = new Vector3(newX, p.y, p.z);
-            _slideVelocity = Mathf.MoveTowards(_slideVelocity, 0f, 7f * dt);
-            TryBonk();
-
-            // Slid off its support (another crate): fall again.
-            float under = BrawlGround.HeightAt(newX, BottomY, this);
-            if (BottomY > under + 0.05f)
-            {
-                _resting = false;
-                BrawlGround.Unregister(this);
-            }
+            Destroy(_warning);
+            _warning = null;
+            VfxUtil.SpawnBurst(transform.position - Vector3.up * (Size * 0.4f),
+                new Color(1f, 0.8f, 0.4f), 8, 3f, 0.10f);
+            BrawlAudio.Play(BrawlAudio.Id.HitHeavy, transform.position, 0.5f);
         }
-    }
-
-    float WalkableTop(float x)
-    {
-        if (!_resting || Mathf.Abs(x - transform.position.x) > Size * 0.5f)
-            return float.NaN;
-        return transform.position.y + Size * 0.5f;
-    }
-
-    void TryBonk()
-    {
-        var controller = BrawlController.Instance;
-        if (controller == null)
-            return;
-        foreach (var fighter in new[] { controller.Cyan, controller.Magenta })
+        else if (impact > 3f && _bonkCooldown <= 0f)
         {
-            if (fighter == null || fighter == _kicker)
-                continue;
-            if (Mathf.Abs(fighter.transform.position.x - transform.position.x) > Size * 0.7f)
-                continue;
-            if (fighter.transform.position.y > transform.position.y + Size * 0.5f)
-                continue;   // standing above it, not in its path
-            var hit = BrawlMoveSet.Table[BrawlMoveSet.Move.Punch];
-            hit.damage = (int)SlideDamage;
-            fighter.TakeHit(hit, _kicker != null ? _kicker : fighter.Opponent);
-            _slideVelocity *= 0.3f;
-            _kicker = null;   // one bonk per kick
-            return;
+            _bonkCooldown = 0.4f;
+            BrawlAudio.Play(BrawlAudio.Id.Graze, transform.position, 0.4f);
         }
     }
 
     public bool Strike(Vector3 point, float radius, BrawlFighter attacker)
     {
-        if (!_resting)
+        if (_box == null)
             return false;
-        var closest = transform.position;
-        float half = Size * 0.5f + radius;
-        if (Mathf.Abs(point.x - closest.x) > half
-            || Mathf.Abs(point.y - closest.y) > half)
+        if ((_box.ClosestPoint(point) - point).sqrMagnitude > radius * radius)
             return false;
 
         _hitsLeft--;
         _kicker = attacker;
-        _slideVelocity = (attacker != null ? attacker.Facing : 1f) * 6.5f;
+        _kickerGrace = 0.6f;
+        float direction = attacker != null ? attacker.Facing : 1f;
+        // The kick is an impulse with spin — the box TUMBLES away.
+        _body.linearVelocity = new Vector3(direction * 7f, 3.2f, 0f);
+        _body.angularVelocity = new Vector3(0f, 0f, -direction * 9f);
         VfxUtil.SpawnBurst(point, new Color(1f, 0.8f, 0.4f), 6, 3f, 0.09f);
         BrawlAudio.Play(BrawlAudio.Id.Hit, point, 0.7f);
 
@@ -167,7 +179,6 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
     {
         VfxUtil.Explosion(transform.position, new Color(1f, 0.8f, 0.35f), 0.5f);
         BrawlAudio.Play(BrawlAudio.Id.BlastHit, transform.position, 0.8f);
-        // A gift for the one who broke it, sometimes.
         if (breaker != null && Random.value < 0.35f)
         {
             breaker.GrantPickup();
@@ -179,7 +190,6 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
 
     public void Despawn()
     {
-        BrawlGround.Unregister(this);
         BrawlProps.Unregister(this);
         if (_warning != null)
             Destroy(_warning);
@@ -189,7 +199,6 @@ public class BrawlCrate : MonoBehaviour, BrawlProps.IStrikeable
 
     void OnDestroy()
     {
-        BrawlGround.Unregister(this);
         BrawlProps.Unregister(this);
     }
 }

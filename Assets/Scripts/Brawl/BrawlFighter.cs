@@ -138,6 +138,17 @@ public class BrawlFighter : MonoBehaviour
         fighter.TeamId = teamId;
         fighter._spawnX = side * BrawlStage.StartOffset;
 
+        // The solid the physics crates bounce off. Ignore Raycast layer so
+        // the terrain probe and camera never read a robot as scenery; the
+        // capsule has no rigidbody, so props carom while the robot stays
+        // script-driven.
+        go.layer = 2;
+        var bumper = go.AddComponent<CapsuleCollider>();
+        bumper.center = new Vector3(0f, BrawlMoveSet.BodyHeight * 0.5f, 0f);
+        bumper.radius = BrawlMoveSet.BodyHalfWidth;
+        bumper.height = BrawlMoveSet.BodyHeight;
+        go.AddComponent<BrawlBodyBumper>().Owner = fighter;
+
         // Root -> Body -> Model, the shape every character in the project
         // has; effects and factories all expect a "Body" to hang off.
         var body = new GameObject("Body").transform;

@@ -55,8 +55,10 @@ public static class BrawlGround
     public static float HeightAt(float x, float below = float.PositiveInfinity, Component exclude = null)
     {
         float best = 0f;
+        // DefaultRaycastLayers skips Ignore Raycast — where fighters'
+        // bumper capsules and still-bouncing crates live.
         if (Physics.Raycast(new Vector3(x, ProbeTop, 0f), Vector3.down, out var hit,
-                ProbeTop + 1f, ~0, QueryTriggerInteraction.Ignore))
+                ProbeTop + 1f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
         {
             float top = hit.point.y;
             if (top > best && top <= below + 0.3f)

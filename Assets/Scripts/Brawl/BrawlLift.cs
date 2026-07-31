@@ -22,7 +22,8 @@ public class BrawlLift : MonoBehaviour
 
         var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
         pad.name = "Pad";
-        Object.Destroy(pad.GetComponent<Collider>());
+        // The collider STAYS: physics crates land on lifts, and the
+        // terrain probe reads the pad directly.
         pad.transform.SetParent(go.transform, false);
         pad.transform.localScale = new Vector3(Width, 0.22f, 2.4f);
         pad.GetComponent<MeshRenderer>().sharedMaterial =

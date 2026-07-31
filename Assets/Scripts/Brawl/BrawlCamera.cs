@@ -81,7 +81,7 @@ public class BrawlCamera : MonoBehaviour
         Vector3 direction = line / Mathf.Max(length, 1e-4f);
         float wantedPullIn = 0f;
         if (Physics.SphereCast(gaze, 0.35f, direction, out var hit, length,
-                ~0, QueryTriggerInteraction.Ignore))
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             wantedPullIn = length - Mathf.Max(3.5f, hit.distance - 0.45f);
         float ease = wantedPullIn > _obstruction ? 14f : 2.5f;
         _obstruction = Mathf.Lerp(_obstruction, wantedPullIn,
