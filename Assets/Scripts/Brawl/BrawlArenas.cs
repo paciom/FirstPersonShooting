@@ -263,7 +263,11 @@ public class BrawlParade : MonoBehaviour
     }
 }
 
-/// <summary>Spawn scheduling for a stage's falling toys, capped and unhurried.</summary>
+/// <summary>
+/// Spawn scheduling for a stage's falling toys, capped and unhurried —
+/// and aimed AT THE FIGHT: cargo that lands across the arena is scenery;
+/// cargo that lands beside (or between) the fighters is gameplay.
+/// </summary>
 public class BrawlHazards : MonoBehaviour
 {
     public bool crates;
@@ -282,11 +286,11 @@ public class BrawlHazards : MonoBehaviour
             if (_crateTimer <= 0f)
             {
                 _crateTimer = Random.Range(7f, 13f);
-                var half = BrawlStage.BoundsHalf;
                 if (BrawlProps.Count<BrawlCrate>() < 3)
-                    BrawlCrate.Spawn(stageRoot,
-                        Random.Range(-(half.x - 2f), half.x - 2f),
-                        Random.Range(-(half.y - 2f), half.y - 2f));
+                {
+                    var spot = NearTheFight(1.4f, 4.5f, 2f);
+                    BrawlCrate.Spawn(stageRoot, spot.x, spot.y);
+                }
             }
         }
         if (balls)
@@ -295,12 +299,48 @@ public class BrawlHazards : MonoBehaviour
             if (_ballTimer <= 0f)
             {
                 _ballTimer = Random.Range(14f, 22f);
-                var half = BrawlStage.BoundsHalf;
                 if (BrawlProps.Count<BrawlBall>() < 1)
-                    BrawlBall.Spawn(stageRoot,
-                        Random.Range(-(half.x - 3f), half.x - 3f),
-                        Random.Range(-(half.y - 3f), half.y - 3f));
+                {
+                    var spot = NearTheFight(2.5f, 6f, 3f);
+                    BrawlBall.Spawn(stageRoot, spot.x, spot.y);
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// A drop point around the fighters' midpoint: a ring of scatter, with
+    /// one drop in four aimed right between them — the warning ring gives
+    /// fair notice. Clamped inside the bounds; falls back to centre-field
+    /// scatter if the fighters aren't around (they always are, in a fight).
+    /// </summary>
+    static Vector2 NearTheFight(float minRadius, float maxRadius, float margin)
+    {
+        Vector2 focus = Vector2.zero;
+        var controller = BrawlController.Instance;
+        if (controller != null && controller.Cyan != null && controller.Magenta != null)
+        {
+            Vector3 mid = (controller.Cyan.transform.position
+                           + controller.Magenta.transform.position) * 0.5f;
+            focus = new Vector2(mid.x, mid.z);
+        }
+
+        Vector2 spot;
+        if (Random.value < 0.25f)
+        {
+            // Right into the duel.
+            spot = focus + Random.insideUnitCircle * 0.8f;
+        }
+        else
+        {
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            float radius = Random.Range(minRadius, maxRadius);
+            spot = focus + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+        }
+
+        var half = BrawlStage.BoundsHalf;
+        spot.x = Mathf.Clamp(spot.x, -(half.x - margin), half.x - margin);
+        spot.y = Mathf.Clamp(spot.y, -(half.y - margin), half.y - margin);
+        return spot;
     }
 }
