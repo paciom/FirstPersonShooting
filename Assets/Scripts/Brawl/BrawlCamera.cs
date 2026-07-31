@@ -19,6 +19,7 @@ public class BrawlCamera : MonoBehaviour
 
     Transform _a, _b;
     float _x;
+    float _y;
     float _distance = NearDistance;
     float _shakeAmplitude;
     float _obstruction;
@@ -27,7 +28,7 @@ public class BrawlCamera : MonoBehaviour
     {
         _a = a;
         _b = b;
-        Solve(out _x, out _distance);
+        Solve(out _x, out _y, out _distance);
         Place(Vector3.zero);
     }
 
@@ -37,10 +38,18 @@ public class BrawlCamera : MonoBehaviour
         _shakeAmplitude = Mathf.Max(_shakeAmplitude, amplitude);
     }
 
-    void Solve(out float x, out float distance)
+    void Solve(out float x, out float y, out float distance)
     {
         x = Mathf.Clamp((_a.position.x + _b.position.x) * 0.5f, -TrackHalf, TrackHalf);
-        float separation = Mathf.Abs(_a.position.x - _b.position.x);
+        // The gaze RIDES the fighters' elevation — a duel on top of remix
+        // structures is framed exactly like one on the deck, instead of the
+        // camera staring at the ground floor while the fight happens above.
+        y = (_a.position.y + _b.position.y) * 0.5f;
+        // Vertical splits (one robot up a level) need pull-back too, and
+        // more per metre than lateral ones — the frame is wide, not tall.
+        float separation = Mathf.Max(
+            Mathf.Abs(_a.position.x - _b.position.x),
+            Mathf.Abs(_a.position.y - _b.position.y) * 2.2f);
         distance = Mathf.Lerp(NearDistance, FarDistance,
             Mathf.InverseLerp(2f, 10f, separation));
     }
@@ -50,9 +59,10 @@ public class BrawlCamera : MonoBehaviour
         if (_a == null || _b == null)
             return;
 
-        Solve(out float wantedX, out float wantedDistance);
+        Solve(out float wantedX, out float wantedY, out float wantedDistance);
         float ease = 1f - Mathf.Exp(-6f * Time.deltaTime);
         _x = Mathf.Lerp(_x, wantedX, ease);
+        _y = Mathf.Lerp(_y, wantedY, ease);
         _distance = Mathf.Lerp(_distance, wantedDistance, ease);
 
         _shakeAmplitude = Mathf.Lerp(_shakeAmplitude, 0f, 1f - Mathf.Exp(-8f * Time.deltaTime));
@@ -66,10 +76,11 @@ public class BrawlCamera : MonoBehaviour
 
     void Place(Vector3 shake)
     {
-        // The gaze point rides at chest height between the fighters; shake
-        // moves it at half strength so a thump reads as a jolt, not a pan.
-        Vector3 gaze = new Vector3(_x, 1.1f, 0f) + shake * 0.5f;
-        Vector3 desired = new Vector3(_x, 2.3f, -_distance);
+        // The gaze point rides at chest height above the fighters' own
+        // level; shake moves it at half strength so a thump reads as a
+        // jolt, not a pan.
+        Vector3 gaze = new Vector3(_x, _y + 1.1f, 0f) + shake * 0.5f;
+        Vector3 desired = new Vector3(_x, _y + 2.3f, -_distance);
 
         // Auto-avoid: nothing gets to stand between the lens and the fight.
         // A sphere-cast from the fight toward the desired spot finds the
