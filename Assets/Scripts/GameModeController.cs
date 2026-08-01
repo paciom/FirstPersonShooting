@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -55,6 +55,8 @@ public class GameModeController : MonoBehaviour
     BrawlController _brawl;
     BrawlShow _brawlShow;
     GameObject _brawlStageSelect;
+    ChineseQuest _chineseQuest;
+    GameObject _chineseDeckSelect;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -126,6 +128,12 @@ public class GameModeController : MonoBehaviour
         if (Mode == GameMode.Menu && _brawlStageSelect != null && Input.GetKeyDown(KeyCode.Escape))
         {
             CancelBrawlStageSelect();
+            return;
+        }
+
+        if (Mode == GameMode.Menu && _chineseDeckSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelChineseDeckSelect();
             return;
         }
 
@@ -260,6 +268,13 @@ public class GameModeController : MonoBehaviour
             _brawlShow.Teardown();
             _brawlShow = null;
         }
+        // Same contract again: Chinese Quest borrows Brawl's world lifecycle
+        // wholesale, so it hands the arena back the same way.
+        if (_chineseQuest != null)
+        {
+            _chineseQuest.Teardown();
+            _chineseQuest = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -281,6 +296,7 @@ public class GameModeController : MonoBehaviour
         // orphaned canvas floating over the main menu.
         CloseArenaSelect();
         CloseBrawlStageSelect();
+        CloseChineseDeckSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
         LockCursor(false);
@@ -802,6 +818,61 @@ public class GameModeController : MonoBehaviour
         else
             ShowOverlay("BRAWL: AI v AI — F3 for Hitboxes — ESC for Menu",
                         "BRAWL: AI v AI — tap MENU to go back");
+        LockCursor(false);
+    }
+
+    // ---------- Chinese Quest ----------
+
+    /// <summary>
+    /// CHINESE QUEST's front screen: which words to fight over. There is no
+    /// robot select in front of it — the hero and the four answers are cast
+    /// from the roster automatically, because five DIFFERENT robots is the
+    /// point (four identical ones holding four different words are hard to
+    /// tell apart at a glance, and glancing is the whole input).
+    /// </summary>
+    public void OpenChineseDeckSelect()
+    {
+        _menuCanvas.SetActive(false);
+        CloseChineseDeckSelect();
+        _chineseDeckSelect = ChineseDeckSelect.Build(this);
+    }
+
+    /// <summary>Escape/BACK from the deck screen goes back a step, to the main menu.</summary>
+    public void CancelChineseDeckSelect()
+    {
+        CloseChineseDeckSelect();
+        _menuCanvas.SetActive(true);
+    }
+
+    void CloseChineseDeckSelect()
+    {
+        if (_chineseDeckSelect != null)
+        {
+            Destroy(_chineseDeckSelect);
+            _chineseDeckSelect = null;
+        }
+    }
+
+    /// <summary>
+    /// A deck was picked: stand five robots around a character and start
+    /// asking. Its stage is its own set, exactly as Commander's battlefield
+    /// and Brawl's ring are, so no arena select comes in front of it.
+    /// </summary>
+    public void StartChineseQuest(int deckIndex)
+    {
+        Mode = GameMode.ChineseQuest;
+        CloseChineseDeckSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _chineseQuest = ChineseQuest.Begin(this, _roster, deckIndex);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("Read the character   ·   click a robot or its card   ·   " +
+                    "1 – 4 on the keyboard   ·   ESC — Menu",
+                    "Read the character   ·   tap a robot or its card   ·   tap MENU to go back");
         LockCursor(false);
     }
 

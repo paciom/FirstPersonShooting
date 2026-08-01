@@ -276,6 +276,40 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
+    /// Full health, empty meter, clean animator, standing exactly here.
+    ///
+    /// ResetForRound is the two-corner version: it sends every fighter back
+    /// to ITS OWN spawn either side of the brawl line, which is the only
+    /// arrangement a bout has. Chinese Quest stands five robots at five
+    /// scripted posts and resets them between questions, so the spot has to
+    /// be an argument.
+    /// </summary>
+    public void ResetAt(float x, float z)
+    {
+        Health = BrawlMoveSet.MaxHealth;
+        Charge = 0f;
+        _moveTime = 0f;
+        _stunTime = 0f;
+        _floorTime = 0f;
+        _getUpFired = false;
+        // Reposition already clears velocity, guard and Phase — including
+        // the KO the last question may have left this robot lying in.
+        Reposition(x, z);
+        if (_animator != null)
+        {
+            _animator.Rebind();
+            _animator.Update(0f);
+        }
+    }
+
+    /// <summary>
+    /// Hand the blast meter over from outside the fight's economy. A bout
+    /// earns the special by landing and eating hits; a quiz hands it out as
+    /// the reward for reading a character right.
+    /// </summary>
+    public void GrantCharge(float amount) => GainCharge(amount);
+
+    /// <summary>
     /// The referee's break: back to the corner, everything ELSE kept —
     /// health, charge, the animator's stride. For untangling soft-locks
     /// (a lane wall neither side can cross), not for round resets.

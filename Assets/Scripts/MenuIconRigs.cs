@@ -1,11 +1,11 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
 /// <summary>The main menu's app icons, in grid order. Indexes MenuIconSet.textures.</summary>
 public enum MenuIcon
 {
     AIvAI = 0, PlayerVsAI, Brawl, BrawlWar, BrawlShow,
-    OnlinePvP, Commander, CommanderWar, TowerDefense, ArenaBuilder,
+    OnlinePvP, Commander, CommanderWar, TowerDefense, ChineseQuest, ArenaBuilder,
 }
 
 /// <summary>What MenuIconRigs.Build hands back: the rig root plus everything
@@ -35,7 +35,7 @@ public class MenuIconSet
 /// </summary>
 public static class MenuIconRigs
 {
-    public const int IconCount = 10;
+    public const int IconCount = 11;
 
     // Far under everything, spaced so no rig's lights (max range ~13) or
     // camera far plane (max 15) can reach a neighbour 40 units away.
@@ -92,6 +92,7 @@ public static class MenuIconRigs
             case MenuIcon.Commander: return BuildCommander(rig, roster, rt);
             case MenuIcon.CommanderWar: return BuildCommanderWar(rig, roster, rt);
             case MenuIcon.TowerDefense: return BuildTowerDefense(rig, roster, rt);
+            case MenuIcon.ChineseQuest: return BuildChineseQuest(rig, roster, rt);
             default: return BuildArenaBuilder(rig, rt);
         }
     }
@@ -245,6 +246,75 @@ public static class MenuIconRigs
         FrozenRobot(rig, Cast(roster, "scout", 2), 1, null, 0f, new Vector3(0.12f, 0f, -0.25f), 180f, 0.4f);
         AddLights(rig, TableReach);
         return AddCamera(rig, rt, new Vector3(0f, 3f, 3.7f), 40f, 35f, 15f);
+    }
+
+    /// <summary>
+    /// A character hanging in the air over a hero robot blasting one of the
+    /// two answers flanking it — the quiz, in one frame. The glyph is the
+    /// icon: no arrangement of robots says "Chinese" and a single 汉 says
+    /// nothing else.
+    /// </summary>
+    static Camera BuildChineseQuest(Transform rig, RobotRoster roster, RenderTexture rt)
+    {
+        FightFloor(rig);
+
+        // The two answers, small and set back so the hero reads as the one
+        // the player is.
+        FrozenRobot(rig, Cast(roster, "knight", 3), 1, BrawlAnim.Hit, 0.35f,
+            new Vector3(-1.02f, 0f, -0.2f), 130f, 1.1f);
+        FrozenRobot(rig, Cast(roster, "panther", 5), 1, null, 0f,
+            new Vector3(1.02f, 0f, -0.2f), -130f, 1.1f);
+        FrozenRobot(rig, Cast(roster, "ranger", 0), 0, BrawlAnim.Blast, 0.5f,
+            new Vector3(0.05f, 0f, 0.72f), 200f, 1.35f);
+
+        Bolt(rig, new Vector3(-0.2f, 0.78f, 0.5f), new Vector3(-0.88f, 0.62f, -0.1f), Cyan);
+        HoloGlyph(rig, "汉", new Vector3(0f, 1.42f, -0.5f), 0.8f);
+
+        AddLights(rig, FightReach);
+        return AddCamera(rig, rt, new Vector3(0f, 1.2f, 3.0f), 10f, 40f, 12f);
+    }
+
+    /// <summary>
+    /// A Chinese character hanging in the diorama as a hologram.
+    ///
+    /// A world-space Canvas rather than a TextMesh: these glyphs come from a
+    /// DYNAMIC font (Noto Sans SC, rasterized on demand), and the UI text
+    /// path is the one that rebuilds itself correctly when that atlas grows.
+    /// The rig sits 300 units under the world with a 12-unit camera far
+    /// plane, so only its own icon camera can see it.
+    /// </summary>
+    static void HoloGlyph(Transform rig, string glyph, Vector3 localPosition, float height)
+    {
+        var go = new GameObject("HoloGlyph");
+        go.transform.SetParent(rig, false);
+
+        // Adding a Canvas turns this object's Transform INTO the RectTransform,
+        // so the scale below is the object's own — which is why the glow plate
+        // hangs off the rig instead of off this, where it would be scaled by
+        // the canvas-units-to-metres factor as well as by its own size.
+        var canvas = go.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        var rect = (RectTransform)go.transform;
+        rect.localPosition = localPosition;
+        rect.sizeDelta = new Vector2(200f, 200f);
+        // Canvas units to diorama metres. The camera looks back down -Z, which
+        // is the face a canvas presents by default, so no billboarding.
+        rect.localScale = Vector3.one * (height / 200f);
+
+        var label = ChineseFont.MakeText(go.transform, "Glyph", glyph, 170,
+            new Color(0.75f, 0.97f, 1f), FontStyle.Bold);
+        var labelRect = label.rectTransform;
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        // The glow BEHIND it — further from the camera, which sits at +Z — so
+        // the character reads as projected light rather than as a sticker.
+        // 1.1 emission stays under the bloom whiteout line.
+        Prop(rig, PrimitiveType.Quad, localPosition + new Vector3(0f, 0f, -0.06f),
+            Vector3.one * (height * 1.25f),
+            ArenaMaterials.Emissive("MenuIcon_GlyphGlow", new Color(0.12f, 0.55f, 0.8f), 1.1f));
     }
 
     /// <summary>A toybox of arena blocks with one ghost-block floating mid-placement.</summary>

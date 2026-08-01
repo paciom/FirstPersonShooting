@@ -12,7 +12,11 @@ public static class MainMenu
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color TileColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
 
-    // The icon grid: five columns, two rows on the 1920x1080 reference canvas.
+    // The icon grid: two rows on the 1920x1080 reference canvas, each row
+    // centred on its own count so an odd number of modes does not leave a
+    // ragged gap on the right. Six across is the widest row here — 6 x 250 =
+    // 1500, comfortably inside 1920 even before the tiles are inset.
+    //
     // Row 1's labels bottom out at -379, inside the -403 extent the old
     // ten-button list proved safe on ultrawide, where match-width scaling
     // shrinks the reference height and clips anything lower.
@@ -81,27 +85,30 @@ public static class MainMenu
 
         Texture Icon(MenuIcon icon) => icons.textures[(int)icon];
 
-        // Row one: the shooter and the whole Brawl family (all route through
-        // robot select). Row two: online, the strategy modes, the builder.
-        MakeAppIcon(canvasGo.transform, "AI  v  AI", Icon(MenuIcon.AIvAI), 0, 0,
+        // Row one: the shooter, the whole Brawl family (all route through robot
+        // select) and the online match — everything that is two robots fighting.
+        // Row two: the strategy modes, the learning mode, the builder.
+        MakeAppIcon(canvasGo.transform, "AI  v  AI", Icon(MenuIcon.AIvAI), 0, 6, 0,
             () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeAppIcon(canvasGo.transform, "PLAYER  v  AI", Icon(MenuIcon.PlayerVsAI), 1, 0,
+        MakeAppIcon(canvasGo.transform, "PLAYER  v  AI", Icon(MenuIcon.PlayerVsAI), 1, 6, 0,
             () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeAppIcon(canvasGo.transform, "BRAWL", Icon(MenuIcon.Brawl), 2, 0,
+        MakeAppIcon(canvasGo.transform, "BRAWL", Icon(MenuIcon.Brawl), 2, 6, 0,
             () => controller.OpenRobotSelect(GameMode.Brawl));
-        MakeAppIcon(canvasGo.transform, "BRAWL:  AI  v  AI", Icon(MenuIcon.BrawlWar), 3, 0,
+        MakeAppIcon(canvasGo.transform, "BRAWL:  AI  v  AI", Icon(MenuIcon.BrawlWar), 3, 6, 0,
             () => controller.OpenRobotSelect(GameMode.BrawlWar));
-        MakeAppIcon(canvasGo.transform, "MARTIAL  ARTS  SHOW", Icon(MenuIcon.BrawlShow), 4, 0,
+        MakeAppIcon(canvasGo.transform, "MARTIAL  ARTS  SHOW", Icon(MenuIcon.BrawlShow), 4, 6, 0,
             () => controller.OpenRobotSelect(GameMode.BrawlShow));
-        MakeAppIcon(canvasGo.transform, "ONLINE  PVP", Icon(MenuIcon.OnlinePvP), 0, 1,
+        MakeAppIcon(canvasGo.transform, "ONLINE  PVP", Icon(MenuIcon.OnlinePvP), 5, 6, 0,
             () => OnlineMenu.Open(controller, canvasGo));
-        MakeAppIcon(canvasGo.transform, "COMMANDER", Icon(MenuIcon.Commander), 1, 1,
+        MakeAppIcon(canvasGo.transform, "COMMANDER", Icon(MenuIcon.Commander), 0, 5, 1,
             controller.StartCommander);
-        MakeAppIcon(canvasGo.transform, "COMMANDER:  AI  WAR", Icon(MenuIcon.CommanderWar), 2, 1,
+        MakeAppIcon(canvasGo.transform, "COMMANDER:  AI  WAR", Icon(MenuIcon.CommanderWar), 1, 5, 1,
             controller.StartCommanderWar);
-        MakeAppIcon(canvasGo.transform, "TOWER  DEFENSE", Icon(MenuIcon.TowerDefense), 3, 1,
+        MakeAppIcon(canvasGo.transform, "TOWER  DEFENSE", Icon(MenuIcon.TowerDefense), 2, 5, 1,
             controller.StartTowerDefense);
-        MakeAppIcon(canvasGo.transform, "ARENA  BUILDER", Icon(MenuIcon.ArenaBuilder), 4, 1,
+        MakeAppIcon(canvasGo.transform, "CHINESE  QUEST", Icon(MenuIcon.ChineseQuest), 3, 5, 1,
+            controller.OpenChineseDeckSelect);
+        MakeAppIcon(canvasGo.transform, "ARENA  BUILDER", Icon(MenuIcon.ArenaBuilder), 4, 5, 1,
             controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,
@@ -170,11 +177,14 @@ public static class MainMenu
     /// with the mode name underneath — the phone-home-screen shape. The label
     /// is a SIBLING of the tile, not a child: the tile is a Mask, and a child
     /// label below the tile would be clipped to nothing.
+    ///
+    /// <paramref name="inRow"/> is how many icons share this row, so each row
+    /// centres itself. Rows are rarely equal — modes get added one at a time.
     /// </summary>
-    static void MakeAppIcon(Transform parent, string label, Texture preview, int column, int row,
-        UnityEngine.Events.UnityAction onClick)
+    static void MakeAppIcon(Transform parent, string label, Texture preview, int column,
+        int inRow, int row, UnityEngine.Events.UnityAction onClick)
     {
-        float x = (column - 2) * IconPitch;
+        float x = (column - (inRow - 1) * 0.5f) * IconPitch;
         float y = row == 0 ? Row0Y : Row1Y;
 
         var tile = MakeImage(parent, $"Icon_{label}", TileColor);
@@ -214,8 +224,13 @@ public static class MainMenu
     /// The rounded-square sprite every tile shares, generated once: a signed-
     /// distance alpha ramp gives anti-aliased corners, and the 9-slice border
     /// keeps them circular at any tile size. No art asset needed.
+    ///
+    /// Public because it is the project's one rounded panel: any runtime
+    /// screen that wants soft corners (Chinese Quest's answer cards, its
+    /// results panel) should share this sprite rather than generate a second
+    /// texture with a slightly different radius.
     /// </summary>
-    static Sprite RoundedTile()
+    public static Sprite RoundedTile()
     {
         if (_roundedTile != null)
             return _roundedTile;

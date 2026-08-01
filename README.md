@@ -21,6 +21,36 @@ The game opens on a main menu with three modes:
 
 **Esc** returns to the menu from any mode; click to re-lock the cursor after alt-tab.
 
+## Chinese Quest — the learning mode
+
+A hero robot stands centre stage with a Chinese character at the bottom of the
+screen and four robots ringing it, one per corner, each holding up a meaning and
+its pinyin. Pick one — tap the robot, tap its card, or press **1**–**4** — and
+the hero attacks it with a photon blast or a run-in kung-fu strike. Right: the
+answer goes down, the hero poses and the word is read aloud. Wrong: that robot
+blocks, charges back and lands one on you, then the real answer stands up and
+says itself. Five shields, then the run ends.
+
+Nothing here re-implements combat — all five robots are `BrawlFighter`s driven
+through the same `Intent` struct a human controller fills, so the frame data,
+hit reactions and knockdowns are Brawl's own. The mode adds only choreography.
+
+Its two asset dependencies are **generated, not authored**, and both are
+re-runnable after editing `Assets/Scripts/Chinese/ChineseLexicon.cs`:
+
+```bash
+python Tools/subsetfont.py
+```
+
+```bash
+powershell -ExecutionPolicy Bypass -File Tools/chinesevoice.ps1
+```
+
+The first packs the CJK glyphs (Unity's built-in font has none, and a WebGL
+build has no OS font to fall back on); the second bakes a pronunciation clip per
+word with Windows' zh-CN voice. See
+[Assets/Resources/Chinese/README.md](Assets/Resources/Chinese/README.md).
+
 ## Current status — Phase 1 greybox + visual upgrade
 
 - First-person movement (WASD + mouse, Shift sprint, Space jump, Esc frees the cursor)
