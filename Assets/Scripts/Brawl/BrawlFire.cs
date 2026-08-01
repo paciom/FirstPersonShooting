@@ -1,127 +1,15 @@
 using UnityEngine;
 
 /// <summary>
-/// Runtime particle builder for the hot stuff — no assets, WebGL-safe.
-/// Layered ParticleSystems (soft-sprite billboards with color-over-life,
-/// size curves and turbulence) are what make the fire read as FIRE instead
-/// of orange confetti.
-/// </summary>
-public static class BrawlFireVfx
-{
-    static Texture2D _soft;
-    static Material _additive, _blended;
-
-    /// <summary>A soft radial sprite: bright centre, feathered edge.</summary>
-    static Texture2D SoftSprite()
-    {
-        if (_soft != null)
-            return _soft;
-        const int size = 64;
-        _soft = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float dx = (x + 0.5f) / size - 0.5f;
-                float dy = (y + 0.5f) / size - 0.5f;
-                float fall = Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy) * 2f);
-                fall = fall * fall * (3f - 2f * fall);   // smoothstep feather
-                _soft.SetPixel(x, y, new Color(1f, 1f, 1f, fall));
-            }
-        _soft.Apply();
-        return _soft;
-    }
-
-    static Material ParticleMaterial(bool additive)
-    {
-        var cached = additive ? _additive : _blended;
-        if (cached != null)
-            return cached;
-        var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
-        if (shader == null)
-            shader = Shader.Find("Sprites/Default");
-        var mat = new Material(shader) { mainTexture = SoftSprite() };
-        mat.SetOverrideTag("RenderType", "Transparent");
-        mat.SetFloat("_Surface", 1f);
-        mat.SetFloat("_ZWrite", 0f);
-        mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        mat.SetFloat("_DstBlend", additive
-            ? (float)UnityEngine.Rendering.BlendMode.One
-            : (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        mat.DisableKeyword("_ALPHATEST_ON");
-        mat.renderQueue = 3000;
-        if (mat.HasProperty("_BaseMap"))
-            mat.SetTexture("_BaseMap", SoftSprite());
-        if (mat.HasProperty("_BaseColor"))
-            mat.SetColor("_BaseColor", Color.white);
-        if (additive) _additive = mat; else _blended = mat;
-        return mat;
-    }
-
-    /// <summary>
-    /// One upward-billowing system: colour runs start→end over each puff's
-    /// life, turbulence wobbles it, size grows by <paramref name="grow"/>.
-    /// Rate 0 = built silent; callers drive emission.
-    /// </summary>
-    public static ParticleSystem MakeSystem(Transform parent, string name,
-        Color start, Color end, bool additive, float rate, float size,
-        float grow, float speed, float lifetime, float radius)
-    {
-        var go = new GameObject(name);
-        go.transform.SetParent(parent, false);
-        go.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);   // emit UP
-        var system = go.AddComponent<ParticleSystem>();
-
-        var main = system.main;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(lifetime * 0.7f, lifetime * 1.15f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.7f, speed * 1.2f);
-        main.startSize = new ParticleSystem.MinMaxCurve(size * 0.7f, size * 1.25f);
-        main.startColor = start;
-        main.maxParticles = 400;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-        var shape = system.shape;
-        shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius = radius;
-
-        var emission = system.emission;
-        emission.rateOverTime = rate;
-
-        var color = system.colorOverLifetime;
-        color.enabled = true;
-        var gradient = new Gradient();
-        gradient.SetKeys(
-            new[] { new GradientColorKey(Color.white, 0f),
-                    new GradientColorKey(new Color(end.r, end.g, end.b), 0.55f),
-                    new GradientColorKey(new Color(end.r * 0.6f, end.g * 0.6f, end.b * 0.6f), 1f) },
-            new[] { new GradientAlphaKey(start.a, 0f),
-                    new GradientAlphaKey(end.a > 0f ? end.a : start.a * 0.55f, 0.6f),
-                    new GradientAlphaKey(0f, 1f) });
-        color.color = gradient;
-
-        var sizeLife = system.sizeOverLifetime;
-        sizeLife.enabled = true;
-        sizeLife.size = new ParticleSystem.MinMaxCurve(1f,
-            AnimationCurve.EaseInOut(0f, 0.6f, 1f, grow));
-
-        var noise = system.noise;
-        noise.enabled = true;
-        noise.strength = 0.4f;
-        noise.frequency = 0.7f;
-        noise.scrollSpeed = 0.6f;
-
-        var renderer = system.GetComponent<ParticleSystemRenderer>();
-        renderer.material = ParticleMaterial(additive);
-        renderer.sortMode = ParticleSystemSortMode.Distance;
-        return system;
-    }
-}
-
-/// <summary>
 /// The falling fire: a warning ring, a blazing comet, then a burning patch
 /// that stays lit for ~30 seconds and hurts BOTH robots standing in it — a
 /// piece of the arena neither side owns and both must dance around. Direct
 /// hits sting extra.
+///
+/// The flames themselves come from <see cref="BrawlFx"/>, which prefers a
+/// prefab in Resources/BrawlFx (drop a bought asset-store fire there and it
+/// takes over) and otherwise builds its own on the project's additive
+/// sprite pipeline.
 /// </summary>
 public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
 {
@@ -138,7 +26,9 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     float _burnLeft = BurnSeconds;
     float _cyanCooldown, _magentaCooldown;
     GameObject _warning, _comet;
-    ParticleSystem _flames, _embers, _smoke;
+    ParticleSystem[] _systems;
+    float[] _baseRates;
+    GameObject _prefabFx;
     Light _glow;
     float _flicker;
 
@@ -179,22 +69,21 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         var core = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         Destroy(core.GetComponent<Collider>());
         core.transform.SetParent(_comet.transform, false);
-        core.transform.localScale = Vector3.one * 0.5f;
+        core.transform.localScale = Vector3.one * 0.42f;
         core.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Emissive("brawl-fire-core", new Color(1f, 0.62f, 0.2f), 2.6f);
 
-        var trail = BrawlFireVfx.MakeSystem(_comet.transform, "Trail",
-            new Color(1f, 0.85f, 0.35f, 0.9f), new Color(0.9f, 0.25f, 0.05f, 0f),
-            additive: true, rate: 70f, size: 0.4f, grow: 1.4f,
-            speed: 0.6f, lifetime: 0.45f, radius: 0.12f);
-        trail.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // trail UPWARD behind the fall
+        // The tail streams UP behind a falling comet, so the flame rig sits
+        // as-is — its own updraught is the trail.
+        if (BrawlFx.TryPrefab("firecomet", _comet.transform, Vector3.zero) == null)
+            BrawlFx.BuildFire(_comet.transform, 0.16f, 0.55f);
 
         var light = new GameObject("CometGlow").AddComponent<Light>();
         light.transform.SetParent(_comet.transform, false);
         light.type = LightType.Point;
         light.color = new Color(1f, 0.6f, 0.25f);
-        light.intensity = 2f;
-        light.range = 7f;
+        light.intensity = 2.4f;
+        light.range = 8f;
     }
 
     void BuildPatch()
@@ -204,31 +93,26 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         Destroy(scorch.GetComponent<Collider>());
         scorch.transform.SetParent(transform, false);
         scorch.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-        scorch.transform.localScale = new Vector3(PatchRadius * 2f, 0.02f, PatchRadius * 2f);
+        scorch.transform.localScale = new Vector3(PatchRadius * 1.7f, 0.02f, PatchRadius * 1.7f);
         scorch.GetComponent<MeshRenderer>().sharedMaterial =
-            ArenaMaterials.Lit("brawl-fire-scorch", new Color(0.09f, 0.06f, 0.05f), 0.2f);
+            ArenaMaterials.Lit("brawl-fire-scorch", new Color(0.05f, 0.04f, 0.035f), 0.15f);
 
-        _flames = BrawlFireVfx.MakeSystem(transform, "Flames",
-            new Color(1f, 0.88f, 0.4f, 0.95f), new Color(0.85f, 0.2f, 0.04f, 0f),
-            additive: true, rate: 60f, size: 0.45f, grow: 1.6f,
-            speed: 1.9f, lifetime: 0.75f, radius: PatchRadius * 0.8f);
-        _embers = BrawlFireVfx.MakeSystem(transform, "Embers",
-            new Color(1f, 0.75f, 0.3f, 1f), new Color(1f, 0.4f, 0.1f, 0f),
-            additive: true, rate: 14f, size: 0.09f, grow: 0.8f,
-            speed: 3.4f, lifetime: 1.2f, radius: PatchRadius * 0.7f);
-        _smoke = BrawlFireVfx.MakeSystem(transform, "Smoke",
-            new Color(0.22f, 0.2f, 0.19f, 0.34f), new Color(0.12f, 0.11f, 0.11f, 0f),
-            additive: false, rate: 10f, size: 0.6f, grow: 2.4f,
-            speed: 1.1f, lifetime: 1.6f, radius: PatchRadius * 0.55f);
-        _smoke.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+        _prefabFx = BrawlFx.TryPrefab("fire", transform, Vector3.zero);
+        if (_prefabFx == null)
+        {
+            _systems = BrawlFx.BuildFire(transform, PatchRadius);
+            _baseRates = new float[_systems.Length];
+            for (int i = 0; i < _systems.Length; i++)
+                _baseRates[i] = _systems[i].emission.rateOverTime.constant;
+        }
 
         _glow = new GameObject("FireGlow").AddComponent<Light>();
         _glow.transform.SetParent(transform, false);
         _glow.transform.localPosition = new Vector3(0f, 0.8f, 0f);
         _glow.type = LightType.Point;
         _glow.color = new Color(1f, 0.55f, 0.2f);
-        _glow.intensity = 2.2f;
-        _glow.range = 8f;
+        _glow.intensity = 2.4f;
+        _glow.range = 9f;
     }
 
     void Update()
@@ -258,15 +142,17 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         // The last stretch dies down honestly — emission and glow fade so
         // nobody is surprised when it goes out.
         float strength = Mathf.Clamp01(_burnLeft / DieDownSeconds);
-        var flameEmission = _flames.emission;
-        flameEmission.rateOverTime = 60f * strength;
-        var emberEmission = _embers.emission;
-        emberEmission.rateOverTime = 14f * strength;
-        var smokeEmission = _smoke.emission;
-        smokeEmission.rateOverTime = 10f * Mathf.Clamp01(strength + 0.3f);
+        if (_systems != null)
+            for (int i = 0; i < _systems.Length; i++)
+            {
+                var emission = _systems[i].emission;
+                emission.rateOverTime = _baseRates[i] * strength;
+            }
+        else if (_prefabFx != null && strength < 1f)
+            BrawlFx.StopEmitting(_prefabFx);
 
         _flicker += dt * 11f;
-        _glow.intensity = (2.2f + 0.7f * Mathf.PerlinNoise(_flicker, 0.37f)) * strength;
+        _glow.intensity = (2.4f + 0.8f * Mathf.PerlinNoise(_flicker, 0.37f)) * strength;
 
         var controller = BrawlController.Instance;
         if (controller != null)

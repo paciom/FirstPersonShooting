@@ -56,11 +56,13 @@ public class BrawlGeyser : MonoBehaviour
             ArenaMaterials.Emissive("brawl-geyser-ring", new Color(0.75f, 0.92f, 1f), 1.3f);
         _ringGlow = ring.transform;
 
-        _steam = BrawlFireVfx.MakeSystem(transform, "Steam",
-            new Color(0.92f, 0.96f, 1f, 0.5f), new Color(0.75f, 0.8f, 0.9f, 0f),
-            additive: false, rate: 0f, size: 0.55f, grow: 2.2f,
-            speed: 5.5f, lifetime: 0.8f, radius: VentRadius * 0.6f);
+        // A bought steam/smoke prefab in Resources/BrawlFx takes over here.
+        var custom = BrawlFx.TryPrefab("steam", transform, Vector3.zero);
+        _steam = custom != null
+            ? custom.GetComponentInChildren<ParticleSystem>()
+            : BrawlFx.BuildSteam(transform, VentRadius);
         _steamEmission = _steam.emission;
+        _steamEmission.rateOverTime = 0f;
     }
 
     void Update()
