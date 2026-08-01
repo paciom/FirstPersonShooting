@@ -11,7 +11,9 @@ using UnityEngine.UI;
 /// a forged template. Doubles as the judging bench for the animation
 /// pipeline: this screen is where a new Meshy clip earns its place.
 ///
-/// ← / → skip between moves, Escape leaves. World lifecycle is the Brawl
+/// ← / → skip between moves, drag (or one finger) swings the view around
+/// the performer and the wheel/pinch closes in, Escape leaves. World
+/// lifecycle is the Brawl
 /// one (hide the cast, swap the Environment, hand it back via
 /// ArenaRuntime.Load) with a single fighter whose combat brain is switched
 /// off — the show drives the Animator directly.
@@ -46,6 +48,8 @@ public class BrawlShow : MonoBehaviour
     Animator _animator;
     Text _caption;
     Text _source;
+    Text _hint;
+    BrawlShowCamera _camera;
     Act[] _acts;
     int _actIndex = -1;
     float _actTime;
@@ -96,8 +100,8 @@ public class BrawlShow : MonoBehaviour
         _animator = _fighter.GetComponentInChildren<Animator>(true);
 
         _cameraRig = BuildCameraRig();
-        _cameraRig.GetComponent<BrawlCamera>()
-            .SetTargets(_fighter.transform, _fighter.transform);
+        _camera = _cameraRig.GetComponent<BrawlShowCamera>();
+        _camera.Frame(_fighter.transform);
 
         // F3 works here too — the show is where volumes get inspected.
         BrawlDebug.Attach(gameObject, _fighter);
@@ -195,6 +199,9 @@ public class BrawlShow : MonoBehaviour
 
     void Update()
     {
+        if (_hint != null && _hint.enabled && _camera != null && _camera.AudienceTookOver)
+            _hint.enabled = false;
+
         if (Input.GetKeyDown(KeyCode.RightArrow))
         {
             NextAct(+1);
@@ -315,6 +322,15 @@ public class BrawlShow : MonoBehaviour
         sourceRect.anchorMin = sourceRect.anchorMax = new Vector2(0.5f, 0f);
         sourceRect.anchoredPosition = new Vector2(0f, 118f);
         sourceRect.sizeDelta = new Vector2(800f, 32f);
+
+        // A draggable view nobody knows is draggable may as well be fixed.
+        // The hint retires itself the moment the viewer takes the camera.
+        _hint = MakeText(canvasGo.transform, "Hint", 24, new Color(1f, 1f, 1f, 0.38f));
+        var hintRect = _hint.rectTransform;
+        hintRect.anchorMin = hintRect.anchorMax = new Vector2(0.5f, 1f);
+        hintRect.anchoredPosition = new Vector2(0f, -46f);
+        hintRect.sizeDelta = new Vector2(900f, 32f);
+        _hint.text = "DRAG  TO  LOOK  AROUND   ·   SCROLL  TO  ZOOM";
     }
 
     static Text MakeText(Transform parent, string name, int size, Color color)
@@ -389,7 +405,9 @@ public class BrawlShow : MonoBehaviour
         rig.AddComponent<AudioListener>();
         var data = rig.AddComponent<UniversalAdditionalCameraData>();
         data.renderPostProcessing = true;
-        rig.AddComponent<BrawlCamera>();
+        // The audience steers this one — see BrawlShowCamera for why the
+        // fight's director camera is wrong for a demonstration.
+        rig.AddComponent<BrawlShowCamera>();
         return rig;
     }
 }
