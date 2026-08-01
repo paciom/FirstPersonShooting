@@ -1,4 +1,4 @@
-# robot move start end — strike windows cut from Meshy
+# robot move start end ï¿½ strike windows cut from Meshy
 # library routines; written by meshyfight.py analyze,
 # hand-tweak freely (the forge re-reads on next Play).
 bolt elbow 1.04 1.59
@@ -105,7 +105,7 @@ titan jab 0.27 0.82
 titan kick 1.27 1.82
 titan kneestrike 0.59 1.14
 titan lowkick 0.64 1.19
-titan punch 1.15 1.70
+titan punch 1.45 2.00
 titan sidekick 0.29 0.84
 titan spinkick 0.76 1.31
 titan uppercut 0.32 0.87
