@@ -1,5 +1,18 @@
 # Drop-in effect overrides
 
+**In use now:** `fire.prefab` and `firecomet.prefab` are copies of *Free
+Fire VFX - URP* by Vefects (imported to `Assets/Vefects/`), picked from
+its 15 prefabs as follows:
+
+- `fire` = `VFX_Fire_Floor_01` — a floor fire, which is exactly what a
+  burning patch is. All six of the pack's Floor prefabs are complete.
+- `firecomet` = `VFX_Fire_01_Big` scaled to 0.3 by the caller. The Small
+  and Medium variants look right for a comet but ship with **missing
+  materials** (their "Lights" and "Sparkles Handler" renderers reference
+  materials the download omits), so the Big one is used shrunk instead.
+
+Replacing either is just a matter of copying a different prefab over it.
+
 Any prefab placed in this folder **replaces** the matching runtime-built
 effect, with no code change. `BrawlFx.TryPrefab` looks them up by name:
 

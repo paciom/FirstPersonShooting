@@ -20,6 +20,8 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     const float BurnSeconds = 30f;
     const float DieDownSeconds = 4f;
     const float FallSpeed = 11f;
+    /// <summary>Scale a dropped-in fire prefab to cover the burn patch.</summary>
+    const float PatchScale = 1.15f;
 
     float _groundY;
     bool _burning;
@@ -75,15 +77,21 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
 
         // The tail streams UP behind a falling comet, so the flame rig sits
         // as-is — its own updraught is the trail.
-        if (BrawlFx.TryPrefab("firecomet", _comet.transform, Vector3.zero) == null)
+        // The comet rides the pack's BIG fire shrunk down — its Small and
+        // Medium prefabs are the ones missing materials.
+        var custom = BrawlFx.TryPrefab("firecomet", _comet.transform, Vector3.zero, 0.3f);
+        if (custom == null)
             BrawlFx.BuildFire(_comet.transform, 0.16f, 0.55f);
 
-        var light = new GameObject("CometGlow").AddComponent<Light>();
-        light.transform.SetParent(_comet.transform, false);
-        light.type = LightType.Point;
-        light.color = new Color(1f, 0.6f, 0.25f);
-        light.intensity = 2.4f;
-        light.range = 8f;
+        if (!BrawlFx.HasOwnLight(custom))
+        {
+            var light = new GameObject("CometGlow").AddComponent<Light>();
+            light.transform.SetParent(_comet.transform, false);
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.6f, 0.25f);
+            light.intensity = 2.4f;
+            light.range = 8f;
+        }
     }
 
     void BuildPatch()
@@ -97,7 +105,7 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         scorch.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Lit("brawl-fire-scorch", new Color(0.05f, 0.04f, 0.035f), 0.15f);
 
-        _prefabFx = BrawlFx.TryPrefab("fire", transform, Vector3.zero);
+        _prefabFx = BrawlFx.TryPrefab("fire", transform, Vector3.zero, PatchScale);
         if (_prefabFx == null)
         {
             _systems = BrawlFx.BuildFire(transform, PatchRadius);
@@ -106,6 +114,10 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
                 _baseRates[i] = _systems[i].emission.rateOverTime.constant;
         }
 
+        // A bought effect brings its own lighting; two flicker lights on one
+        // fire just washes the patch out.
+        if (BrawlFx.HasOwnLight(_prefabFx))
+            return;
         _glow = new GameObject("FireGlow").AddComponent<Light>();
         _glow.transform.SetParent(transform, false);
         _glow.transform.localPosition = new Vector3(0f, 0.8f, 0f);
@@ -151,8 +163,11 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         else if (_prefabFx != null && strength < 1f)
             BrawlFx.StopEmitting(_prefabFx);
 
-        _flicker += dt * 11f;
-        _glow.intensity = (2.4f + 0.8f * Mathf.PerlinNoise(_flicker, 0.37f)) * strength;
+        if (_glow != null)
+        {
+            _flicker += dt * 11f;
+            _glow.intensity = (2.4f + 0.8f * Mathf.PerlinNoise(_flicker, 0.37f)) * strength;
+        }
 
         var controller = BrawlController.Instance;
         if (controller != null)

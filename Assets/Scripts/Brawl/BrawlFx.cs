@@ -69,16 +69,64 @@ public static class BrawlFx
     /// A store-bought effect, if the project has one: drop a prefab named
     /// e.g. "fire" into Assets/Resources/BrawlFx/ and it replaces the
     /// runtime rig wholesale. Returns null when there is nothing to load.
+    ///
+    /// Two fixes are applied to whatever turns up, because effect packs are
+    /// authored for a generic project rather than this one:
+    ///
+    /// HEAT DISTORTION is stripped. Refraction passes sample the camera's
+    /// opaque texture, and this project runs with `Require Opaque Texture`
+    /// OFF (it costs a full-screen copy every frame, and this game ships to
+    /// WebGL) — a distortion quad with nothing to refract renders as a
+    /// smear of garbage. Turn that setting on in PhotonArena_URP and delete
+    /// this strip if the shimmer is wanted.
+    ///
+    /// LOOPING is forced. A hazard burns for 30 seconds; pack prefabs are
+    /// often authored as one-shots that would quietly stop after a second.
     /// </summary>
-    public static GameObject TryPrefab(string name, Transform parent, Vector3 localPosition)
+    public static GameObject TryPrefab(string name, Transform parent, Vector3 localPosition,
+        float scale = 1f)
     {
         var prefab = Resources.Load<GameObject>(PrefabDir + name);
         if (prefab == null)
             return null;
+
         var instance = Object.Instantiate(prefab, parent);
         instance.transform.localPosition = localPosition;
         instance.transform.localRotation = Quaternion.identity;
+        instance.transform.localScale = Vector3.one * scale;
+
+        foreach (var system in instance.GetComponentsInChildren<ParticleSystem>(true))
+        {
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            // Packs ship sub-emitters whose materials were left out of the
+            // download (this one omits two). A null material draws as
+            // MAGENTA, so the honest move is to drop that layer.
+            if (IsDistortion(system.transform)
+                || renderer == null || renderer.sharedMaterial == null)
+            {
+                system.gameObject.SetActive(false);
+                continue;
+            }
+            var main = system.main;
+            main.loop = true;
+            system.Play(true);
+        }
         return instance;
+    }
+
+    static bool IsDistortion(Transform node)
+    {
+        for (var walk = node; walk != null; walk = walk.parent)
+            if (walk.name.IndexOf("distort", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || walk.name.IndexOf("refract", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        return false;
+    }
+
+    /// <summary>True when a prefab override brings its own light rig.</summary>
+    public static bool HasOwnLight(GameObject instance)
+    {
+        return instance != null && instance.GetComponentInChildren<Light>(true) != null;
     }
 
     /// <summary>Stop a prefab override emitting so it can die down naturally.</summary>
