@@ -8,12 +8,16 @@ using UnityEngine.EventSystems;
 /// CHINESE QUEST — the learning mode.
 ///
 /// A hero robot stands centre stage. A Chinese character hangs at the bottom
-/// of the screen, and four robots ring the hero, one at each corner, each
-/// holding up a meaning and its pinyin. Pick one and the hero attacks it:
-/// a photon blast down the diagonal, or a run-in and a kung-fu strike. Get it
-/// right and that robot goes down, the hero celebrates and the word is read
-/// aloud. Get it wrong and the robot blocks, charges back and lands one on
-/// the hero — then the real answer stands up and says itself.
+/// of the screen, and four robots ring the hero, one at each corner, all
+/// turned in on it, each holding up a meaning and its pinyin.
+///
+/// Choosing is what earns the pronunciation — the word is spoken the instant
+/// an answer is committed to, right or wrong, and never before, because every
+/// card carries pinyin and a character read aloud beside them turns reading
+/// into matching. Then the ROBOT HOLDING THE RIGHT ANSWER settles it, in one
+/// direction or the other: find it and the hero charges it down; miss it and
+/// it crosses the stage and floors the hero, which is a lesson where a robot
+/// that was wrong punishing you would have been only a penalty.
 ///
 /// It is a quiz wearing the fighting game's clothes: nothing here re-implements
 /// combat. The five robots ARE BrawlFighters, driven through the same
@@ -105,9 +109,9 @@ public class ChineseQuest : MonoBehaviour
     /// <summary>How often the hero picks the ranged answer over running in.</summary>
     const float BlastChance = 0.5f;
     /// <summary>
-    /// The wrong answer's reprisal leans ranged. It is the only attack in the
-    /// round now — the hero does not swing back at a robot it picked by
-    /// mistake — so it can afford to be the fast kind more often than not.
+    /// The right answer's reprisal leans ranged. It is the only attack in a
+    /// missed round — the hero never swings — so it can afford to be the fast
+    /// kind more often than not.
     /// </summary>
     const float PunishBlastChance = 0.6f;
 
@@ -116,10 +120,10 @@ public class ChineseQuest : MonoBehaviour
     /// on stage geometry, or a coroutine killed by a recompile mid-play — the
     /// watchdog deals the next question rather than leaving a dead screen.
     ///
-    /// Set well clear of the honest worst case, which is a wrong answer where
-    /// both the strike and the counter-strike are charges that time out:
-    /// roughly 20 s of legitimate waiting. A watchdog that can fire on a slow
-    /// round is worse than no watchdog, because it looks like the bug.
+    /// Set well clear of the honest worst case — a charge that times out, its
+    /// strike, and the reveal, with every wait taking its full bound. A
+    /// watchdog that can fire on a merely slow round is worse than no
+    /// watchdog, because it looks like the bug.
     /// </summary>
     const float RoundWatchdog = 32f;
 
@@ -248,31 +252,41 @@ public class ChineseQuest : MonoBehaviour
             bot.OnHitLanded = (victim, damage, knockdown) => _heroHurt = true;
             _answers[i] = bot;
         }
-        FaceTheHouse();
+        FaceTheCentre();
     }
 
     /// <summary>
-    /// Everyone square to the camera, presenting themselves — the line-up
-    /// pose between questions.
+    /// The ring: the hero square to the camera, presenting itself, and all
+    /// four answers turned in on it.
     ///
-    /// A BrawlFighter turns to face its Opponent every frame it is standing
-    /// free, so posing one means having no opponent at all. The pairing is
-    /// made at the moment an answer is picked and unmade when the round ends;
-    /// see <see cref="RunRound"/>.
+    /// The answers are aimed by giving them the hero as their Opponent rather
+    /// than by setting a rotation, because a BrawlFighter turns to face its
+    /// opponent every frame it is standing free — one assignment keeps them
+    /// looking inward through a get-up, a shove and a walk home, where a
+    /// one-off rotation would be undone by the next frame. The rotation IS
+    /// also set here, for the one frame before their own Update catches up.
+    ///
+    /// The hero is the odd one out: no opponent at all, so nothing overwrites
+    /// the half turn that shows it to the player. It is paired only for the
+    /// exchange, and unpaired again when the round ends — see
+    /// <see cref="RunRound"/>.
     /// </summary>
-    void FaceTheHouse()
+    void FaceTheCentre()
     {
         // The camera looks up +Z, so facing it is a half turn: robots model
         // +Z as forward.
-        var toCamera = Quaternion.Euler(0f, 180f, 0f);
         _hero.Opponent = null;
-        _hero.transform.rotation = toCamera;
+        _hero.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+
         foreach (var bot in _answers)
         {
             if (bot == null)
                 continue;
-            bot.Opponent = null;
-            bot.transform.rotation = toCamera;
+            bot.Opponent = _hero;
+            Vector3 inward = _hero.transform.position - bot.transform.position;
+            inward.y = 0f;
+            if (inward.sqrMagnitude > 1e-4f)
+                bot.transform.rotation = Quaternion.LookRotation(inward.normalized, Vector3.up);
         }
     }
 
@@ -310,7 +324,7 @@ public class ChineseQuest : MonoBehaviour
             _answers[i].Driven = default;
             WarpHome(_answers[i], AnswerPosts[i]);
         }
-        FaceTheHouse();
+        FaceTheCentre();
 
         DealQuestion();
         _hud.ShowQuestion(_word, _options);
@@ -438,42 +452,47 @@ public class ChineseQuest : MonoBehaviour
     /// </summary>
     IEnumerator RunRound(int index)
     {
-        var target = _answers[index];
+        // The right robot either way. It is the one the hero attacks when the
+        // player finds it, and the one that comes for the hero when they do
+        // not — so the character always ends the round standing next to the
+        // robot that was holding its meaning, whichever direction the punch
+        // travelled.
+        var answer = _answers[_correct];
         bool correct = index == _correct;
         _asked++;
 
         _hud.MarkChosen(index, correct);
-        // Every answer is followed by the word, right or wrong, said the moment
-        // the choice is made — the pronunciation is the reward for committing
-        // to a guess, so it must never arrive before one.
+        // The correct word, said the moment a choice is committed to — right
+        // or wrong, always, exactly once. The pronunciation is what answering
+        // buys, so it must never arrive before an answer.
         ChineseVoice.Say(_word);
 
         // The pairing: from here until the round ends these two look at each
-        // other, which is also what aims every strike between them.
-        _hero.Opponent = target;
-        target.Opponent = _hero;
+        // other, which is also what aims every strike between them. The hero
+        // needs it explicitly because it alone stands unpaired between rounds.
+        _hero.Opponent = answer;
 
-        // Who swings is the whole answer. Right, and the hero goes and takes
-        // it. Wrong, and the hero does not get to swing at all — it holds its
-        // ground and the robot it picked comes for it.
         if (correct)
         {
-            _director.WatchFight(_hero.transform, target.transform);
+            _director.WatchFight(_hero.transform, answer.transform);
             _heroLanded = false;
             yield return new WaitForSeconds(TurnBeat);
-            yield return Attack(_hero, target, Random.value < BlastChance);
+            yield return Attack(_hero, answer, Random.value < BlastChance);
             yield return Until(() => _heroLanded, 2.2f);
-            yield return Reward(target);
+            yield return Reward(answer);
         }
         else
         {
-            yield return Punish(target);
+            // The hero holds its mark and takes it. The robot that was right
+            // is the one that crosses the stage.
+            yield return Punish(answer);
         }
 
-        // Unpair before the reset so nobody spins to face a departing enemy.
+        // Unpaired before the reset so the hero does not spin to follow a
+        // robot walking away. The answers keep theirs — facing the centre is
+        // their resting pose, not a fight.
         _hero.Opponent = null;
-        target.Opponent = null;
-        target.Driven = default;
+        answer.Driven = default;
 
         if (_shields <= 0)
         {
@@ -514,20 +533,25 @@ public class ChineseQuest : MonoBehaviour
 
     /// <summary>
     /// Wrong: the hero stands its ground — no swing, no charge — and the robot
-    /// the player picked comes across the stage and hits it. Then the real
-    /// answer stands up: the miss is the moment the word is worth teaching.
+    /// that WAS the answer crosses the stage and hits it.
     ///
-    /// The hero is still paired to its attacker, so it turns to face what is
-    /// coming. Turning is not moving; the feet stay on the mark.
+    /// The attacker is the correct answer rather than the one the player
+    /// picked, which makes the round say the right sentence. The red card is
+    /// what you chose; the green one is what was true, and it is the one that
+    /// walks over. A robot that was wrong punishing you for agreeing with it
+    /// taught nothing.
+    ///
+    /// The hero is paired to its attacker, so it turns to face what is coming.
+    /// Turning is not moving; the feet stay on the mark.
     /// </summary>
-    IEnumerator Punish(BrawlFighter wrong)
+    IEnumerator Punish(BrawlFighter answer)
     {
         _streak = 0;
 
         _heroHurt = false;
-        _director.WatchFight(wrong.transform, _hero.transform);
+        _director.WatchFight(answer.transform, _hero.transform);
         yield return new WaitForSeconds(TurnBeat);
-        yield return Attack(wrong, _hero, Random.value < PunishBlastChance);
+        yield return Attack(answer, _hero, Random.value < PunishBlastChance);
         yield return Until(() => _heroHurt, 2.4f);
 
         _shields = Mathf.Max(0, _shields - 1);
@@ -535,11 +559,8 @@ public class ChineseQuest : MonoBehaviour
         _hud.SetScore(_score, _streak);
         _director.Shake(0.55f);
 
-        // The teaching beat: the right robot rises, its card lights green,
-        // and the word is spoken.
-        var answer = _answers[_correct];
-        answer.Opponent = null;
-        answer.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        // The teaching beat: the robot that was right takes its pose over the
+        // hero it just floored, and its card lights green beside the red one.
         answer.Celebrate();
         VfxUtil.SpawnBurst(answer.transform.position + Vector3.up * 2.1f,
             new Color(0.35f, 1f, 0.55f), 20, 4f, 0.14f);
@@ -704,7 +725,7 @@ public class ChineseQuest : MonoBehaviour
     {
         StopRound();
         _phase = Phase.Over;
-        FaceTheHouse();
+        FaceTheCentre();
         _hud.ShowResults(_score, _right, _asked, _bestStreak);
         BrawlAudio.PlayFlat(BrawlAudio.Id.Gong, 0.8f);
     }

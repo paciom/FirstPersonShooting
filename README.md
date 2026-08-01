@@ -24,8 +24,9 @@ The game opens on a main menu with three modes:
 ## Chinese Quest — the learning mode
 
 A hero robot stands centre stage with a Chinese character at the bottom of the
-screen and four robots ringing it, one per corner, each holding up a meaning and
-its pinyin. Pick one — tap the robot, tap its card, or press **1**–**4**.
+screen and four robots ringing it, one per corner and all turned in on it, each
+holding up a meaning and its pinyin. Pick one — tap the robot, tap its card, or
+press **1**–**4**.
 
 Committing to an answer is what earns the pronunciation: the character is
 **spoken in Mandarin the instant you choose**, right or wrong. It is never
@@ -33,10 +34,12 @@ spoken before, because every card carries pinyin — hearing the word first woul
 turn "what does this character mean" into "which of these four sounds was that",
 and the character need never be looked at.
 
-**Right:** the hero rockets across the stage or blasts down the diagonal, the
-answer goes down, the hero poses. **Wrong:** the hero holds its ground and does
-not swing at all — the robot you picked comes for *it* — and then the real
-answer stands up and lights green. Five shields, then the run ends.
+Then the robot holding the **right** answer settles it, in one direction or the
+other. Find it and the hero rockets across the stage or blasts down the diagonal
+and puts it down. Miss it and the hero never swings at all — it holds its mark
+while the correct robot crosses the stage and floors *it*, then takes the pose
+as its card lights green beside the red one you picked. Five shields, then the
+run ends.
 
 The whole cast runs at double a bout's speed, and the charge to a target at four
 times, through `BrawlFighter.Tempo` — one knob that scales a fighter's delta time
