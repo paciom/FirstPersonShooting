@@ -9,7 +9,8 @@ using UnityEngine.UI;
 public class HudController : MonoBehaviour
 {
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f, 0.9f);
-    static readonly Color WarnOrange = new Color(1f, 0.5f, 0.1f, 0.95f);
+    static readonly Color HealthyGreen = new Color(0.35f, 0.95f, 0.5f, 0.95f);
+    static readonly Color WarnAmber = new Color(1f, 0.72f, 0.15f, 0.95f);
     static readonly Color CriticalRed = new Color(1f, 0.28f, 0.2f, 0.95f);
     static readonly Color GhostAmber = new Color(1f, 0.7f, 0.25f, 0.85f);
     static readonly Color OverGold = new Color(1f, 0.88f, 0.35f, 0.95f);
@@ -118,13 +119,9 @@ public class HudController : MonoBehaviour
         SetBarFill(_shieldFill, n);
         SetBarFill(_shieldGhost, _ghostShown);
 
-        Color tone;
-        if (_shield.HasOvershield)
-            tone = OverGold;                      // airdropped overshield: unmistakably richer
-        else if (n <= CriticalFraction)
-            tone = CriticalRed;
-        else
-            tone = Color.Lerp(WarnOrange, HoloCyan, Mathf.InverseLerp(CriticalFraction, 1f, n));
+        // Airdropped overshield gets its own colour rather than a place on the
+        // ramp — it is the one state where a full bar is worth MORE than full.
+        Color tone = _shield.HasOvershield ? OverGold : ShieldTone(n);
 
         // Down to the last quarter the bar breathes. A colour change on its own
         // is easy to miss with a firefight happening over the top of it.
@@ -135,6 +132,26 @@ public class HudController : MonoBehaviour
         // Ceil, so a sliver of shield never reads as the 0 that means de-rezzed.
         if (_shieldText != null)
             _shieldText.text = $"{Mathf.CeilToInt(_shield.Current)} / {Mathf.RoundToInt(_shield.maxShield)}";
+    }
+
+    /// <summary>
+    /// Full-to-empty colour ramp, cyan → green → amber → red.
+    ///
+    /// It detours through green and amber instead of running cyan straight to
+    /// red because those two are near-complementary: a direct lerp spends the
+    /// middle of the bar in a desaturated olive, which reads as a rendering
+    /// fault rather than a warning. Every stop here is a colour a player can
+    /// name, which is the whole job of the ramp.
+    /// </summary>
+    static Color ShieldTone(float n)
+    {
+        if (n >= 0.70f)
+            return Color.Lerp(HealthyGreen, HoloCyan, Mathf.InverseLerp(0.70f, 1f, n));
+        if (n >= 0.40f)
+            return Color.Lerp(WarnAmber, HealthyGreen, Mathf.InverseLerp(0.40f, 0.70f, n));
+        if (n >= CriticalFraction)
+            return Color.Lerp(CriticalRed, WarnAmber, Mathf.InverseLerp(CriticalFraction, 0.40f, n));
+        return CriticalRed;
     }
 
     /// <summary>
