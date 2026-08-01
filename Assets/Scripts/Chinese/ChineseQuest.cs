@@ -70,7 +70,8 @@ public class ChineseQuest : MonoBehaviour
         new Vector3(4.6f, 0f, -2.9f),    // 4  near right  → bottom-right
     };
 
-    public const int Options = 4;
+    /// <summary>Answers per question — the quiz's number, not this mode's.</summary>
+    public const int Options = ChineseQuiz.Count;
 
     // ------------------------------------------------------------- the rules
 
@@ -140,17 +141,8 @@ public class ChineseQuest : MonoBehaviour
     BrawlFighter _hero;
     BrawlFighter[] _answers = new BrawlFighter[Options];
 
-    ChineseLexicon.Deck _deck;
-    ChineseLexicon.Word _word;
-    readonly ChineseLexicon.Word[] _options = new ChineseLexicon.Word[Options];
-    int _correct;
-
-    /// <summary>
-    /// Words asked recently, newest last — a deck of twelve that re-asks the
-    /// same character three times in a row does not feel random, it feels
-    /// broken. Half the deck is held back, so short decks still rotate.
-    /// </summary>
-    readonly List<string> _recent = new List<string>();
+    /// <summary>Which word, and the three decoys — see ChineseQuiz.</summary>
+    ChineseQuiz _quiz;
 
     Phase _phase = Phase.Over;
     float _phaseTime;
@@ -183,7 +175,7 @@ public class ChineseQuest : MonoBehaviour
 
     void Setup(RobotRoster roster)
     {
-        _deck = ChineseLexicon.DeckAt(_deckIndex);
+        _quiz = new ChineseQuiz(_deckIndex);
 
         var player = FindFirstObjectByType<PlayerBrain>();
         if (player != null)
@@ -215,7 +207,7 @@ public class ChineseQuest : MonoBehaviour
         _director = _cameraRig.GetComponent<ChineseQuestCamera>();
         _director.FrameCast(KeyPoints());
 
-        _hud = ChineseQuestHud.Build(transform, _camera, _deck);
+        _hud = ChineseQuestHud.Build(transform, _camera, _quiz.Deck);
         _hud.OnPicked = Answer;
         _hud.OnPlayAgain = Restart;
         for (int i = 0; i < Options; i++)
@@ -326,8 +318,8 @@ public class ChineseQuest : MonoBehaviour
         }
         FaceTheCentre();
 
-        DealQuestion();
-        _hud.ShowQuestion(_word, _options);
+        _quiz.Deal();
+        _hud.ShowQuestion(_quiz.Word, _quiz.Choices);
         _hud.SetCardsLive(true);
         _director.Relax();
         // Pointedly NOT spoken here. Every card carries pinyin, so a character
@@ -364,75 +356,6 @@ public class ChineseQuest : MonoBehaviour
         VfxUtil.SpawnBurst(fighter.transform.position + Vector3.up, spark, 10, 3.2f, 0.11f);
     }
 
-    /// <summary>
-    /// Roll the question: one word the player has not seen lately, and three
-    /// decoys from the SAME deck. Same-deck decoys are the point — four words
-    /// from four themes can be answered off the theme alone, without ever
-    /// reading the character.
-    /// </summary>
-    void DealQuestion()
-    {
-        var words = _deck.words;
-        int hold = Mathf.Min(_recent.Count, Mathf.Max(0, words.Length / 2 - 1));
-
-        int pick = Random.Range(0, words.Length);
-        for (int attempt = 0; attempt < 40; attempt++)
-        {
-            int candidate = Random.Range(0, words.Length);
-            if (!RecentlyAsked(words[candidate].hanzi, hold))
-            {
-                pick = candidate;
-                break;
-            }
-        }
-        _word = words[pick];
-        _recent.Add(_word.hanzi);
-        if (_recent.Count > words.Length)
-            _recent.RemoveAt(0);
-
-        // Three distinct decoys. Distinct by MEANING, not by index: a deck
-        // holding two words that both mean "old" would otherwise offer the
-        // player two correct-looking answers and mark one of them wrong.
-        var chosen = new List<ChineseLexicon.Word> { _word };
-        for (int attempt = 0; attempt < 200 && chosen.Count < Options; attempt++)
-        {
-            var candidate = words[Random.Range(0, words.Length)];
-            bool clash = false;
-            foreach (var taken in chosen)
-                if (taken.english == candidate.english || taken.hanzi == candidate.hanzi)
-                    clash = true;
-            if (!clash)
-                chosen.Add(candidate);
-        }
-        // A deck too small or too repetitive to fill four slots pads with
-        // whatever is left rather than dealing a broken question.
-        for (int i = 0; chosen.Count < Options && i < words.Length; i++)
-            if (!chosen.Contains(words[i]))
-                chosen.Add(words[i]);
-
-        for (int i = 0; i < Options; i++)
-            _options[i] = chosen[i % chosen.Count];
-
-        // Shuffle, then find where the answer landed.
-        for (int i = Options - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (_options[i], _options[j]) = (_options[j], _options[i]);
-        }
-        _correct = 0;
-        for (int i = 0; i < Options; i++)
-            if (_options[i].hanzi == _word.hanzi)
-                _correct = i;
-    }
-
-    bool RecentlyAsked(string hanzi, int hold)
-    {
-        for (int i = _recent.Count - hold; i < _recent.Count; i++)
-            if (i >= 0 && _recent[i] == hanzi)
-                return true;
-        return false;
-    }
-
     /// <summary>A card, a robot or a number key was picked. One answer per round.</summary>
     public void Answer(int index)
     {
@@ -457,15 +380,18 @@ public class ChineseQuest : MonoBehaviour
         // not — so the character always ends the round standing next to the
         // robot that was holding its meaning, whichever direction the punch
         // travelled.
-        var answer = _answers[_correct];
-        bool correct = index == _correct;
+        var answer = _answers[_quiz.Correct];
+        bool correct = index == _quiz.Correct;
         _asked++;
 
         _hud.MarkChosen(index, correct);
+        // The syllabus hears about it before anything else does: on the
+        // INFINITE deck this is what advances a word toward being retired.
+        _quiz.Report(correct);
         // The correct word, said the moment a choice is committed to — right
         // or wrong, always, exactly once. The pronunciation is what answering
         // buys, so it must never arrive before an answer.
-        ChineseVoice.Say(_word);
+        ChineseVoice.Say(_quiz.Word);
 
         // The pairing: from here until the round ends these two look at each
         // other, which is also what aims every strike between them. The hero
@@ -525,7 +451,7 @@ public class ChineseQuest : MonoBehaviour
         BrawlAudio.PlayFlat(BrawlAudio.Id.Victory, 0.45f);
 
         _hud.SetScore(_score, _streak);
-        _hud.Correct(_word, _streak);
+        _hud.Correct(_quiz.Word, _streak);
         _director.Celebrate(_hero.transform);
 
         yield return new WaitForSeconds(RevealBeat);
@@ -565,7 +491,7 @@ public class ChineseQuest : MonoBehaviour
         VfxUtil.SpawnBurst(answer.transform.position + Vector3.up * 2.1f,
             new Color(0.35f, 1f, 0.55f), 20, 4f, 0.14f);
 
-        _hud.Wrong(_word, _correct);
+        _hud.Wrong(_quiz.Word, _quiz.Correct);
         yield return new WaitForSeconds(RevealBeat + 0.4f);
     }
 
@@ -740,7 +666,6 @@ public class ChineseQuest : MonoBehaviour
         _asked = 0;
         _right = 0;
         _shields = MaxShields;
-        _recent.Clear();
         _hud.HideResults();
         _hud.SetScore(_score, _streak);
         _hud.SetShields(_shields, MaxShields);
@@ -765,6 +690,7 @@ public class ChineseQuest : MonoBehaviour
     public void Teardown()
     {
         StopRound();
+        _quiz.Flush();
         ChineseVoice.Release();
 
         if (_cameraRig != null)

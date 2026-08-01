@@ -75,6 +75,12 @@ public class ChineseQuestHud : MonoBehaviour
     bool _distanceMeter;
     int _shownDistance = -1;
 
+    /// <summary>
+    /// True once the cards have been pinned into a row instead of riding above
+    /// their robots. See <see cref="UseCardRow"/>.
+    /// </summary>
+    bool _cardRow;
+
     float _bannerTime;
 
     public static ChineseQuestHud Build(Transform parent, Camera camera, ChineseLexicon.Deck deck)
@@ -349,6 +355,33 @@ public class ChineseQuestHud : MonoBehaviour
     }
 
     /// <summary>
+    /// Pin the cards into a fixed row across the top instead of floating them
+    /// over their robots.
+    ///
+    /// Anchoring cards to robots is right when the robots are spread across
+    /// the frame, as they are in Quest. It fails completely down a road: four
+    /// robots fifty metres out sit within a few dozen pixels of the vanishing
+    /// point, so all four cards land on the same spot and stack into an
+    /// unreadable pile. A row across the top costs the direct robot-to-card
+    /// line, but the lanes already run left to right in the same order as the
+    /// cards and the numbers, so the mapping survives.
+    /// </summary>
+    public void UseCardRow()
+    {
+        _cardRow = true;
+        const float gap = 26f;
+        float pitch = CardWidth + gap;
+        for (int i = 0; i < _cards.Length; i++)
+        {
+            var rect = _cards[i].rect;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            // Below the score and distance line, which sit at -46.
+            rect.anchoredPosition = new Vector2((i - (_cards.Length - 1) * 0.5f) * pitch, -152f);
+        }
+    }
+
+    /// <summary>
     /// Swap the shield pips for a distance readout — the runner's currency.
     /// Called once, before the first question.
     /// </summary>
@@ -436,7 +469,8 @@ public class ChineseQuestHud : MonoBehaviour
                 card.pulse = Mathf.Max(0f, card.pulse - dt * 2.2f);
                 card.rect.localScale = Vector3.one * (1f + card.pulse * 0.12f);
             }
-            PositionCard(card);
+            if (!_cardRow)
+                PositionCard(card);
         }
     }
 

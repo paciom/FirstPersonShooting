@@ -89,6 +89,21 @@ def wanted_characters():
     # main menu's app-icon diorama hangs a character in the air.
     sources.append(os.path.join(ROOT, "Assets", "Scripts", "MenuIconRigs.cs"))
 
+    # And the INFINITE deck, which is not source at all — 2000 characters in a
+    # TextAsset, every one of which the game can put on screen. It dwarfs
+    # everything the scripts contribute.
+    frequency = os.path.join(ROOT, "Assets", "Resources", "Chinese", "frequency.txt")
+    if os.path.isfile(frequency):
+        for line in open(frequency, encoding="utf-8"):
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) >= 2:
+                chars.update(fields[0])
+                chars.update(fields[1])
+    else:
+        print("NOTE: no frequency.txt — run Tools/buildfrequency.py for the INFINITE deck")
+
     for path in sources:
         # utf-8-sig: these files carry a BOM so that compilers outside Unity
         # do not read them in the machine's ANSI codepage.

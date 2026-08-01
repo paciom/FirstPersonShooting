@@ -285,15 +285,74 @@ public static class ChineseLexicon
         }
     }
 
-    /// <summary>The decks in menu order: the themed ones, then the mixed bag.</summary>
-    public static Deck DeckAt(int index)
+    static Deck _infinite;
+
+    /// <summary>
+    /// The 2000 most frequent characters in written Chinese, most common
+    /// first — the syllabus deck, loaded from the TextAsset that
+    /// Tools/buildfrequency.py generates. Data that size does not belong in
+    /// source: a 2000-entry table is a file nobody can read and every diff has
+    /// to scroll past.
+    ///
+    /// Falls back to the mixed bag if the asset is missing, so a clone that
+    /// has not pulled LFS still plays.
+    /// </summary>
+    public static Deck Infinite
     {
-        if (index < 0 || index >= Decks.Length)
-            return Everything;
-        return Decks[index];
+        get
+        {
+            if (_infinite == null)
+                _infinite = LoadFrequency();
+            return _infinite;
+        }
     }
 
-    public static int MenuCount => Decks.Length + 1;
+    static Deck LoadFrequency()
+    {
+        var asset = UnityEngine.Resources.Load<UnityEngine.TextAsset>("Chinese/frequency");
+        if (asset == null)
+        {
+            UnityEngine.Debug.LogWarning("[ChineseLexicon] Resources/Chinese/frequency.txt is " +
+                "missing — run `python Tools/buildfrequency.py`. Falling back to EVERYTHING.");
+            return Everything;
+        }
+
+        var words = new List<Word>();
+        foreach (string line in asset.text.Split('\n'))
+        {
+            if (line.Length == 0 || line[0] == '#')
+                continue;
+            var fields = line.TrimEnd('\r').Split('\t');
+            if (fields.Length < 3 || fields[0].Length == 0)
+                continue;
+            words.Add(new Word(fields[0], fields[1], fields[2]));
+        }
+        if (words.Count < Options)
+            return Everything;
+        return new Deck("INFINITE", "无限", words.ToArray());
+    }
+
+    /// <summary>A round needs one answer and three decoys; a deck below this is unusable.</summary>
+    const int Options = 4;
+
+    /// <summary>
+    /// The decks in menu order: the themed ones, then the mixed bag, then the
+    /// frequency syllabus. Anything out of range lands on the syllabus rather
+    /// than throwing — a bad index is a menu bug, not a reason to stop.
+    /// </summary>
+    public static Deck DeckAt(int index)
+    {
+        if (index >= 0 && index < Decks.Length)
+            return Decks[index];
+        if (index == Decks.Length)
+            return Everything;
+        return Infinite;
+    }
+
+    /// <summary>True for the one deck that keeps score of what has been learned.</summary>
+    public static bool IsInfinite(int index) => index == Decks.Length + 1;
+
+    public static int MenuCount => Decks.Length + 2;
 
     // ------------------------------------------------------- pinyin → ascii
 

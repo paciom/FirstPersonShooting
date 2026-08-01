@@ -39,7 +39,8 @@ public class ChineseRun : MonoBehaviour
     /// </summary>
     public static readonly float[] Lanes = { -4.8f, -1.6f, 1.6f, 4.8f };
 
-    public const int Options = 4;
+    /// <summary>Answers per question — the quiz's number, not this mode's.</summary>
+    public const int Options = ChineseQuiz.Count;
 
     // ------------------------------------------------------------- the rules
 
@@ -101,11 +102,8 @@ public class ChineseRun : MonoBehaviour
     float _gateZ;
     bool _gateLive;
 
-    ChineseLexicon.Deck _deck;
-    ChineseLexicon.Word _word;
-    readonly ChineseLexicon.Word[] _options = new ChineseLexicon.Word[Options];
-    int _correct;
-    readonly List<string> _recent = new List<string>();
+    /// <summary>Which word, and the three decoys — see ChineseQuiz.</summary>
+    ChineseQuiz _quiz;
 
     Phase _phase = Phase.Over;
     float _phaseTime;
@@ -157,7 +155,7 @@ public class ChineseRun : MonoBehaviour
 
     void Setup(RobotRoster roster)
     {
-        _deck = ChineseLexicon.DeckAt(_deckIndex);
+        _quiz = new ChineseQuiz(_deckIndex);
         _best = PlayerPrefs.GetInt(BestKey, 0);
 
         var player = FindFirstObjectByType<PlayerBrain>();
@@ -202,11 +200,14 @@ public class ChineseRun : MonoBehaviour
         _director = _cameraRig.GetComponent<ChineseRunCamera>();
         _director.Follow(_hero.transform);
 
-        _hud = ChineseQuestHud.Build(transform, _camera, _deck);
+        _hud = ChineseQuestHud.Build(transform, _camera, _quiz.Deck);
         _hud.OnPicked = Answer;
         // Distance, not shields: the road IS the score here, and a wrong
-        // answer costs ground rather than a life.
+        // answer costs ground rather than a life. And a fixed row of cards,
+        // not four floating over four robots — down a road they all converge
+        // on the vanishing point and stack into an unreadable pile.
         _hud.UseDistanceMeter();
+        _hud.UseCardRow();
         _hud.SetScore(_score, _streak);
 
         NextGate();
@@ -225,7 +226,7 @@ public class ChineseRun : MonoBehaviour
         ClearGate();
 
         _gateZ = _hero.transform.position.z + GateLead;
-        DealQuestion();
+        _quiz.Deal();
 
         int fleet = (_roster != null && _roster.HasRobots) ? _roster.robots.Length : 1;
         for (int i = 0; i < Options; i++)
@@ -241,11 +242,10 @@ public class ChineseRun : MonoBehaviour
             bot.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
             bot.OnHitLanded = (victim, damage, knockdown) => _heroHurt = true;
             _gate[i] = bot;
-            _hud.SetAnchor(i, bot.transform);
         }
 
         _gateLive = true;
-        _hud.ShowQuestion(_word, _options);
+        _hud.ShowQuestion(_quiz.Word, _quiz.Choices);
         _hud.SetCardsShown(true);
         _hud.SetCardsLive(true);
         _phase = Phase.Asking;
@@ -269,67 +269,6 @@ public class ChineseRun : MonoBehaviour
     }
 
     /// <summary>
-    /// Roll the question: one word not asked lately, three decoys from the
-    /// same deck. Identical rule to <see cref="ChineseQuest"/> — same-deck
-    /// decoys are what stop the theme alone from answering it.
-    /// </summary>
-    void DealQuestion()
-    {
-        var words = _deck.words;
-        int hold = Mathf.Min(_recent.Count, Mathf.Max(0, words.Length / 2 - 1));
-
-        int pick = Random.Range(0, words.Length);
-        for (int attempt = 0; attempt < 40; attempt++)
-        {
-            int candidate = Random.Range(0, words.Length);
-            if (!RecentlyAsked(words[candidate].hanzi, hold))
-            {
-                pick = candidate;
-                break;
-            }
-        }
-        _word = words[pick];
-        _recent.Add(_word.hanzi);
-        if (_recent.Count > words.Length)
-            _recent.RemoveAt(0);
-
-        var chosen = new List<ChineseLexicon.Word> { _word };
-        for (int attempt = 0; attempt < 200 && chosen.Count < Options; attempt++)
-        {
-            var candidate = words[Random.Range(0, words.Length)];
-            bool clash = false;
-            foreach (var taken in chosen)
-                if (taken.english == candidate.english || taken.hanzi == candidate.hanzi)
-                    clash = true;
-            if (!clash)
-                chosen.Add(candidate);
-        }
-        for (int i = 0; chosen.Count < Options && i < words.Length; i++)
-            if (!chosen.Contains(words[i]))
-                chosen.Add(words[i]);
-
-        for (int i = 0; i < Options; i++)
-            _options[i] = chosen[i % chosen.Count];
-        for (int i = Options - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (_options[i], _options[j]) = (_options[j], _options[i]);
-        }
-        _correct = 0;
-        for (int i = 0; i < Options; i++)
-            if (_options[i].hanzi == _word.hanzi)
-                _correct = i;
-    }
-
-    bool RecentlyAsked(string hanzi, int hold)
-    {
-        for (int i = _recent.Count - hold; i < _recent.Count; i++)
-            if (i >= 0 && _recent[i] == hanzi)
-                return true;
-        return false;
-    }
-
-    /// <summary>
     /// A lane was chosen — or the road ran out, which arrives here as -1 and
     /// is scored exactly like a wrong one. Not answering is an answer.
     /// </summary>
@@ -345,21 +284,24 @@ public class ChineseRun : MonoBehaviour
 
     IEnumerator RunGate(int index)
     {
-        var answer = _gate[_correct];
-        bool correct = index == _correct;
+        var answer = _gate[_quiz.Correct];
+        bool correct = index == _quiz.Correct;
 
         if (index >= 0)
             _hud.MarkChosen(index, correct);
+        // The syllabus first: on the INFINITE deck this is what advances a
+        // word toward being retired, and running out of road counts.
+        _quiz.Report(correct);
         // The correct word, said the instant a choice is committed to — right,
         // wrong, or out of road.
-        ChineseVoice.Say(_word);
+        ChineseVoice.Say(_quiz.Word);
 
         if (correct)
         {
             _streak++;
             _score += PointsPerWord + (_streak - 1) * StreakBonus;
             _hud.SetScore(_score, _streak);
-            _hud.Correct(_word, _streak);
+            _hud.Correct(_quiz.Word, _streak);
             yield return SmashThrough(answer);
         }
         else
@@ -369,7 +311,7 @@ public class ChineseRun : MonoBehaviour
             // Lit green while it is still standing there charging its shot, so
             // the robot about to fire and the answer that was right are read as
             // the same fact.
-            _hud.Wrong(_word, _correct);
+            _hud.Wrong(_quiz.Word, _quiz.Correct);
             yield return ThrownBack(answer);
         }
 
@@ -692,6 +634,7 @@ public class ChineseRun : MonoBehaviour
     {
         StopRound();
         BankBest();
+        _quiz.Flush();
         ChineseVoice.Release();
 
         // Handed back before anything else builds on it — a stage that keeps

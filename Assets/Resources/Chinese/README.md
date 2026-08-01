@@ -5,6 +5,29 @@ script at runtime. Both files here are **built by tools, not authored** — do
 not hand-edit them; edit `Assets/Scripts/Chinese/ChineseLexicon.cs` and re-run
 the two commands below.
 
+## `frequency.txt` — the INFINITE deck
+
+The 2000 most frequent Chinese characters, most common first — the syllabus
+deck, as against the eleven hand-picked themed ones in `ChineseLexicon.cs`.
+
+```bash
+python Tools/buildfrequency.py
+```
+
+Joins two public sources. **Order** is Jun Da's Modern Chinese Character
+Frequency List (lingua.mtsu.edu), derived from a 258-million-character corpus.
+**Readings and meanings** are CC-CEDICT (CC BY-SA 4.0) — Jun Da's file carries
+glosses too, but a character with one reading and four senses is formatted
+identically to one with four readings, so they cannot be split reliably.
+
+A TextAsset rather than generated C#: 2000 entries is data, and data that large
+in source is a file nobody can read and every diff has to scroll past.
+`ChineseProgress` is what walks it — frequency order for new words, a 50
+question gap before any repeat, retirement after three right in a row.
+
+Both tools below read this file as well as the lexicon, so re-running
+`buildfrequency.py` means re-running both.
+
 ## `NotoSansSC-Quest.ttf` — the glyphs
 
 Unity's built-in `LegacyRuntime.ttf`, which every other screen in this project
@@ -17,7 +40,7 @@ This is [Noto Sans SC](https://fonts.google.com/noto/specimen/Noto+Sans+SC)
 2.04, **SIL Open Font License 1.1** (redistribution permitted; the licence text
 travels inside the font's own name table). The full family is ~18 MB of 31,000
 glyphs, so `Tools/subsetfont.py` pins the variable weight axis to Medium 500
-and cuts it to the ~190 characters this mode can actually draw — 121 KB.
+and cuts it to the ~2,000 characters these modes can actually draw — 640 KB.
 
 ```bash
 python Tools/subsetfont.py

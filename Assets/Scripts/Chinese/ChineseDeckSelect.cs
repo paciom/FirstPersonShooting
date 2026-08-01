@@ -18,11 +18,13 @@ public static class ChineseDeckSelect
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color CardColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
 
-    const int Columns = 4;
-    const float CardWidth = 340f;
-    const float CardHeight = 190f;
-    const float PitchX = 380f;
-    const float PitchY = 228f;
+    // Five across, because the deck list grew to thirteen and a four-wide
+    // grid needed a fourth row that ran into the BACK button.
+    const int Columns = 5;
+    const float CardWidth = 300f;
+    const float CardHeight = 168f;
+    const float PitchX = 316f;
+    const float PitchY = 198f;
 
     public static GameObject Build(GameModeController controller, GameMode mode)
     {
@@ -71,7 +73,7 @@ public static class ChineseDeckSelect
             float x = (column - (inRow - 1) * 0.5f) * PitchX;
             float y = top - row * PitchY;
 
-            MakeDeckCard(canvasGo.transform, deck, new Vector2(x, y),
+            MakeDeckCard(canvasGo.transform, deck, Subtitle(i, deck), new Vector2(x, y),
                 running ? () => controller.StartChineseRun(deckIndex)
                         : (UnityEngine.Events.UnityAction)(() => controller.StartChineseQuest(deckIndex)));
         }
@@ -90,31 +92,34 @@ public static class ChineseDeckSelect
         return canvasGo;
     }
 
-    static void MakeDeckCard(Transform parent, ChineseLexicon.Deck deck, Vector2 position,
-        UnityEngine.Events.UnityAction onClick)
+    static void MakeDeckCard(Transform parent, ChineseLexicon.Deck deck, string subtitle,
+        Vector2 position, UnityEngine.Events.UnityAction onClick)
     {
         var card = Panel(parent, $"Deck_{deck.title}", CardColor);
         Place(card.rectTransform, new Vector2(0.5f, 0.5f), position, new Vector2(CardWidth, CardHeight));
 
         // Three characters off the top of the deck: the card shows what it is
         // rather than describing it.
-        var sample = ChineseFont.MakeText(card.transform, "Sample", Sample(deck), 56,
+        var sample = ChineseFont.MakeText(card.transform, "Sample", Sample(deck), 50,
             new Color(1f, 1f, 1f, 0.92f), FontStyle.Bold);
-        Place(sample.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -56f),
-            new Vector2(CardWidth - 24f, 70f));
+        Place(sample.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -48f),
+            new Vector2(CardWidth - 24f, 62f));
 
         var title = ChineseFont.MakeText(card.transform, "Title", deck.title, 32, HoloCyan,
             FontStyle.Bold);
-        Place(title.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 62f),
-            new Vector2(CardWidth - 24f, 40f));
+        Place(title.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 56f),
+            new Vector2(CardWidth - 24f, 38f));
         title.resizeTextForBestFit = true;
-        title.resizeTextMinSize = 18;
-        title.resizeTextMaxSize = 34;
+        title.resizeTextMinSize = 16;
+        title.resizeTextMaxSize = 30;
 
-        var chinese = ChineseFont.MakeText(card.transform, "Chinese",
-            $"{deck.hanzi}   ·   {deck.Count} WORDS", 24, new Color(1f, 1f, 1f, 0.55f));
-        Place(chinese.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 26f),
-            new Vector2(CardWidth - 24f, 32f));
+        var chinese = ChineseFont.MakeText(card.transform, "Chinese", subtitle, 22,
+            new Color(1f, 1f, 1f, 0.55f));
+        Place(chinese.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 24f),
+            new Vector2(CardWidth - 18f, 30f));
+        chinese.resizeTextForBestFit = true;
+        chinese.resizeTextMinSize = 14;
+        chinese.resizeTextMaxSize = 22;
 
         var button = card.gameObject.AddComponent<Button>();
         button.targetGraphic = card;
@@ -123,6 +128,20 @@ public static class ChineseDeckSelect
         colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
         button.colors = colors;
         button.onClick.AddListener(onClick);
+    }
+
+    /// <summary>
+    /// The line under a deck's name. Themed decks say how many words they
+    /// hold, which is all there is to know about them. The syllabus deck says
+    /// how much of it has been RETIRED — that number only ever goes up, and it
+    /// is the only score in this game that means the player learned something.
+    /// </summary>
+    static string Subtitle(int index, ChineseLexicon.Deck deck)
+    {
+        if (!ChineseLexicon.IsInfinite(index))
+            return $"{deck.hanzi}   ·   {deck.Count} WORDS";
+        int learned = new ChineseProgress(deck.Count).Learned;
+        return $"{deck.hanzi}   ·   {learned} / {deck.Count} LEARNED";
     }
 
     /// <summary>

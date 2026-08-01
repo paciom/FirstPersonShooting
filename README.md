@@ -67,8 +67,29 @@ Nothing here re-implements combat — all five robots are `BrawlFighter`s driven
 through the same `Intent` struct a human controller fills, so the frame data,
 hit reactions and knockdowns are Brawl's own. The mode adds only choreography.
 
-Its two asset dependencies are **generated, not authored**, and both are
-re-runnable after editing `Assets/Scripts/Chinese/ChineseLexicon.cs`:
+### Decks, and the INFINITE one
+
+Both modes open on the same deck picker. Eleven themed decks (ANIMALS, NUMBERS,
+FAMILY, …) are hand-picked, plus EVERYTHING, which mixes them. A round's three
+wrong answers always come from the same deck as the right one — same-theme
+decoys are the difficulty, since four words from four themes can be answered off
+the theme alone without ever reading the character.
+
+**INFINITE** is different: the 2000 most frequent characters in written Chinese,
+walked from the top, with spaced repetition (`ChineseProgress`). New characters
+arrive in frequency order; a character may only come back once **50 questions**
+have passed, so getting it right proves something; and it is **retired after
+three correct in a row** and never asked again. The deck card shows how many of
+the 2000 have been retired, and that state survives the session.
+
+### Generated assets
+
+All three are **generated, not authored**, and re-runnable after editing
+`Assets/Scripts/Chinese/ChineseLexicon.cs`:
+
+```bash
+python Tools/buildfrequency.py
+```
 
 ```bash
 python Tools/subsetfont.py
@@ -78,9 +99,10 @@ python Tools/subsetfont.py
 powershell -ExecutionPolicy Bypass -File Tools/chinesevoice.ps1
 ```
 
-The first packs the CJK glyphs (Unity's built-in font has none, and a WebGL
-build has no OS font to fall back on); the second bakes a pronunciation clip per
-word with Windows' zh-CN voice. See
+The first builds the INFINITE deck from Jun Da's frequency list and CC-CEDICT;
+the second packs the CJK glyphs (Unity's built-in font has none, and a WebGL
+build has no OS font to fall back on); the third bakes a pronunciation clip per
+distinct reading with Windows' zh-CN voice. See
 [Assets/Resources/Chinese/README.md](Assets/Resources/Chinese/README.md).
 
 ## Current status — Phase 1 greybox + visual upgrade
