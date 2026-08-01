@@ -102,13 +102,26 @@ public static class BrawlFx
         foreach (var system in instance.GetComponentsInChildren<ParticleSystem>(true))
         {
             var renderer = system.GetComponent<ParticleSystemRenderer>();
-            // Packs ship sub-emitters whose materials were left out of the
-            // download (this one omits two). A null material draws as
-            // MAGENTA, so the honest move is to drop that layer.
-            if (IsDistortion(system.transform)
-                || renderer == null || renderer.sharedMaterial == null)
+            // A null material draws MAGENTA, so that layer has to go — but
+            // "no material" is also perfectly normal for two kinds of
+            // system a fire prefab is built from: the ROOT, which is an
+            // organiser with its renderer already off, and a lights-only
+            // emitter whose render mode is None. Both legitimately draw
+            // nothing. Only a layer that is actually set to DRAW and has
+            // nothing to draw with is broken.
+            bool broken = renderer != null && renderer.enabled
+                          && renderer.renderMode != ParticleSystemRenderMode.None
+                          && renderer.sharedMaterial == null;
+
+            if (broken || IsDistortion(system.transform, instance.transform))
             {
-                system.gameObject.SetActive(false);
+                // Switch off the LAYER, never the GameObject: on this pack
+                // the root is a system too, and deactivating it took the
+                // whole fire — every child — down with it.
+                if (renderer != null)
+                    renderer.enabled = false;
+                var emission = system.emission;
+                emission.enabled = false;
                 continue;
             }
             system.Play(true);
@@ -134,12 +147,38 @@ public static class BrawlFx
         return alive;
     }
 
-    static bool IsDistortion(Transform node)
+    /// <summary>
+    /// Is any layer still feeding the effect? A system can hold zero
+    /// particles for an innocent moment — off-screen culling pauses the
+    /// simulation — so "no particles right now" alone must never condemn a
+    /// working effect.
+    /// </summary>
+    public static bool AnyEmitting(GameObject instance)
+    {
+        if (instance == null)
+            return false;
+        foreach (var system in instance.GetComponentsInChildren<ParticleSystem>())
+            if (system.gameObject.activeInHierarchy && system.isEmitting)
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Is this layer part of a distortion group? The walk stops at the
+    /// effect's own root — past that lie the game's own objects, and a
+    /// stage or arena that happened to be named "…Distortion" would
+    /// silently switch off every effect parented under it.
+    /// </summary>
+    static bool IsDistortion(Transform node, Transform root)
     {
         for (var walk = node; walk != null; walk = walk.parent)
+        {
             if (walk.name.IndexOf("distort", System.StringComparison.OrdinalIgnoreCase) >= 0
                 || walk.name.IndexOf("refract", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
+            if (walk == root)
+                break;
+        }
         return false;
     }
 

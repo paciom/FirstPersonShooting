@@ -158,7 +158,10 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     void ProvePrefabBurns()
     {
         _prefabCheck = -1f;
-        if (BrawlFx.AliveParticles(_prefabFx) > 0)
+        // Both tests must fail. Zero particles alone is innocent (an
+        // off-screen system is paused), so a still-emitting effect is
+        // always left alone.
+        if (BrawlFx.AliveParticles(_prefabFx) > 0 || BrawlFx.AnyEmitting(_prefabFx))
             return;
         Debug.LogWarning("[BrawlFire] Resources/BrawlFx/fire renders nothing — " +
                          "falling back to the built-in flames.");
