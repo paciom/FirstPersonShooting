@@ -20,6 +20,13 @@ public class EnergyShield : MonoBehaviour
              "broadcasts may change it. Local hits become feedback-only.")]
     [HideInInspector] public bool remoteProxy;
 
+    [Tooltip("Nothing lands at all while this is set — no damage, and no hit " +
+             "feedback either, so the shots visibly do nothing. The respawn " +
+             "grace in an arcade mode: a character that has just re-materialized " +
+             "must not be killed by the shell that was already in the air when " +
+             "it went down.")]
+    [HideInInspector] public bool invulnerable;
+
     public float Current { get; private set; }
     public bool IsDown { get; private set; }
     public float Normalized => Current / maxShield;
@@ -110,7 +117,7 @@ public class EnergyShield : MonoBehaviour
 
     public void TakeHit(float damage, Vector3 hitPoint, Transform attacker = null)
     {
-        if (IsDown)
+        if (IsDown || invulnerable)
             return;
 
         LastDamageMultiplier = DamageMultiplierFor(hitPoint);

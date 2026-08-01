@@ -4,7 +4,7 @@ using UnityEngine.Rendering.Universal;
 /// <summary>The main menu's app icons, in grid order. Indexes MenuIconSet.textures.</summary>
 public enum MenuIcon
 {
-    AIvAI = 0, PlayerVsAI, Brawl, BrawlWar, BrawlShow,
+    AIvAI = 0, PlayerVsAI, Brawl, BrawlWar, BrawlShow, TankRaid,
     OnlinePvP, Commander, CommanderWar, TowerDefense, ChineseQuest, ChineseRun, ArenaBuilder,
 }
 
@@ -35,7 +35,7 @@ public class MenuIconSet
 /// </summary>
 public static class MenuIconRigs
 {
-    public const int IconCount = 12;
+    public const int IconCount = 13;
 
     // Far under everything, spaced so no rig's lights (max range ~13) or
     // camera far plane (max 15) can reach a neighbour 40 units away.
@@ -88,6 +88,7 @@ public static class MenuIconRigs
             case MenuIcon.Brawl: return BuildBrawl(rig, roster, rt);
             case MenuIcon.BrawlWar: return BuildBrawlWar(rig, roster, rt);
             case MenuIcon.BrawlShow: return BuildBrawlShow(rig, roster, rt);
+            case MenuIcon.TankRaid: return BuildTankRaid(rig, roster, rt);
             case MenuIcon.OnlinePvP: return BuildOnline(rig, roster, rt);
             case MenuIcon.Commander: return BuildCommander(rig, roster, rt);
             case MenuIcon.CommanderWar: return BuildCommanderWar(rig, roster, rt);
@@ -166,6 +167,111 @@ public static class MenuIconRigs
             new Vector3(0f, 0f, 0.1f), -30f, 1.65f);
         AddLights(rig, FightReach);
         return AddCamera(rig, rt, new Vector3(0f, 0.95f, 2.7f), 8f, 38f, 12f);
+    }
+
+    /// <summary>
+    /// The scroller, from its own camera: the hero tank at the bottom with its
+    /// turret swung off the line it is driving, two raiders coming down the
+    /// field at it, and a weapon pod glowing on the deck between them.
+    ///
+    /// The TURRET IS THE ICON. A tank pointing its gun where it is going is
+    /// every other tank in every other game; one driving up the screen with the
+    /// barrel hard over to the right is the whole reason this mode has two
+    /// sticks, and it is legible at 190 pixels.
+    /// </summary>
+    static Camera BuildTankRaid(Transform rig, RobotRoster roster, RenderTexture rt)
+    {
+        var deck = ArenaMaterials.Lit("MenuIcon_TankDeck", new Color(0.11f, 0.14f, 0.17f), 0.3f);
+        var berm = ArenaMaterials.Lit("MenuIcon_TankBerm", new Color(0.22f, 0.24f, 0.29f), 0.15f);
+        Prop(rig, PrimitiveType.Cube, new Vector3(0f, -0.05f, 0f), new Vector3(3.6f, 0.1f, 4.4f), deck);
+        foreach (float side in new[] { -1f, 1f })
+            Prop(rig, PrimitiveType.Cube, new Vector3(side * 1.55f, 0.12f, 0f),
+                new Vector3(0.5f, 0.34f, 4.4f), berm);
+
+        // Stripes down the middle: without them a flat deck under a static
+        // camera has nothing that says the field is moving.
+        var stripe = ArenaMaterials.Emissive("MenuIcon_TankStripe", new Color(0.45f, 0.6f, 0.75f), 1f);
+        for (int i = -2; i <= 2; i++)
+            Prop(rig, PrimitiveType.Cube, new Vector3(0f, 0.03f, i * 0.8f),
+                new Vector3(0.06f, 0.02f, 0.34f), stripe);
+
+        Tank(rig, Cast(roster, "titan", 1), 0, new Vector3(-0.15f, 0f, 1.15f), 0f, 62f, 0.62f);
+        Tank(rig, Cast(roster, "knight", 3), 1, new Vector3(-0.78f, 0f, -0.72f), 180f, 0f, 0.55f);
+        Tank(rig, Cast(roster, "panther", 5), 1, new Vector3(0.72f, 0f, -1.15f), 165f, 0f, 0.55f);
+
+        // The hero's shell, already away and crossing to the left-hand raider.
+        Bolt(rig, new Vector3(0.14f, 0.34f, 1.24f), new Vector3(-0.62f, 0.3f, -0.5f), Cyan, 0.04f);
+        Bolt(rig, new Vector3(0.66f, 0.28f, -1f), new Vector3(0.1f, 0.3f, 0.4f), Magenta, 0.04f);
+
+        // A pod on the deck — the other half of the loop, in one amber cube.
+        Prop(rig, PrimitiveType.Cube, new Vector3(0.85f, 0.24f, 0.35f), Vector3.one * 0.2f,
+            ArenaMaterials.Emissive("MenuIcon_TankPod", new Color(1f, 0.75f, 0.2f), 1.8f),
+            new Vector3(35f, 20f, 35f));
+
+        AddLights(rig, TableReach);
+        return AddCamera(rig, rt, new Vector3(0f, 2.5f, 2.9f), 44f, 36f, 15f);
+    }
+
+    /// <summary>
+    /// A roster robot's TANK form — the last of its transformation stages, which
+    /// is the mesh Tools/tankturret.py cut a turret out of.
+    ///
+    /// <paramref name="turretYaw"/> turns that turret rather than the hull,
+    /// which is the whole point of the icon; it is found by the same name
+    /// <see cref="TankTurret"/> looks for at runtime, and doing nothing when the
+    /// mesh has no turret ring is the correct answer for a picture.
+    /// </summary>
+    static void Tank(Transform parent, RobotRoster.Entry entry, int teamId, Vector3 groundPos,
+        float hullYaw, float turretYaw, float length)
+    {
+        var holder = new GameObject($"Tank_{teamId}").transform;
+        holder.SetParent(parent, false);
+        holder.localPosition = groundPos;
+        holder.localRotation = Quaternion.Euler(0f, hullYaw, 0f);
+
+        GameObject prefab = entry.HasStages
+            ? entry.transformStages[entry.transformStages.Length - 1]
+            : entry.vehiclePrefab;
+        if (prefab == null)
+        {
+            Prop(holder, PrimitiveType.Cube, new Vector3(0f, length * 0.22f, 0f),
+                new Vector3(length * 0.6f, length * 0.44f, length),
+                ArenaMaterials.Lit("MenuIcon_TankBlock", new Color(0.3f, 0.36f, 0.45f), 0.3f));
+            return;
+        }
+
+        var instance = Object.Instantiate(prefab, holder);
+        instance.name = "Hull";
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return;
+
+        // Turned by its own barrel, exactly as the mode turns it — see
+        // TankPawn.NoseYaw. Before measuring: a turn after the fit moves the
+        // mesh off the centring solved for it.
+        instance.transform.localRotation =
+            Quaternion.Euler(0f, TankPawn.NoseYaw(holder, instance.transform, 180f), 0f);
+
+        var bounds = RobotFactory.MeasureWorldBounds(renderers);
+        float longest = Mathf.Max(bounds.size.x, bounds.size.z, 0.01f);
+        // Multiply, never replace: glTF roots carry unit-conversion scale.
+        instance.transform.localScale *= length / longest;
+
+        bounds = RobotFactory.MeasureWorldBounds(instance.GetComponentsInChildren<Renderer>());
+        instance.transform.localPosition -= holder.InverseTransformPoint(
+            new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+
+        TeamPaint.Apply(instance.GetComponentsInChildren<Renderer>(),
+            MatchAnnouncer.TeamColor(teamId), 0, false, entry.paintAnchorHue);
+
+        if (Mathf.Approximately(turretYaw, 0f))
+            return;
+        foreach (var node in instance.GetComponentsInChildren<Transform>())
+            if (node.name.StartsWith(TankTurret.PivotName))
+            {
+                node.Rotate(Vector3.up, turretYaw, Space.World);
+                break;
+            }
     }
 
     /// <summary>Two robots squared up under a little ringed planet: a match across the world.</summary>

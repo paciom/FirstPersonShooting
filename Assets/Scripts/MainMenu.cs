@@ -86,19 +86,23 @@ public static class MainMenu
         Texture Icon(MenuIcon icon) => icons.textures[(int)icon];
 
         // Row one: the shooter, the whole Brawl family (all route through robot
-        // select) and the online match — everything that is two robots fighting.
-        // Row two: the strategy modes, the learning mode, the builder.
-        MakeAppIcon(canvasGo.transform, "AI  v  AI", Icon(MenuIcon.AIvAI), 0, 6, 0,
+        // select), the tank scroller and the online match — everything that is
+        // robots fighting. Seven across is the widest this canvas takes:
+        // 7 x 250 puts the outer tiles' edges at ±845, inside the 960 half-width.
+        // Row two: the strategy modes, the learning modes, the builder.
+        MakeAppIcon(canvasGo.transform, "AI  v  AI", Icon(MenuIcon.AIvAI), 0, 7, 0,
             () => controller.OpenRobotSelect(GameMode.AIvAI));
-        MakeAppIcon(canvasGo.transform, "PLAYER  v  AI", Icon(MenuIcon.PlayerVsAI), 1, 6, 0,
+        MakeAppIcon(canvasGo.transform, "PLAYER  v  AI", Icon(MenuIcon.PlayerVsAI), 1, 7, 0,
             () => controller.OpenRobotSelect(GameMode.PlayerVsAI));
-        MakeAppIcon(canvasGo.transform, "BRAWL", Icon(MenuIcon.Brawl), 2, 6, 0,
+        MakeAppIcon(canvasGo.transform, "BRAWL", Icon(MenuIcon.Brawl), 2, 7, 0,
             () => controller.OpenRobotSelect(GameMode.Brawl));
-        MakeAppIcon(canvasGo.transform, "BRAWL:  AI  v  AI", Icon(MenuIcon.BrawlWar), 3, 6, 0,
+        MakeAppIcon(canvasGo.transform, "BRAWL:  AI  v  AI", Icon(MenuIcon.BrawlWar), 3, 7, 0,
             () => controller.OpenRobotSelect(GameMode.BrawlWar));
-        MakeAppIcon(canvasGo.transform, "MARTIAL  ARTS  SHOW", Icon(MenuIcon.BrawlShow), 4, 6, 0,
+        MakeAppIcon(canvasGo.transform, "MARTIAL  ARTS  SHOW", Icon(MenuIcon.BrawlShow), 4, 7, 0,
             () => controller.OpenRobotSelect(GameMode.BrawlShow));
-        MakeAppIcon(canvasGo.transform, "ONLINE  PVP", Icon(MenuIcon.OnlinePvP), 5, 6, 0,
+        MakeAppIcon(canvasGo.transform, "TANK  RAID", Icon(MenuIcon.TankRaid), 5, 7, 0,
+            () => controller.OpenRobotSelect(GameMode.TankRaid));
+        MakeAppIcon(canvasGo.transform, "ONLINE  PVP", Icon(MenuIcon.OnlinePvP), 6, 7, 0,
             () => OnlineMenu.Open(controller, canvasGo));
         MakeAppIcon(canvasGo.transform, "COMMANDER", Icon(MenuIcon.Commander), 0, 6, 1,
             controller.StartCommander);

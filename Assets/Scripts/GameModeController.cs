@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -57,6 +57,7 @@ public class GameModeController : MonoBehaviour
     GameObject _brawlStageSelect;
     ChineseQuest _chineseQuest;
     ChineseRun _chineseRun;
+    TankRaid _tankRaid;
     GameObject _chineseDeckSelect;
     DeRezEffect[] _deRezEffects;
 
@@ -283,6 +284,14 @@ public class GameModeController : MonoBehaviour
             _chineseRun.Teardown();
             _chineseRun = null;
         }
+        // Same contract once more — and this one also sweeps the tanks, which
+        // live at the SCENE ROOT rather than under its stage (see TankPawn), so
+        // destroying the stage would leave them driving around the arena.
+        if (_tankRaid != null)
+        {
+            _tankRaid.Teardown();
+            _tankRaid = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -323,6 +332,7 @@ public class GameModeController : MonoBehaviour
             else if (mode == GameMode.Brawl) StartBrawl();
             else if (mode == GameMode.BrawlWar) StartBrawlWar();
             else if (mode == GameMode.BrawlShow) StartBrawlShow();
+            else if (mode == GameMode.TankRaid) StartTankRaid();
             else StartPlayerVsAI();
             return;
         }
@@ -362,6 +372,15 @@ public class GameModeController : MonoBehaviour
         if (_pendingMode == GameMode.BrawlShow)
         {
             StartBrawlShow();
+            return;
+        }
+        // Tank Raid takes the cyan pick as the hero's chassis and builds its own
+        // tanks from the roster, so it skips the FPS-cast reskin the same way
+        // the Brawl family does — and its battlefield is its own set, so there
+        // is no arena step in front of it either.
+        if (_pendingMode == GameMode.TankRaid)
+        {
+            StartTankRaid();
             return;
         }
         ApplyRobotSelection();
@@ -826,6 +845,33 @@ public class GameModeController : MonoBehaviour
         else
             ShowOverlay("BRAWL: AI v AI — F3 for Hitboxes — ESC for Menu",
                         "BRAWL: AI v AI — tap MENU to go back");
+        LockCursor(false);
+    }
+
+    // ---------- Tank Raid ----------
+
+    /// <summary>
+    /// TANK RAID: the vertical scroller. The player's chosen robot drives up a
+    /// battlefield with no end in its tank form, hull on one stick and turret on
+    /// the other, while raiders come down it. Its own set, like every mode that
+    /// builds its world rather than borrowing an arena — so no arena select
+    /// comes in front of it.
+    /// </summary>
+    public void StartTankRaid()
+    {
+        Mode = GameMode.TankRaid;
+        CloseRobotSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _tankRaid = TankRaid.Begin(this, _roster, _cyanRobot);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
+                    "grab the pods   ·   ESC — Menu",
+                    "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
         LockCursor(false);
     }
 
