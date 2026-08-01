@@ -80,8 +80,12 @@ public static class BrawlFx
     /// smear of garbage. Turn that setting on in PhotonArena_URP and delete
     /// this strip if the shimmer is wanted.
     ///
-    /// LOOPING is forced. A hazard burns for 30 seconds; pack prefabs are
-    /// often authored as one-shots that would quietly stop after a second.
+    /// LOOPING IS LEFT ALONE. Forcing every sub-system to loop was a bug:
+    /// a pack's ground quad is often ONE long-lived particle, and looping
+    /// it re-emits the quad endlessly until the stack of them reads as a
+    /// flat opaque disc. A fire prefab already loops the parts meant to
+    /// loop; <see cref="AliveParticles"/> is how the caller checks the
+    /// effect is really running.
     /// </summary>
     public static GameObject TryPrefab(string name, Transform parent, Vector3 localPosition,
         float scale = 1f)
@@ -107,11 +111,27 @@ public static class BrawlFx
                 system.gameObject.SetActive(false);
                 continue;
             }
-            var main = system.main;
-            main.loop = true;
             system.Play(true);
         }
         return instance;
+    }
+
+    /// <summary>
+    /// Live particles across an override, the honest test of "is this
+    /// effect actually showing anything". A prefab can load, instantiate
+    /// and still render nothing — wrong pipeline, stripped shader, an
+    /// emitter that finished — and silence is the one outcome the game
+    /// must never accept from a hazard the player has to see.
+    /// </summary>
+    public static int AliveParticles(GameObject instance)
+    {
+        if (instance == null)
+            return 0;
+        int alive = 0;
+        foreach (var system in instance.GetComponentsInChildren<ParticleSystem>())
+            if (system.gameObject.activeInHierarchy)
+                alive += system.particleCount;
+        return alive;
     }
 
     static bool IsDistortion(Transform node)

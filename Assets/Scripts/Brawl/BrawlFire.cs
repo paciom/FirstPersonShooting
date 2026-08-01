@@ -31,6 +31,7 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     ParticleSystem[] _systems;
     float[] _baseRates;
     GameObject _prefabFx;
+    float _prefabCheck = -1f;
     Light _glow;
     float _flicker;
 
@@ -96,27 +97,38 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
 
     void BuildPatch()
     {
-        var scorch = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        scorch.name = "Scorch";
-        Destroy(scorch.GetComponent<Collider>());
-        scorch.transform.SetParent(transform, false);
-        scorch.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-        scorch.transform.localScale = new Vector3(PatchRadius * 1.7f, 0.02f, PatchRadius * 1.7f);
-        scorch.GetComponent<MeshRenderer>().sharedMaterial =
-            ArenaMaterials.Lit("brawl-fire-scorch", new Color(0.05f, 0.04f, 0.035f), 0.15f);
-
         _prefabFx = BrawlFx.TryPrefab("fire", transform, Vector3.zero, PatchScale);
         if (_prefabFx == null)
+            BuildOwnFire();
+        else
+            _prefabCheck = 0.8f;   // …and prove it is really burning
+
+        // The scorch only exists for the HAND-BUILT fire, which has no
+        // ground element of its own. A bought floor fire brings its own
+        // burning-ground quad, and a lit disc laid over the top of it
+        // hides that quad and catches the fire's own orange light — which
+        // is all a brown plate on the floor really was.
+        if (_prefabFx == null)
         {
-            _systems = BrawlFx.BuildFire(transform, PatchRadius);
-            _baseRates = new float[_systems.Length];
-            for (int i = 0; i < _systems.Length; i++)
-                _baseRates[i] = _systems[i].emission.rateOverTime.constant;
+            var scorch = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            scorch.name = "Scorch";
+            Destroy(scorch.GetComponent<Collider>());
+            scorch.transform.SetParent(transform, false);
+            scorch.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+            scorch.transform.localScale = new Vector3(PatchRadius * 1.7f, 0.02f, PatchRadius * 1.7f);
+            scorch.GetComponent<MeshRenderer>().sharedMaterial =
+                ArenaMaterials.Lit("brawl-fire-scorch", new Color(0.05f, 0.04f, 0.035f), 0.15f);
         }
 
         // A bought effect brings its own lighting; two flicker lights on one
         // fire just washes the patch out.
-        if (BrawlFx.HasOwnLight(_prefabFx))
+        if (!BrawlFx.HasOwnLight(_prefabFx))
+            EnsureGlow();
+    }
+
+    void EnsureGlow()
+    {
+        if (_glow != null)
             return;
         _glow = new GameObject("FireGlow").AddComponent<Light>();
         _glow.transform.SetParent(transform, false);
@@ -125,6 +137,35 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         _glow.color = new Color(1f, 0.55f, 0.2f);
         _glow.intensity = 2.4f;
         _glow.range = 9f;
+    }
+
+    void BuildOwnFire()
+    {
+        _systems = BrawlFx.BuildFire(transform, PatchRadius);
+        _baseRates = new float[_systems.Length];
+        for (int i = 0; i < _systems.Length; i++)
+            _baseRates[i] = _systems[i].emission.rateOverTime.constant;
+    }
+
+    /// <summary>
+    /// The override gets one second to show a single particle. If it does
+    /// not, it is silently broken — wrong pipeline, stripped shader, an
+    /// emitter that already finished — and an INVISIBLE hazard that still
+    /// burns robots is the worst outcome available, so the hand-built fire
+    /// takes over. The warning names the folder, since fixing it means
+    /// swapping the prefab.
+    /// </summary>
+    void ProvePrefabBurns()
+    {
+        _prefabCheck = -1f;
+        if (BrawlFx.AliveParticles(_prefabFx) > 0)
+            return;
+        Debug.LogWarning("[BrawlFire] Resources/BrawlFx/fire renders nothing — " +
+                         "falling back to the built-in flames.");
+        Destroy(_prefabFx);          // takes the prefab's own light with it
+        _prefabFx = null;
+        BuildOwnFire();
+        EnsureGlow();
     }
 
     void Update()
@@ -149,6 +190,13 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         {
             Despawn();
             return;
+        }
+
+        if (_prefabCheck > 0f)
+        {
+            _prefabCheck -= dt;
+            if (_prefabCheck <= 0f)
+                ProvePrefabBurns();
         }
 
         // The last stretch dies down honestly — emission and glow fade so

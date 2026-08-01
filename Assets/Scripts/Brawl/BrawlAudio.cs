@@ -290,13 +290,24 @@ public static class BrawlAudio
         foreach (var part in parts)
             count = Mathf.Max(count, part.samples);
         var mixed = new float[count];
-        var buffer = new float[count];
         foreach (var part in parts)
         {
-            System.Array.Clear(buffer, 0, buffer.Length);
+            // The buffer must match THIS part exactly: GetData rejects an
+            // array longer than the clip ("Data longer than the AudioClip"),
+            // which a buffer sized for the longest part always was. Length
+            // counts interleaved channels, so an imported stereo override
+            // needs the full width and a mixdown.
+            int channels = Mathf.Max(1, part.channels);
+            var buffer = new float[part.samples * channels];
             part.GetData(buffer, 0);
-            for (int i = 0; i < part.samples; i++)
-                mixed[i] += buffer[i];
+            int frames = Mathf.Min(part.samples, count);
+            for (int i = 0; i < frames; i++)
+            {
+                float sum = 0f;
+                for (int c = 0; c < channels; c++)
+                    sum += buffer[i * channels + c];
+                mixed[i] += sum / channels;
+            }
         }
         for (int i = 0; i < count; i++)
             mixed[i] = (float)System.Math.Tanh(mixed[i]);
