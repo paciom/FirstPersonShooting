@@ -73,6 +73,7 @@ public class CommanderUnit : MonoBehaviour
     [SerializeField] bool _vehicleForm;
     [SerializeField] float _robotSpeed;
     Coroutine _morphRoutine;
+    TankTurret _turret;
 
     /// <summary>Seconds each stop-motion stage holds; below ~0.15 a still never registers.</summary>
     const float StageSeconds = 0.11f;
@@ -501,6 +502,34 @@ public class CommanderUnit : MonoBehaviour
 
         if (_order == OrderKind.Attack)
             TickAttack();
+
+        TickTurret();
+    }
+
+    /// <summary>
+    /// A tank on the move keeps its gun on whatever it is going to fight, even
+    /// though it will stand up to fight it — the barrel swinging round to
+    /// follow an enemy is what tells a player, from across the map, that this
+    /// column has seen their army.
+    ///
+    /// The component is added on first use rather than at build time: units are
+    /// assembled by CommanderArmy at runtime and there is no prefab to put it on.
+    /// </summary>
+    void TickTurret()
+    {
+        if (!_vehicleForm)
+        {
+            if (_turret != null)
+                _turret.enabled = false;
+            return;
+        }
+
+        if (_turret == null)
+            _turret = gameObject.AddComponent<TankTurret>();
+        _turret.enabled = true;
+
+        if (_target != null && _target.IsAlive)
+            _turret.AimAt(_target.transform.position + Vector3.up * 1.1f);
     }
 
     /// <summary>The slow tick: registry self-heal, arrivals, target acquisition.</summary>

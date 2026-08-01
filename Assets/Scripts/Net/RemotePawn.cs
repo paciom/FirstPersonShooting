@@ -108,6 +108,11 @@ public class RemotePawn : MonoBehaviour
             return;
         if (_shield != null && _shield.IsDown)
             return;
+        // Point the mirror's turret where its owner is shooting. Only fire
+        // intent crosses the wire, so this is the one moment the mirror learns
+        // where the other player's gun is aimed.
+        if (_vehicle != null && _vehicle.IsVehicle)
+            _vehicle.Turret.AimAlong(direction);
         weapons[slot].TryFire(direction.normalized);
     }
 

@@ -333,18 +333,35 @@ public class AIBrain : MonoBehaviour
 
         if (hasLineOfSight)
         {
-            // Face the target while engaging.
-            Vector3 flat = _target.transform.position - transform.position;
-            flat.y = 0f;
-            if (flat.sqrMagnitude > 0.01f)
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation, Quaternion.LookRotation(flat), 8f * Time.deltaTime);
+            // A tank turns its TURRET, not its hull: the chassis keeps facing
+            // the way it drives (the agent owns that) and the gun does the
+            // tracking, which is the whole reason to be a tank holding a
+            // standoff. A robot turns its whole body to face the target, as it
+            // always has — and so does a tank whose model has no rigged turret.
+            TankTurret turret = _vehicle != null && _vehicle.IsVehicle && _vehicle.Turret.HasTurret
+                ? _vehicle.Turret : null;
+
+            if (turret != null)
+            {
+                turret.AimAt(targetCenter);
+            }
+            else
+            {
+                Vector3 flat = _target.transform.position - transform.position;
+                flat.y = 0f;
+                if (flat.sqrMagnitude > 0.01f)
+                    transform.rotation = Quaternion.Slerp(
+                        transform.rotation, Quaternion.LookRotation(flat), 8f * Time.deltaTime);
+            }
 
             if (_sawTargetAt < 0f)
                 _sawTargetAt = Time.time;   // reaction timer starts on first sight
 
-            // Fire a little past preferred range so approaches still shoot.
-            if (engaged && Time.time - _sawTargetAt >= reactionDelay && _active != null)
+            // Fire a little past preferred range so approaches still shoot —
+            // but never before the barrel has caught up, or the tank shoots
+            // sideways out of a turret that is visibly still swinging.
+            if (engaged && Time.time - _sawTargetAt >= reactionDelay && _active != null
+                && (turret == null || turret.OnTarget))
             {
                 Vector3 aim = (targetCenter - _active.muzzle.position).normalized;
                 aim = Quaternion.Euler(

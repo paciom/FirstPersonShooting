@@ -168,6 +168,13 @@ public class PlayerBrain : MonoBehaviour
 
         Transform aim = _motor.head != null ? _motor.head : transform;
 
+        // Driving: the turret follows the view. The hull yaws with the mouse
+        // too, so the barrel mostly sits dead ahead — but it is what keeps the
+        // gun pointing where the shots go while the hull is still catching up
+        // after a flick, and it is the same call the bots make.
+        if (_vehicle != null && _vehicle.IsVehicle)
+            _vehicle.Turret.AimAlong(aim.forward);
+
         if (armed)
         {
             bool firing = touch != null ? touch.Fire : Input.GetMouseButton(0);
