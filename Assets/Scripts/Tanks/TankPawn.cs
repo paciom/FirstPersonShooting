@@ -212,14 +212,20 @@ public class TankPawn : MonoBehaviour
         }
 
         // Only the hero can ever pick up a pod, so only the hero carries a rack
-        // to grant one out of.
-        pawn._guns = TankArsenal.Attach(go, pawn.Muzzle, go.transform, kind, teamId == 0);
+        // to grant one out of. Bolts take the team's colour so the player can
+        // tell their own fire from the army's.
+        bool hero = teamId == 0;
+        pawn._guns = TankArsenal.Attach(go, pawn.Muzzle, go.transform, kind, hero, tint);
         pawn.Loadout = go.AddComponent<WeaponLoadout>();
         pawn.Loadout.all = pawn._guns;
         pawn.Loadout.basicIndices = new[] { 0 };
         pawn.Loadout.grantDuration = TankArsenal.PodSeconds;
 
         go.SetActive(true);
+        // Only now: the pod guns write their own damage in Awake, which has just
+        // this moment run. See TankArsenal.AmplifyPods.
+        if (hero)
+            TankArsenal.AmplifyPods(pawn._guns);
         pawn.Shield.OnDeRezzed += pawn.HandleWrecked;
         return pawn;
     }

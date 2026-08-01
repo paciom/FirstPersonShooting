@@ -38,15 +38,24 @@ public class TankRaid : MonoBehaviour
 {
     // ------------------------------------------------------------------- tuning
 
-    const float HeroShield = 220f;
-    const float HeroRegenDelay = 5f;
-    const float HeroRegenPerSecond = 6f;
+    // ONE TANK AGAINST AN ARMY. The hero is not a raider with a bigger number
+    // on it: it out-shields the heaviest raider six to one and out-guns it by
+    // more than ten, so a raider that catches the hero alone loses, and it takes
+    // a crossfire of them to be a threat at all. See TankArsenal for the guns —
+    // the cannon one-shots a walker and two-shots a raider tank.
+    //
+    // Regen matters as much as the pool: it is slow enough that a bad stretch
+    // still costs a continue, and quick enough that a player who breaks contact
+    // and clears a flank is rewarded for it.
+    const float HeroShield = 600f;
+    const float HeroRegenDelay = 3.5f;
+    const float HeroRegenPerSecond = 22f;
     const float HeroSpeed = 12f;
     const float HeroTurn = 190f;
 
-    const float RaiderTankShield = 95f;
+    const float RaiderTankShield = 110f;
     const float RaiderTankSpeed = 7f;
-    const float RaiderWalkerShield = 55f;
+    const float RaiderWalkerShield = 50f;
     const float RaiderWalkerSpeed = 9.5f;
 
     /// <summary>Continues. Three is the arcade number and it is the right one.</summary>
@@ -67,15 +76,20 @@ public class TankRaid : MonoBehaviour
     /// </summary>
     const float SpawnLead = TankRaidCamera.VisibleAhead + 14f;
 
-    /// <summary>How many raiders may be on the field at once, at the start and at
-    /// full difficulty.</summary>
-    const int StartingPressure = 4;
-    const int MaxPressure = 11;
+    /// <summary>
+    /// How many raiders may be on the field at once, at the start and at full
+    /// difficulty. Raised alongside the hero: a cannon that two-shots a raider
+    /// tank clears the old cap faster than it refilled, and an army that is
+    /// mostly not there is not an army. Numbers, not toughness, is the honest
+    /// way to pressure a hero that is meant to be stronger than any one of them.
+    /// </summary>
+    const int StartingPressure = 5;
+    const int MaxPressure = 14;
 
     /// <summary>Metres of progress it takes to add one to the pressure.</summary>
     const float MetresPerStep = 260f;
 
-    const float SpawnInterval = 1.35f;
+    const float SpawnInterval = 0.9f;
 
     /// <summary>Odds a wreck leaves anything at all.</summary>
     const float DropChance = 0.45f;
@@ -214,7 +228,14 @@ public class TankRaid : MonoBehaviour
     }
 
     /// <summary>
-    /// Both thumbs, or the keyboard equivalent.
+    /// Both thumbs, or the keyboard and mouse, or a mixture.
+    ///
+    /// THE STICKS ADD, THEY DO NOT REPLACE. '=' puts the on-screen controls up on
+    /// any machine (that is TouchControls' own testing toggle, and this mode
+    /// follows it), and a player who does that on a desktop has not stopped
+    /// having a keyboard — a stick at rest must not read as "hold still" and
+    /// take WASD away. Whichever input is actually being pushed wins; the stick
+    /// gets first refusal because a thumb on it is unambiguous.
     ///
     /// The drive stick is a WORLD heading rather than a hull-relative one: the
     /// camera never rotates in this mode, so screen-up is always up the field,
@@ -226,19 +247,19 @@ public class TankRaid : MonoBehaviour
         if (_continuing || _hero.IsDown)
             return;
 
-        Vector2 drive = TankSticks.Showing
-            ? TankSticks.Drive
-            : new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        Vector2 drive = TankSticks.Drive;
+        if (drive.sqrMagnitude < 1e-4f)
+            drive = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
         _hero.Drive = drive;
 
-        // The gun: the right stick where there is one, the mouse otherwise. The
-        // mouse aims at a POINT on the ground rather than along a direction,
+        // The gun: the right stick while a thumb is on it, the mouse otherwise.
+        // The mouse aims at a POINT on the ground rather than along a direction,
         // which is what lets the player put the crosshair on a raider instead of
         // pushing the turret at it.
-        if (TankSticks.Showing && TankSticks.Aim.sqrMagnitude > 1e-4f)
+        Vector2 aimStick = TankSticks.Aim;
+        if (aimStick.sqrMagnitude > 1e-4f)
         {
-            var stick = TankSticks.Aim;
-            _hero.AimAlong(new Vector3(stick.x, 0f, stick.y));
+            _hero.AimAlong(new Vector3(aimStick.x, 0f, aimStick.y));
         }
         else if (!TankSticks.Showing &&
                  TankRaidCamera.GroundUnder(_camera, Input.mousePosition, out var ground))

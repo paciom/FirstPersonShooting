@@ -870,7 +870,7 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
-                    "grab the pods   ·   ESC — Menu",
+                    "grab the pods   ·   = — Thumb sticks   ·   ESC — Menu",
                     "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
         LockCursor(false);
     }

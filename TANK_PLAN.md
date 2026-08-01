@@ -29,11 +29,22 @@ Hull + TurretPivot + TurretMuzzle). Nothing about either had to change.
 
 ## The cast
 
-| | chassis | shield | what it does |
-|---|---|---|---|
-| Hero | the player's picked robot's tank | 220 | drives, turret tracks the stick |
-| Raider tank | roster tanks, magenta | 95 | closes to 18 m, strafes, turret tracks |
-| Raider robot | roster walkers, magenta | 55 | faster, lighter, faces you and shoots |
+One tank against an army, and the arithmetic says so. The hero out-shields the
+heaviest raider six to one and out-guns it by more than ten: its cannon
+one-shots a walker and two-shots a raider tank, while a raider that catches the
+hero alone simply loses. Only a crossfire is a threat. Difficulty is therefore
+NUMBERS — the pressure cap climbs with distance — and never a raider that is
+individually a match for the player.
+
+| | chassis | shield | gun | what it does |
+|---|---|---|---|---|
+| Hero | the player's picked robot's tank | 600 (+22/s) | 60 × 3.4/s | drives, turret tracks the stick |
+| Raider tank | roster tanks, magenta | 110 | 13 × 1.5/s | closes to 19 m, strafes, turret tracks |
+| Raider robot | roster walkers, magenta | 50 | 7 × 2.2/s | faster, lighter, faces you and shoots |
+
+Bolts are coloured by TEAM rather than by weapon, unlike the arena's guns: with
+a dozen tanks firing down a scrolling field, "whose shot is that" has to be
+answerable at a glance.
 
 Everything is one `TankPawn` at scene root — the shootable contract in this
 project is `hit.transform.root.GetComponent<EnergyShield>()`, so a pawn parented
@@ -46,6 +57,11 @@ The pod grants one gun from a curated twelve for 20 seconds through the existing
 `WeaponLoadout` — the same component, timer and drop-on-de-rez the arena's
 airdrops use. The kit's odds rise as the hero's shield falls, so a bad run gets
 help and a good one does not.
+
+The twelve are scaled up on pickup (`TankArsenal.PodDamageScale`). They come from
+the arena, where they are balanced against hundred-shield robots and a chattering
+blaster; dropped in beside a sixty-damage cannon every one of them would be a
+downgrade, and a prize that makes you weaker is worse than no prize.
 
 ## Files
 
