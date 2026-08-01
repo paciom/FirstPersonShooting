@@ -23,6 +23,21 @@ public static class BrawlStage
     public static Vector2 BoundsHalf { get; private set; } = new Vector2(LaneHalf, 6f);
 
     /// <summary>
+    /// Move the fence BrawlFighter clamps itself to, for a mode that builds
+    /// its own ground instead of calling <see cref="Build"/>.
+    ///
+    /// Chinese Run is the reason: a road with no end still needs the sides of
+    /// it enforced, so it keeps the narrow x fence and opens z to something a
+    /// runner cannot reach. Build() overwrites this, so every mode that goes
+    /// through it is unaffected — but a mode that sets it should put it back
+    /// on teardown rather than trust the next one to.
+    /// </summary>
+    public static void SetBounds(Vector2 half) => BoundsHalf = half;
+
+    /// <summary>The fence an authored stage uses — what SetBounds should restore.</summary>
+    public static Vector2 DefaultBounds => new Vector2(LaneHalf, 6f);
+
+    /// <summary>
     /// Where the fighters START (world z). Remix stages scan candidate
     /// lines and open on the most traversable one; the fight roams free
     /// from there.

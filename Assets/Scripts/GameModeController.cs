@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -56,6 +56,7 @@ public class GameModeController : MonoBehaviour
     BrawlShow _brawlShow;
     GameObject _brawlStageSelect;
     ChineseQuest _chineseQuest;
+    ChineseRun _chineseRun;
     GameObject _chineseDeckSelect;
     DeRezEffect[] _deRezEffects;
 
@@ -274,6 +275,13 @@ public class GameModeController : MonoBehaviour
         {
             _chineseQuest.Teardown();
             _chineseQuest = null;
+        }
+        // Same again — and this one also hands back the lane fence it widened
+        // to build a road with no end.
+        if (_chineseRun != null)
+        {
+            _chineseRun.Teardown();
+            _chineseRun = null;
         }
         ResetMatchState();
         RestoreAllDeRez();
@@ -830,11 +838,16 @@ public class GameModeController : MonoBehaviour
     /// point (four identical ones holding four different words are hard to
     /// tell apart at a glance, and glancing is the whole input).
     /// </summary>
-    public void OpenChineseDeckSelect()
+    public void OpenChineseDeckSelect() => OpenChineseDeckSelect(GameMode.ChineseQuest);
+
+    /// <summary>The runner's front door — same deck picker, different launcher.</summary>
+    public void OpenChineseRunDeckSelect() => OpenChineseDeckSelect(GameMode.ChineseRun);
+
+    void OpenChineseDeckSelect(GameMode mode)
     {
         _menuCanvas.SetActive(false);
         CloseChineseDeckSelect();
-        _chineseDeckSelect = ChineseDeckSelect.Build(this);
+        _chineseDeckSelect = ChineseDeckSelect.Build(this, mode);
     }
 
     /// <summary>Escape/BACK from the deck screen goes back a step, to the main menu.</summary>
@@ -873,6 +886,31 @@ public class GameModeController : MonoBehaviour
         ShowOverlay("Read the character   ·   click a robot or its card   ·   " +
                     "1 – 4 to answer   ·   ESC — Menu",
                     "Read the character   ·   tap a robot or its card   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// CHINESE RUN: the same question asked at a sprint. A road with no end,
+    /// four robots standing across it holding the four meanings, and only as
+    /// long to answer as it takes to reach them. Its own set, like every
+    /// Chinese and Brawl mode — no arena select in front of it.
+    /// </summary>
+    public void StartChineseRun(int deckIndex)
+    {
+        Mode = GameMode.ChineseRun;
+        CloseChineseDeckSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _chineseRun = ChineseRun.Begin(this, _roster, deckIndex);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("Answer before you reach them   ·   click a robot or its card   ·   " +
+                    "1 – 4 to answer   ·   ESC — Menu",
+                    "Answer before you reach them   ·   tap a robot or its card   ·   " +
+                    "tap MENU to go back");
         LockCursor(false);
     }
 

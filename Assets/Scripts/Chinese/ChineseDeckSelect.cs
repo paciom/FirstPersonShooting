@@ -2,7 +2,7 @@
 using UnityEngine.UI;
 
 /// <summary>
-/// The screen in front of Chinese Quest: pick which words to fight over.
+/// The screen in front of both Chinese modes: pick which words to fight over.
 ///
 /// The deck matters more here than a stage picker does in Brawl, because the
 /// deck IS the difficulty. A round's three wrong answers are drawn from the
@@ -24,8 +24,9 @@ public static class ChineseDeckSelect
     const float PitchX = 380f;
     const float PitchY = 228f;
 
-    public static GameObject Build(GameModeController controller)
+    public static GameObject Build(GameModeController controller, GameMode mode)
     {
+        bool running = mode == GameMode.ChineseRun;
         var canvasGo = new GameObject("ChineseDeckSelect");
         canvasGo.transform.SetParent(controller.transform, false);
         var canvas = canvasGo.AddComponent<Canvas>();
@@ -41,12 +42,13 @@ public static class ChineseDeckSelect
         backdrop.sprite = null;
         Stretch(backdrop.rectTransform);
 
-        var title = ChineseFont.MakeText(canvasGo.transform, "Title", "CHINESE  QUEST", 72,
-            HoloCyan, FontStyle.Bold);
+        var title = ChineseFont.MakeText(canvasGo.transform, "Title",
+            running ? "CHINESE  RUN" : "CHINESE  QUEST", 72, HoloCyan, FontStyle.Bold);
         Place(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -86f), new Vector2(1200f, 90f));
 
         var subtitle = ChineseFont.MakeText(canvasGo.transform, "Subtitle",
-            "汉字大冒险   ·   PICK  YOUR  WORDS", 28, new Color(1f, 1f, 1f, 0.6f));
+            running ? "汉字快跑   ·   PICK  YOUR  WORDS" : "汉字大冒险   ·   PICK  YOUR  WORDS",
+            28, new Color(1f, 1f, 1f, 0.6f));
         Place(subtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -142f),
             new Vector2(1200f, 40f));
 
@@ -70,11 +72,14 @@ public static class ChineseDeckSelect
             float y = top - row * PitchY;
 
             MakeDeckCard(canvasGo.transform, deck, new Vector2(x, y),
-                () => controller.StartChineseQuest(deckIndex));
+                running ? () => controller.StartChineseRun(deckIndex)
+                        : (UnityEngine.Events.UnityAction)(() => controller.StartChineseQuest(deckIndex)));
         }
 
         var hint = ChineseFont.MakeText(canvasGo.transform, "Hint",
-            "TAP  A  ROBOT  OR  A  CARD  TO  ANSWER   ·   1 – 4  ON  THE  KEYBOARD",
+            running
+                ? "ANSWER  BEFORE  YOU  REACH  THEM   ·   TAP  A  ROBOT  OR  A  CARD   ·   1 – 4"
+                : "TAP  A  ROBOT  OR  A  CARD  TO  ANSWER   ·   1 – 4  ON  THE  KEYBOARD",
             22, new Color(1f, 1f, 1f, 0.42f));
         Place(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 152f), new Vector2(1500f, 34f));
 

@@ -67,6 +67,14 @@ public class ChineseQuestHud : MonoBehaviour
     GameObject _results;
     Text _resultsBody;
 
+    // Chinese Run scores in road rather than lives, so the shield row's corner
+    // is handed over to a distance readout. One HUD, two modes: the answer
+    // cards ride above their robots either way, which is why a ring of four
+    // and a line of four across a road need no different code at all.
+    Text _distanceLabel;
+    bool _distanceMeter;
+    int _shownDistance = -1;
+
     float _bannerTime;
 
     public static ChineseQuestHud Build(Transform parent, Camera camera, ChineseLexicon.Deck deck)
@@ -340,8 +348,51 @@ public class ChineseQuestHud : MonoBehaviour
         ChineseFont.Set(_streak, streak >= 2 ? $"STREAK  ×{streak}" : "");
     }
 
+    /// <summary>
+    /// Swap the shield pips for a distance readout — the runner's currency.
+    /// Called once, before the first question.
+    /// </summary>
+    public void UseDistanceMeter()
+    {
+        _distanceMeter = true;
+        foreach (var pip in _shields)
+            pip.enabled = false;
+
+        _distanceLabel = ChineseFont.MakeText(_canvas.transform, "Distance", "", 34,
+            Color.white, FontStyle.Bold, TextAnchor.UpperRight);
+        Place(_distanceLabel.rectTransform, new Vector2(1f, 1f), new Vector2(-250f, -46f),
+            new Vector2(460f, 44f));
+    }
+
+    /// <summary>
+    /// Metres down the road, and the best ever reached. Guarded on the whole
+    /// number because this is called every frame and the alternative is a
+    /// fresh string, a layout rebuild and a mesh every one of them.
+    /// </summary>
+    public void SetDistance(int metres, int best)
+    {
+        if (_distanceLabel == null || metres == _shownDistance)
+            return;
+        _shownDistance = metres;
+        ChineseFont.Set(_distanceLabel,
+            best > 0 ? $"{metres} m    ·    BEST  {best} m" : $"{metres} m");
+    }
+
+    /// <summary>
+    /// Hide the cards outright — for the beat between a gate being settled and
+    /// the next one being planted, where they would otherwise hang off robots
+    /// that have already burst into light.
+    /// </summary>
+    public void SetCardsShown(bool shown)
+    {
+        foreach (var card in _cards)
+            card.panel.gameObject.SetActive(shown);
+    }
+
     public void SetShields(int shields, int max)
     {
+        if (_distanceMeter)
+            return;
         for (int i = 0; i < _shields.Length; i++)
         {
             bool lit = i < shields;

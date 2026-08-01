@@ -100,15 +100,17 @@ public static class MainMenu
             () => controller.OpenRobotSelect(GameMode.BrawlShow));
         MakeAppIcon(canvasGo.transform, "ONLINE  PVP", Icon(MenuIcon.OnlinePvP), 5, 6, 0,
             () => OnlineMenu.Open(controller, canvasGo));
-        MakeAppIcon(canvasGo.transform, "COMMANDER", Icon(MenuIcon.Commander), 0, 5, 1,
+        MakeAppIcon(canvasGo.transform, "COMMANDER", Icon(MenuIcon.Commander), 0, 6, 1,
             controller.StartCommander);
-        MakeAppIcon(canvasGo.transform, "COMMANDER:  AI  WAR", Icon(MenuIcon.CommanderWar), 1, 5, 1,
+        MakeAppIcon(canvasGo.transform, "COMMANDER:  AI  WAR", Icon(MenuIcon.CommanderWar), 1, 6, 1,
             controller.StartCommanderWar);
-        MakeAppIcon(canvasGo.transform, "TOWER  DEFENSE", Icon(MenuIcon.TowerDefense), 2, 5, 1,
+        MakeAppIcon(canvasGo.transform, "TOWER  DEFENSE", Icon(MenuIcon.TowerDefense), 2, 6, 1,
             controller.StartTowerDefense);
-        MakeAppIcon(canvasGo.transform, "CHINESE  QUEST", Icon(MenuIcon.ChineseQuest), 3, 5, 1,
+        MakeAppIcon(canvasGo.transform, "CHINESE  QUEST", Icon(MenuIcon.ChineseQuest), 3, 6, 1,
             controller.OpenChineseDeckSelect);
-        MakeAppIcon(canvasGo.transform, "ARENA  BUILDER", Icon(MenuIcon.ArenaBuilder), 4, 5, 1,
+        MakeAppIcon(canvasGo.transform, "CHINESE  RUN", Icon(MenuIcon.ChineseRun), 4, 6, 1,
+            controller.OpenChineseRunDeckSelect);
+        MakeAppIcon(canvasGo.transform, "ARENA  BUILDER", Icon(MenuIcon.ArenaBuilder), 5, 6, 1,
             controller.StartArenaPreview);
 
         _hint = MakeText(canvasGo.transform, "Hint", DesktopHint,

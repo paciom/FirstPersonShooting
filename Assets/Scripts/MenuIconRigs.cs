@@ -5,7 +5,7 @@ using UnityEngine.Rendering.Universal;
 public enum MenuIcon
 {
     AIvAI = 0, PlayerVsAI, Brawl, BrawlWar, BrawlShow,
-    OnlinePvP, Commander, CommanderWar, TowerDefense, ChineseQuest, ArenaBuilder,
+    OnlinePvP, Commander, CommanderWar, TowerDefense, ChineseQuest, ChineseRun, ArenaBuilder,
 }
 
 /// <summary>What MenuIconRigs.Build hands back: the rig root plus everything
@@ -35,7 +35,7 @@ public class MenuIconSet
 /// </summary>
 public static class MenuIconRigs
 {
-    public const int IconCount = 11;
+    public const int IconCount = 12;
 
     // Far under everything, spaced so no rig's lights (max range ~13) or
     // camera far plane (max 15) can reach a neighbour 40 units away.
@@ -93,6 +93,7 @@ public static class MenuIconRigs
             case MenuIcon.CommanderWar: return BuildCommanderWar(rig, roster, rt);
             case MenuIcon.TowerDefense: return BuildTowerDefense(rig, roster, rt);
             case MenuIcon.ChineseQuest: return BuildChineseQuest(rig, roster, rt);
+            case MenuIcon.ChineseRun: return BuildChineseRun(rig, roster, rt);
             default: return BuildArenaBuilder(rig, rt);
         }
     }
@@ -272,6 +273,46 @@ public static class MenuIconRigs
 
         AddLights(rig, FightReach);
         return AddCamera(rig, rt, new Vector3(0f, 1.2f, 3.0f), 10f, 40f, 12f);
+    }
+
+    /// <summary>
+    /// The runner, seen from behind: a strip of road with lane dashes running
+    /// away from the camera, four robots standing across the far end, and the
+    /// character hanging over them. The hero's back to us is the point — this
+    /// is the mode you play from behind your own robot.
+    /// </summary>
+    static Camera BuildChineseRun(Transform rig, RobotRoster roster, RenderTexture rt)
+    {
+        var deck = ArenaMaterials.Lit("MenuIcon_RunDeck", new Color(0.10f, 0.13f, 0.18f), 0.35f);
+        var dash = ArenaMaterials.Emissive("MenuIcon_RunDash", new Color(0.6f, 0.85f, 1f), 1.5f);
+        var rail = ArenaMaterials.Emissive("MenuIcon_RunRail", Cyan, 1.8f);
+
+        Prop(rig, PrimitiveType.Cube, new Vector3(0f, -0.03f, 0f), new Vector3(2.4f, 0.06f, 6f), deck);
+        foreach (float side in new[] { -1f, 1f })
+            Prop(rig, PrimitiveType.Cube, new Vector3(side * 1.2f, 0.01f, 0f),
+                new Vector3(0.05f, 0.03f, 6f), rail);
+        // Dashes toward the camera, which is what makes a still image read as
+        // motion: the road has a direction even frozen.
+        for (int i = 0; i < 5; i++)
+            Prop(rig, PrimitiveType.Cube, new Vector3(0f, 0.0f, -1.6f + i * 0.85f),
+                new Vector3(0.07f, 0.03f, 0.4f), dash);
+
+        // The four answers across the road, small with distance.
+        float[] lanes = { -0.86f, -0.29f, 0.29f, 0.86f };
+        string[] cast = { "knight", "panther", "hawk", "racer" };
+        int[] fallback = { 3, 5, 6, 7 };
+        for (int i = 0; i < 4; i++)
+            FrozenRobot(rig, Cast(roster, cast[i], fallback[i]), 1, null, 0f,
+                new Vector3(lanes[i], 0f, 1.35f), 180f, 0.78f);
+
+        // The runner, mid-stride, back to the camera.
+        FrozenRobot(rig, Cast(roster, "ranger", 0), 0, "PunchJab", 0.35f,
+            new Vector3(0f, 0f, -1.25f), 0f, 1.15f);
+
+        HoloGlyph(rig, "跑", new Vector3(0f, 1.5f, 0.6f), 0.72f);
+
+        AddLights(rig, FightReach);
+        return AddCamera(rig, rt, new Vector3(0f, 1.5f, 3.1f), 16f, 40f, 12f);
     }
 
     /// <summary>

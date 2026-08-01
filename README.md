@@ -21,6 +21,24 @@ The game opens on a main menu with three modes:
 
 **Esc** returns to the menu from any mode; click to re-lock the cursor after alt-tab.
 
+## Chinese Run — the learning mode at a sprint
+
+The same question as Chinese Quest, asked under pressure. The hero sprints down
+a road with no end; every so often four robots are standing across it, one per
+lane, holding the four meanings. **The road is the clock** — answer before you
+reach them, because running out of road counts as getting it wrong.
+
+Right, and the hero blows through the robot holding the answer: a photon blast
+taken on the approach, or a gear change into a kick at a dead sprint. Wrong (or
+too slow), and the robot that *was* right fires down the road instead — the hero
+is thrown backward far enough to cost real ground, which is the only currency
+here. Distance and your best-ever distance sit in the corner where Quest keeps
+its shields.
+
+The road is a fixed ring of segments recycled from back to front, so it is
+infinite at a constant object count, and it carries no colliders at all —
+`BrawlGround` answers 0 where it finds none, which *is* the road's surface.
+
 ## Chinese Quest — the learning mode
 
 A hero robot stands centre stage with a Chinese character at the bottom of the
