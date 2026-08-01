@@ -82,7 +82,10 @@ public class BrawlShow : MonoBehaviour
 
         BrawlGround.Clear();
         BrawlProps.Clear();
-        _stageRoot = BrawlStage.Build(environment, default, roster);
+        // No hazards: the show is a demonstration, not a bout. Falling fire,
+        // mines, geysers and repair kits would all be competing with the only
+        // thing anyone is here to watch.
+        _stageRoot = BrawlStage.Build(environment, default, roster, hazards: false);
 
         _fighter = BrawlFighter.Spawn(_stageRoot.transform, roster, _robot, 0);
         // Centre stage, angled toward the house, combat loop off — the show

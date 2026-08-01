@@ -43,7 +43,14 @@ public static class BrawlStage
         return Build(environment, default, null);
     }
 
-    public static GameObject Build(Transform environment, BrawlArenaDef def, RobotRoster roster)
+    /// <summary>
+    /// Builds the stage. <paramref name="hazards"/> false leaves out the
+    /// arena's interference — repair kits, mines, geysers and falling fire —
+    /// for the Martial Arts Show, which is an animation bench rather than a
+    /// fight and wants nothing competing with the robot on screen.
+    /// </summary>
+    public static GameObject Build(Transform environment, BrawlArenaDef def, RobotRoster roster,
+        bool hazards = true)
     {
         var root = new GameObject("BrawlStage");
         if (environment != null)
@@ -56,7 +63,7 @@ public static class BrawlStage
         {
             BoundsHalf = new Vector2(14f, 14f);
             SpawnZ = PickFightLine();
-            FinishFeatures(root, def, roster);
+            FinishFeatures(root, def, roster, hazards);
             return root;
         }
         BoundsHalf = new Vector2(LaneHalf, 6f);
@@ -105,7 +112,7 @@ public static class BrawlStage
         Sun(root, "KeyLight", new Vector3(40f, 25f, 0f), 1.15f, new Color(1f, 0.97f, 0.92f), true);
         Sun(root, "FillLight", new Vector3(30f, 210f, 0f), 0.35f, new Color(0.55f, 0.75f, 1f), false);
 
-        FinishFeatures(root, def, roster);
+        FinishFeatures(root, def, roster, hazards);
         return root;
     }
 
@@ -155,7 +162,8 @@ public static class BrawlStage
     }
 
     /// <summary>Dressing and toys — shared by authored and remix stages.</summary>
-    static void FinishFeatures(GameObject root, BrawlArenaDef def, RobotRoster roster)
+    static void FinishFeatures(GameObject root, BrawlArenaDef def, RobotRoster roster,
+        bool hazards)
     {
         def.dress?.Invoke(root, roster);
         if (def.lifts)
@@ -163,12 +171,17 @@ public static class BrawlStage
             BrawlLift.Spawn(root.transform, -3.5f, 0f);
             BrawlLift.Spawn(root.transform, 3.5f, 0.5f);
         }
-        // Every stage runs the hazard scheduler now — repair kits, mines
-        // and falling fire are universal; only the cargo rain is a per-def
-        // toy.
-        var hazards = root.AddComponent<BrawlHazards>();
-        hazards.crates = def.crates;
-        hazards.stageRoot = root.transform;
+        // Scenery and lifts are the stage; everything below is the arena
+        // FIGHTING BACK, which a demonstration must not do.
+        if (!hazards)
+            return;
+
+        // Every fighting stage runs the hazard scheduler — repair kits,
+        // mines and falling fire are universal; only the cargo rain is a
+        // per-def toy.
+        var scheduler = root.AddComponent<BrawlHazards>();
+        scheduler.crates = def.crates;
+        scheduler.stageRoot = root.transform;
 
         SpawnGeysers(root.transform);
     }
