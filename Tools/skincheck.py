@@ -93,6 +93,81 @@ def profile(path):
     return dists[n // 2], dists[int(n * 0.95)], dists[-1], n
 
 
+def joint_shares(path):
+    """joint name -> fraction of vertices that joint drives most strongly.
+
+    THE signal for a misbound rig, and the one that survives a re-rig moving
+    the joints: both rigs name their joints the same, so how the mesh is
+    DIVIDED between them is comparable even when the placements are not.
+    Titan's 2026-08-01 replacement rig gave RightArm 1474 verts against the
+    original's 510 and left Spine with none at all — his head and torso were
+    being driven by his arm, so they deformed whenever it swung.
+    """
+    gltf, data, bin_start = load(path)
+    names = [gltf["nodes"][j].get("name") for j in gltf["skins"][0]["joints"]]
+    prim = next(m["primitives"][0] for m in gltf["meshes"]
+                if "JOINTS_0" in m["primitives"][0]["attributes"])
+    pa, poff = offset_of(gltf, prim["attributes"]["POSITION"], bin_start)
+    ja, joff = offset_of(gltf, prim["attributes"]["JOINTS_0"], bin_start)
+    wa, woff = offset_of(gltf, prim["attributes"]["WEIGHTS_0"], bin_start)
+    jfmt, jsize = {5121: ("<4B", 4), 5123: ("<4H", 8)}[ja["componentType"]]
+
+    counts = {}
+    total = pa["count"]
+    for i in range(total):
+        jj = struct.unpack_from(jfmt, data, joff + i * jsize)
+        ww = struct.unpack_from("<4f", data, woff + i * 16)
+        k = max(range(4), key=lambda x: ww[x])
+        counts[names[jj[k]]] = counts.get(names[jj[k]], 0) + 1
+    return {name: n / max(total, 1) for name, n in counts.items()}
+
+
+def coalesce(joint):
+    """The unit shares are compared in.
+
+    Per JOINT, with two exceptions. Rigs shuffle mass freely between direct
+    neighbours in the spine and the head/neck stack — knight's re-rig moved
+    his whole Spine share onto Spine01/Spine02, which is alarming per-joint
+    and means nothing — so those two chains are pooled. Everything else stays
+    individual, because pooling the arm hides the failure that matters:
+    titan's RightArm took 24% of the mesh against the original's 8%, and
+    grouping it with the rest of the arm cancelled that out to nothing.
+    """
+    if joint is None:
+        return "other"
+    if joint.startswith("Spine"):
+        return "spine"
+    if joint in ("neck", "Head", "head_end", "headfront"):
+        return "head"
+    # Shoulder/Arm is the third pair that shuffles harmlessly: knight's re-rig
+    # moved 3% of the mesh from arm to shoulder with the chain's total intact,
+    # and his head is the STEADIEST in the fleet (1.9% wobble). Pooling the
+    # two still catches titan, whose shoulder+arm took 27% against 11%.
+    for side in ("Left", "Right"):
+        if joint in (side + "Shoulder", side + "Arm"):
+            return side + "Shoulder+Arm"
+    return joint
+
+
+def share_faults(base_path, target_path):
+    """Joints the re-rig hands far too much (or far too little) of the mesh."""
+    def pooled(path):
+        out = {}
+        for joint, share in joint_shares(path).items():
+            out[coalesce(joint)] = out.get(coalesce(joint), 0.0) + share
+        return out
+
+    base, target = pooled(base_path), pooled(target_path)
+    faults = []
+    for name in sorted(set(base) | set(target)):
+        b, t = base.get(name, 0.0), target.get(name, 0.0)
+        if t > 0.05 and t > b * 1.8:
+            faults.append(f"{name} drives {t:.0%} of the mesh vs {b:.0%}")
+        elif b > 0.05 and t < b * 0.45:
+            faults.append(f"{name} drives {t:.0%}, was {b:.0%}")
+    return faults
+
+
 def arm_proportions(path):
     """(upper arm, forearm) as fractions of model height."""
     gltf, data, bin_start = load(path)
@@ -136,25 +211,20 @@ def audit(names):
             t50, t95, tmax, _ = profile(target)
             ratio = t95 / b95 if b95 > 1e-6 else 0.0
 
-            # The ratio only means anything while both rigs put the joints in
-            # roughly the same places. A re-rig that moved them legitimately
-            # scores high for a reason that is NOT misbinding — titan's
-            # 2026-08-01 replacement rig read 1.55x with perfectly good
-            # weights, and transplanting on that verdict made him WORSE
-            # (fragmented under load). Say "not comparable" rather than cry
-            # wolf; a gate that fires on healthy files gets ignored.
+            # How the mesh is DIVIDED between the joints is the verdict, since
+            # it stays comparable across a re-rig that moved them. The p95
+            # ratio is only advisory: a re-rig legitimately scores high on it
+            # by placing joints differently.
+            faults = share_faults(base, target)
             arm = arm_proportions(target)
             drift = max(abs(a - b) / max(b, 1e-6) for a, b in zip(arm, base_arm))
-            if drift > 0.20:
-                print(f"{'':10s} {suffix + '.glb':16s} {t50:6.3f} {t95:6.3f} {tmax:6.3f}  "
-                      f"{ratio:15.2f}x  <-- not comparable "
-                      f"(joints moved {drift:.0%}; judge by eye)")
-                continue
-
-            flag = "  <-- MISBOUND" if ratio > RATIO_LIMIT else ""
+            note = f"  (joints moved {drift:.0%}, so p95 is advisory)" if drift > 0.20 else ""
+            flag = "  <-- MISBOUND" if faults else ""
             print(f"{'':10s} {suffix + '.glb':16s} {t50:6.3f} {t95:6.3f} {tmax:6.3f}  "
-                  f"{ratio:15.2f}x{flag}")
-            if ratio > RATIO_LIMIT:
+                  f"{ratio:15.2f}x{flag}{note}")
+            for fault in faults:
+                print(f"{'':29s}{fault}")
+            if faults:
                 bad.append(f"{robot}-{suffix}")
     print()
     if bad:
