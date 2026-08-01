@@ -38,7 +38,6 @@ public class ChineseQuestHud : MonoBehaviour
 
     public System.Action<int> OnPicked;
     public System.Action OnPlayAgain;
-    public System.Action OnHear;
 
     class Card
     {
@@ -126,19 +125,13 @@ public class ChineseQuestHud : MonoBehaviour
         _prompt.resizeTextMinSize = 48;
         _prompt.resizeTextMaxSize = 148;
 
-        // Blank until the round is answered: the character is SPOKEN as soon
-        // as it appears, but seeing it written next to four cards that also
-        // carry pinyin would turn reading into matching.
+        // Blank until the round is answered — and so is the pronunciation.
+        // Both the written sound and the spoken one are held back for the same
+        // reason: every card carries pinyin, so either would let the player
+        // match instead of read.
         _promptPinyin = ChineseFont.MakeText(panel.transform, "Pinyin", "", 40, HoloCyan, FontStyle.Bold);
         Place(_promptPinyin.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 34f), new Vector2(620f, 50f));
 
-        // Say it again — beside the panel, not inside it, where the character
-        // and its pinyin have already taken every row. The mode speaks each
-        // character once on its own, and once is never enough for a word you
-        // have not met before.
-        MakeButton(root, "Hear", "听   HEAR  IT", new Vector2(0.5f, 0f),
-            new Vector2(PromptHalfWidth + 140f, 118f), new Vector2(240f, 60f), 24,
-            () => OnHear?.Invoke());
     }
 
     void BuildScoreboard(Transform root, ChineseLexicon.Deck deck)

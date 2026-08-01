@@ -104,8 +104,12 @@ public class ChineseQuest : MonoBehaviour
 
     /// <summary>How often the hero picks the ranged answer over running in.</summary>
     const float BlastChance = 0.5f;
-    /// <summary>The counter-punch leans ranged — a charge across the stage twice a round drags.</summary>
-    const float CounterBlastChance = 0.6f;
+    /// <summary>
+    /// The wrong answer's reprisal leans ranged. It is the only attack in the
+    /// round now — the hero does not swing back at a robot it picked by
+    /// mistake — so it can afford to be the fast kind more often than not.
+    /// </summary>
+    const float PunishBlastChance = 0.6f;
 
     /// <summary>
     /// Nothing in a round should take this long. If one does — a robot wedged
@@ -157,7 +161,6 @@ public class ChineseQuest : MonoBehaviour
     // Set by the fighters' own events — the choreography waits on these
     // rather than guessing how long a strike takes to connect.
     bool _heroLanded;
-    bool _heroBlocked;
     bool _heroHurt;
 
     [SerializeField] int _deckIndex;
@@ -211,7 +214,6 @@ public class ChineseQuest : MonoBehaviour
         _hud = ChineseQuestHud.Build(transform, _camera, _deck);
         _hud.OnPicked = Answer;
         _hud.OnPlayAgain = Restart;
-        _hud.OnHear = () => ChineseVoice.Say(_word);
         for (int i = 0; i < Options; i++)
             _hud.SetAnchor(i, _answers[i].transform);
 
@@ -234,7 +236,6 @@ public class ChineseQuest : MonoBehaviour
         _hero.Tempo = FightTempo;
         _hero.ResetAt(HeroPost.x, HeroPost.z);
         _hero.OnHitLanded = (victim, damage, knockdown) => _heroLanded = true;
-        _hero.OnHitBlocked = (victim, move) => _heroBlocked = true;
 
         for (int i = 0; i < Options; i++)
         {
@@ -315,10 +316,11 @@ public class ChineseQuest : MonoBehaviour
         _hud.ShowQuestion(_word, _options);
         _hud.SetCardsLive(true);
         _director.Relax();
-        // Said the moment it appears, not only once it is answered. A learner
-        // who never hears the character until after they have guessed is being
-        // tested, not taught — and the sound is half of what a character IS.
-        ChineseVoice.Say(_word);
+        // Pointedly NOT spoken here. Every card carries pinyin, so a character
+        // read aloud beside them turns the question from "what does this mean"
+        // into "which of these four sounds did I just hear" — the player never
+        // has to look at the character at all. It is said the instant an answer
+        // is committed to instead; see RunRound.
 
         _phase = Phase.Asking;
         _phaseTime = 0f;
@@ -432,7 +434,7 @@ public class ChineseQuest : MonoBehaviour
     /// The whole beat, from the click to the next question. Written as one
     /// coroutine rather than a state machine because that is what it is: a
     /// sequence with waits in it, and every wait is on something the fighters
-    /// report (a hit landed, a guard held) rather than on a guessed duration.
+    /// report — a hit landing — rather than on a guessed duration.
     /// </summary>
     IEnumerator RunRound(int index)
     {
@@ -441,25 +443,32 @@ public class ChineseQuest : MonoBehaviour
         _asked++;
 
         _hud.MarkChosen(index, correct);
-        _director.WatchFight(_hero.transform, target.transform);
+        // Every answer is followed by the word, right or wrong, said the moment
+        // the choice is made — the pronunciation is the reward for committing
+        // to a guess, so it must never arrive before one.
+        ChineseVoice.Say(_word);
 
         // The pairing: from here until the round ends these two look at each
         // other, which is also what aims every strike between them.
         _hero.Opponent = target;
         target.Opponent = _hero;
-        // A wrong answer raises its guard — the hero's strike will be eaten,
-        // which is what sells "that was not it" before any text appears.
-        target.Driven.block = !correct;
 
-        _heroLanded = _heroBlocked = false;
-        yield return new WaitForSeconds(TurnBeat);
-        yield return Attack(_hero, target, Random.value < BlastChance);
-        yield return Until(() => _heroLanded || _heroBlocked, 2.2f);
-
+        // Who swings is the whole answer. Right, and the hero goes and takes
+        // it. Wrong, and the hero does not get to swing at all — it holds its
+        // ground and the robot it picked comes for it.
         if (correct)
+        {
+            _director.WatchFight(_hero.transform, target.transform);
+            _heroLanded = false;
+            yield return new WaitForSeconds(TurnBeat);
+            yield return Attack(_hero, target, Random.value < BlastChance);
+            yield return Until(() => _heroLanded, 2.2f);
             yield return Reward(target);
+        }
         else
+        {
             yield return Punish(target);
+        }
 
         // Unpair before the reset so nobody spins to face a departing enemy.
         _hero.Opponent = null;
@@ -500,26 +509,25 @@ public class ChineseQuest : MonoBehaviour
         _hud.Correct(_word, _streak);
         _director.Celebrate(_hero.transform);
 
-        ChineseVoice.Say(_word);
-        yield return new WaitForSeconds(Mathf.Max(RevealBeat, ChineseVoice.LengthOf(_word) + 0.7f));
+        yield return new WaitForSeconds(RevealBeat);
     }
 
     /// <summary>
-    /// Wrong: the guard held, and now the robot the player picked comes back
-    /// at them. Then the real answer stands up and says itself — the miss is
-    /// the moment the word is worth teaching.
+    /// Wrong: the hero stands its ground — no swing, no charge — and the robot
+    /// the player picked comes across the stage and hits it. Then the real
+    /// answer stands up: the miss is the moment the word is worth teaching.
+    ///
+    /// The hero is still paired to its attacker, so it turns to face what is
+    /// coming. Turning is not moving; the feet stay on the mark.
     /// </summary>
     IEnumerator Punish(BrawlFighter wrong)
     {
         _streak = 0;
 
-        // Guard down, gloves up.
-        wrong.Driven.block = false;
-        yield return new WaitForSeconds(0.25f);
-
         _heroHurt = false;
         _director.WatchFight(wrong.transform, _hero.transform);
-        yield return Attack(wrong, _hero, Random.value < CounterBlastChance);
+        yield return new WaitForSeconds(TurnBeat);
+        yield return Attack(wrong, _hero, Random.value < PunishBlastChance);
         yield return Until(() => _heroHurt, 2.4f);
 
         _shields = Mathf.Max(0, _shields - 1);
@@ -537,8 +545,7 @@ public class ChineseQuest : MonoBehaviour
             new Color(0.35f, 1f, 0.55f), 20, 4f, 0.14f);
 
         _hud.Wrong(_word, _correct);
-        ChineseVoice.Say(_word);
-        yield return new WaitForSeconds(Mathf.Max(RevealBeat + 0.4f, ChineseVoice.LengthOf(_word) + 1.0f));
+        yield return new WaitForSeconds(RevealBeat + 0.4f);
     }
 
     // -------------------------------------------------------- the swing itself
@@ -659,14 +666,6 @@ public class ChineseQuest : MonoBehaviour
     /// </summary>
     void ReadPick()
     {
-        // Say it again. Space because it is the biggest key on the board and
-        // this is the one thing a player will want to repeat.
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.H))
-        {
-            ChineseVoice.Say(_word);
-            return;
-        }
-
         for (int i = 0; i < Options; i++)
         {
             if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))

@@ -25,12 +25,18 @@ The game opens on a main menu with three modes:
 
 A hero robot stands centre stage with a Chinese character at the bottom of the
 screen and four robots ringing it, one per corner, each holding up a meaning and
-its pinyin. The character is **spoken in Mandarin the moment it appears** —
-**Space**, or the HEAR IT button, says it again. Pick an answer — tap the robot,
-tap its card, or press **1**–**4** — and the hero rockets across the stage or
-blasts down the diagonal. Right: the answer goes down, the hero poses and the
-word is read aloud. Wrong: that robot blocks, charges back and lands one on you,
-then the real answer stands up and says itself. Five shields, then the run ends.
+its pinyin. Pick one — tap the robot, tap its card, or press **1**–**4**.
+
+Committing to an answer is what earns the pronunciation: the character is
+**spoken in Mandarin the instant you choose**, right or wrong. It is never
+spoken before, because every card carries pinyin — hearing the word first would
+turn "what does this character mean" into "which of these four sounds was that",
+and the character need never be looked at.
+
+**Right:** the hero rockets across the stage or blasts down the diagonal, the
+answer goes down, the hero poses. **Wrong:** the hero holds its ground and does
+not swing at all — the robot you picked comes for *it* — and then the real
+answer stands up and lights green. Five shields, then the run ends.
 
 The whole cast runs at double a bout's speed, and the charge to a target at four
 times, through `BrawlFighter.Tempo` — one knob that scales a fighter's delta time

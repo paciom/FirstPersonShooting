@@ -46,13 +46,6 @@ public static class ChineseVoice
         source.Play();
     }
 
-    /// <summary>How long the word takes to say — for pacing a beat around it.</summary>
-    public static float LengthOf(ChineseLexicon.Word word)
-    {
-        var clip = word.IsValid ? Load(word.AudioId) : null;
-        return clip != null ? clip.length : 0.9f;
-    }
-
     public static void Stop()
     {
         if (_source != null)
