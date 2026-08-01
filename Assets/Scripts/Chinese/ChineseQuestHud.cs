@@ -38,6 +38,7 @@ public class ChineseQuestHud : MonoBehaviour
 
     public System.Action<int> OnPicked;
     public System.Action OnPlayAgain;
+    public System.Action OnHear;
 
     class Card
     {
@@ -96,7 +97,7 @@ public class ChineseQuestHud : MonoBehaviour
         EnsureEventSystem();
 
         var root = canvasGo.transform;
-        BuildPrompt(root, deck);
+        BuildPrompt(root);
         BuildScoreboard(root, deck);
         BuildBanner(root);
         BuildCards(root);
@@ -104,7 +105,7 @@ public class ChineseQuestHud : MonoBehaviour
     }
 
     /// <summary>The bottom of the screen: the character being asked about.</summary>
-    void BuildPrompt(Transform root, ChineseLexicon.Deck deck)
+    void BuildPrompt(Transform root)
     {
         var panel = Panel(root, "Prompt", new Color(0.03f, 0.08f, 0.13f, 0.88f));
         var rect = panel.rectTransform;
@@ -125,10 +126,19 @@ public class ChineseQuestHud : MonoBehaviour
         _prompt.resizeTextMinSize = 48;
         _prompt.resizeTextMaxSize = 148;
 
-        // Blank until the round is answered: showing the sound of the word
-        // next to the word would answer half the question for free.
+        // Blank until the round is answered: the character is SPOKEN as soon
+        // as it appears, but seeing it written next to four cards that also
+        // carry pinyin would turn reading into matching.
         _promptPinyin = ChineseFont.MakeText(panel.transform, "Pinyin", "", 40, HoloCyan, FontStyle.Bold);
         Place(_promptPinyin.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 34f), new Vector2(620f, 50f));
+
+        // Say it again — beside the panel, not inside it, where the character
+        // and its pinyin have already taken every row. The mode speaks each
+        // character once on its own, and once is never enough for a word you
+        // have not met before.
+        MakeButton(root, "Hear", "听   HEAR  IT", new Vector2(0.5f, 0f),
+            new Vector2(PromptHalfWidth + 140f, 118f), new Vector2(240f, 60f), 24,
+            () => OnHear?.Invoke());
     }
 
     void BuildScoreboard(Transform root, ChineseLexicon.Deck deck)
@@ -241,11 +251,13 @@ public class ChineseQuestHud : MonoBehaviour
         Place(_resultsBody.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 10f),
             new Vector2(700f, 220f));
 
-        MakeButton(panel.transform, "Again", "PLAY  AGAIN", new Vector2(-170f, -180f),
+        MakeButton(panel.transform, "Again", "PLAY  AGAIN", new Vector2(0.5f, 0.5f),
+            new Vector2(-170f, -180f), new Vector2(280f, 74f), 30,
             () => OnPlayAgain?.Invoke());
         // Straight out through the mode controller, the same exit Escape takes
         // — a touch player has no Escape key.
-        MakeButton(panel.transform, "Menu", "MENU", new Vector2(170f, -180f),
+        MakeButton(panel.transform, "Menu", "MENU", new Vector2(0.5f, 0.5f),
+            new Vector2(170f, -180f), new Vector2(280f, 74f), 30,
             () => { if (GameModeController.Instance != null) GameModeController.Instance.EnterMenu(); });
 
         _results.SetActive(false);
@@ -430,15 +442,15 @@ public class ChineseQuestHud : MonoBehaviour
         return image;
     }
 
-    static void MakeButton(Transform parent, string name, string label, Vector2 position,
-        UnityEngine.Events.UnityAction onClick)
+    static void MakeButton(Transform parent, string name, string label, Vector2 anchor,
+        Vector2 position, Vector2 size, int fontSize, UnityEngine.Events.UnityAction onClick)
     {
         var panel = Panel(parent, name, new Color(0.10f, 0.26f, 0.36f, 0.98f));
-        Place(panel.rectTransform, new Vector2(0.5f, 0.5f), position, new Vector2(280f, 74f));
+        Place(panel.rectTransform, anchor, position, size);
 
-        var text = ChineseFont.MakeText(panel.transform, "Label", label, 30, Color.white,
+        var text = ChineseFont.MakeText(panel.transform, "Label", label, fontSize, Color.white,
             FontStyle.Bold);
-        Place(text.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(270f, 60f));
+        Place(text.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, size - new Vector2(14f, 14f));
 
         var button = panel.gameObject.AddComponent<Button>();
         button.targetGraphic = panel;

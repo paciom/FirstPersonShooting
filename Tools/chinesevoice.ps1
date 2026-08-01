@@ -36,6 +36,120 @@ param(
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Speech
 
+# --- clip polish -------------------------------------------------------------
+#
+# SAPI writes each word with ~0.2 s of lead-in and up to a second of trailing
+# room, at whatever level the synthesiser felt like: measured across the first
+# bake, peaks ran from 3,908 to 28,973 — a 17 dB spread. Quiet words were
+# inaudible under the victory sting, which reads as "the pronunciation is
+# broken" rather than "the pronunciation is quiet".
+#
+# So every clip is trimmed to its speech and peak-normalised before it lands.
+# Trimming also makes ChineseVoice.LengthOf honest: the reveal beat waits on
+# that number, and a second of silence inside it is a second of dead screen.
+Add-Type @"
+using System;
+using System.IO;
+
+public static class WavPolish
+{
+    // Returns "trimmed <seconds> gain <x>" for the log, or an error string.
+    public static string Run(string path, double targetPeak, double floorFraction,
+                             double padSeconds)
+    {
+        byte[] raw = File.ReadAllBytes(path);
+        int rate = 16000, channels = 1, bits = 16;
+        int dataAt = -1, dataLen = 0;
+
+        // Walk the RIFF chunks rather than assuming a 44-byte header: SAPI
+        // emits a 'fact' chunk on some voices, which shifts 'data' along.
+        int at = 12;
+        while (at + 8 <= raw.Length)
+        {
+            string id = System.Text.Encoding.ASCII.GetString(raw, at, 4);
+            int size = BitConverter.ToInt32(raw, at + 4);
+            if (id == "fmt ")
+            {
+                channels = BitConverter.ToInt16(raw, at + 10);
+                rate = BitConverter.ToInt32(raw, at + 12);
+                bits = BitConverter.ToInt16(raw, at + 22);
+            }
+            else if (id == "data")
+            {
+                dataAt = at + 8;
+                dataLen = Math.Min(size, raw.Length - dataAt);
+                break;
+            }
+            at += 8 + size + (size & 1);
+        }
+        if (dataAt < 0 || bits != 16) return "skipped (unexpected format)";
+
+        int count = dataLen / 2;
+        short[] samples = new short[count];
+        Buffer.BlockCopy(raw, dataAt, samples, 0, count * 2);
+
+        int peak = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int v = Math.Abs((int)samples[i]);
+            if (v > peak) peak = v;
+        }
+        if (peak == 0) return "skipped (silent)";
+
+        int floor = (int)(peak * floorFraction);
+        int first = 0, last = count - 1;
+        while (first < count && Math.Abs((int)samples[first]) <= floor) first++;
+        while (last > first && Math.Abs((int)samples[last]) <= floor) last--;
+
+        int pad = (int)(padSeconds * rate) * channels;
+        first = Math.Max(0, first - pad);
+        last = Math.Min(count - 1, last + pad);
+        int kept = last - first + 1;
+
+        double gain = (targetPeak * 32767.0) / peak;
+        short[] outSamples = new short[kept];
+        for (int i = 0; i < kept; i++)
+        {
+            double v = samples[first + i] * gain;
+            if (v > 32767.0) v = 32767.0;
+            if (v < -32768.0) v = -32768.0;
+            outSamples[i] = (short)v;
+        }
+
+        // A few ms of ramp at each end, so a trim that landed mid-waveform
+        // does not click.
+        int ramp = Math.Min(kept / 2, rate / 500);
+        for (int i = 0; i < ramp; i++)
+        {
+            double k = i / (double)ramp;
+            outSamples[i] = (short)(outSamples[i] * k);
+            outSamples[kept - 1 - i] = (short)(outSamples[kept - 1 - i] * k);
+        }
+
+        using (var w = new BinaryWriter(File.Create(path)))
+        {
+            int bytes = kept * 2;
+            w.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            w.Write(36 + bytes);
+            w.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
+            w.Write(16);
+            w.Write((short)1);
+            w.Write((short)channels);
+            w.Write(rate);
+            w.Write(rate * channels * 2);
+            w.Write((short)(channels * 2));
+            w.Write((short)16);
+            w.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+            w.Write(bytes);
+            byte[] outBytes = new byte[bytes];
+            Buffer.BlockCopy(outSamples, 0, outBytes, 0, bytes);
+            w.Write(outBytes);
+        }
+        return String.Format("{0:0.00}s gain x{1:0.0}", kept / (double)rate / channels, gain);
+    }
+}
+"@
+
 $root = Split-Path -Parent $PSScriptRoot
 $lexicon = Join-Path $root 'Assets/Scripts/Chinese/ChineseLexicon.cs'
 $outDir = Join-Path $root 'Assets/Resources/Chinese/Voice'
@@ -121,7 +235,11 @@ foreach ($m in $entries) {
 
     $synth.SetOutputToWaveFile($path, $format)
     $synth.Speak($hanzi)
+    # Released before the polish reopens the file for writing.
     $synth.SetOutputToNull()
+    # Peak to -1 dBFS, and trim anything under 6% of the peak with 40 ms of
+    # room left either side.
+    [WavPolish]::Run($path, 0.89, 0.06, 0.04) | Out-Null
     $made++
 }
 

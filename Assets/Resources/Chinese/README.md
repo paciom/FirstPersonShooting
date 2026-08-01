@@ -45,6 +45,15 @@ voice installed (Settings → Time & language → Language & region → Chinese
 (Simplified) → Language options → Speech; "Microsoft Huihui" is the usual one).
 The script skips itself with a clear error if none is present.
 
+Each clip is **trimmed and peak-normalised** on the way out, which is not a
+nicety. Raw SAPI output ran from 3,908 to 28,973 peak across the set — a 17 dB
+spread that left quiet words inaudible under the victory sting, reading as "the
+pronunciation is broken" rather than "the pronunciation is quiet" — and padded
+every word with ~0.2 s of lead-in and up to a second of trailing room.
+`ChineseVoice.LengthOf` feeds the reveal beat, so that silence was also dead
+screen time. After polishing: uniform −1 dBFS, 0.25–0.88 s, 2.0 MB for the set
+instead of 7.1 MB.
+
 Filenames are the word's tone-numbered pinyin — `xióng māo` → `xiong2_mao1` —
 which is `ChineseLexicon.ToneSlug` in C# and `Get-ToneSlug` in the script. Those
 two must agree; changing one without the other orphans every clip. Homophones

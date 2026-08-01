@@ -63,6 +63,39 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>Horizontal unit vector toward the opponent — the fight axis.</summary>
     public Vector3 FacingDir { get; private set; } = Vector3.right;
 
+    float _tempo = 1f;
+
+    /// <summary>
+    /// How fast this fighter's own clock runs. 1 is the bout's speed; 2 walks,
+    /// strikes, staggers and falls at double.
+    ///
+    /// It is ONE knob rather than a set of them because the whole point of
+    /// this class is that animation and frame data stay locked together — the
+    /// forge bakes clips to exactly Duration. Scaling only the animation
+    /// desyncs the hit window from the fist; scaling only the frame data
+    /// leaves the fist behind. So Tempo scales the delta time every state
+    /// integrates against AND the Animator's playback rate, which keeps the
+    /// pair honest for free and costs one multiply.
+    ///
+    /// Gravity comes along correctly: the arc is the same shape traversed
+    /// faster, not a heavier robot, because velocity integrates in the same
+    /// scaled clock.
+    ///
+    /// Chinese Quest runs its cast at 2 (and briefly higher for the charge
+    /// across the stage) because a quiz answered forty times in a run cannot
+    /// afford a bout's deliberate pacing. Brawl leaves it at 1.
+    /// </summary>
+    public float Tempo
+    {
+        get => _tempo;
+        set
+        {
+            _tempo = Mathf.Clamp(value, 0.05f, 8f);
+            if (_animator != null)
+                _animator.speed = _tempo;
+        }
+    }
+
     /// <summary>The tallest step a walking robot climbs without jumping.</summary>
     const float StepUp = 0.6f;
 
@@ -298,6 +331,8 @@ public class BrawlFighter : MonoBehaviour
         if (_animator != null)
         {
             _animator.Rebind();
+            // Re-asserted after the rebind, not assumed to survive it.
+            _animator.speed = _tempo;
             _animator.Update(0f);
         }
     }
@@ -350,7 +385,9 @@ public class BrawlFighter : MonoBehaviour
 
     void Update()
     {
-        float dt = Time.deltaTime;
+        // Every state below integrates against this, so Tempo reaches the walk,
+        // the strike windows, the stagger, the fall and the get-up in one go.
+        float dt = Time.deltaTime * _tempo;
         if (dt <= 0f)
             return;
 

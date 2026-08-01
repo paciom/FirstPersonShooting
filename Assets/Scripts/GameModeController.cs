@@ -871,8 +871,9 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         ShowOverlay("Read the character   ·   click a robot or its card   ·   " +
-                    "1 – 4 on the keyboard   ·   ESC — Menu",
-                    "Read the character   ·   tap a robot or its card   ·   tap MENU to go back");
+                    "1 – 4 to answer   ·   SPACE to hear it again   ·   ESC — Menu",
+                    "Read the character   ·   tap a robot or its card   ·   " +
+                    "HEAR IT to say it again   ·   tap MENU to go back");
         LockCursor(false);
     }
 

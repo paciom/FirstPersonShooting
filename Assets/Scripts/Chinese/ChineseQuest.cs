@@ -37,7 +37,7 @@ public class ChineseQuest : MonoBehaviour
     // pair sits wider apart than perspective suggests, because the near pair
     // is closer to the camera and spreads on its own.
 
-    static readonly Vector3 HeroPost = new Vector3(0f, 0f, 0.6f);
+    static readonly Vector3 HeroPost = new Vector3(0f, 0f, 0.4f);
 
     /// <summary>
     /// Reading order — the same 1,2,3,4 the number keys answer with, and the
@@ -49,13 +49,21 @@ public class ChineseQuest : MonoBehaviour
     /// frame, and it is the depth that drives them into the top and bottom
     /// corners. Every post stays inside BrawlStage's 16x12 deck, which is
     /// also what BrawlFighter clamps to.
+    ///
+    /// Tight, and tighter than the frame suggests. Because the camera fits
+    /// itself to the cast, spreading the posts wider does NOT push the robots
+    /// into the corners — it just walks the camera back, and everyone ends up
+    /// the same size on screen but further apart in the world, which costs
+    /// nothing but the seconds a charge takes to cross. Pulling them in keeps
+    /// the corner layout and makes the robots BIGGER, since they do not shrink
+    /// with the stage.
     /// </summary>
     static readonly Vector3[] AnswerPosts =
     {
-        new Vector3(-7.8f, 0f, 5.4f),    // 1  far left    → top-left
-        new Vector3(7.8f, 0f, 5.4f),     // 2  far right   → top-right
-        new Vector3(-6.6f, 0f, -4.2f),   // 3  near left   → bottom-left
-        new Vector3(6.6f, 0f, -4.2f),    // 4  near right  → bottom-right
+        new Vector3(-5.4f, 0f, 3.8f),    // 1  far left    → top-left
+        new Vector3(5.4f, 0f, 3.8f),     // 2  far right   → top-right
+        new Vector3(-4.6f, 0f, -2.9f),   // 3  near left   → bottom-left
+        new Vector3(4.6f, 0f, -2.9f),    // 4  near right  → bottom-right
     };
 
     public const int Options = 4;
@@ -70,9 +78,29 @@ public class ChineseQuest : MonoBehaviour
     const int StreakBonus = 5;
 
     // Beats, in seconds. Long enough to read, short enough to keep swinging.
-    const float TurnBeat = 0.35f;
+    // These are WALL clock and stay that way: they are reading time, and the
+    // one thing that must not speed up with the fighting is the moment the
+    // player is being taught something.
+    const float TurnBeat = 0.25f;
     const float RevealBeat = 1.6f;
-    const float BetweenRounds = 0.45f;
+    const float BetweenRounds = 0.35f;
+
+    /// <summary>
+    /// The cast's clock. A bout's pacing is deliberate because two players are
+    /// reading each other; a quiz answered forty times in a run is not, and at
+    /// Brawl speed the wait between clicking and knowing dominates the mode.
+    /// Doubling scales the strike and its animation together — see
+    /// <see cref="BrawlFighter.Tempo"/>.
+    /// </summary>
+    const float FightTempo = 2f;
+
+    /// <summary>
+    /// And the charge across the stage is faster still: four times a walk is
+    /// 12 m/s, which crosses to an answer in under half a second. A robot that
+    /// has to be watched jogging to its target every single question is the
+    /// mode's worst beat, so it is the one that gets rocket boots.
+    /// </summary>
+    const float ChargeTempo = 4f;
 
     /// <summary>How often the hero picks the ranged answer over running in.</summary>
     const float BlastChance = 0.5f;
@@ -183,6 +211,7 @@ public class ChineseQuest : MonoBehaviour
         _hud = ChineseQuestHud.Build(transform, _camera, _deck);
         _hud.OnPicked = Answer;
         _hud.OnPlayAgain = Restart;
+        _hud.OnHear = () => ChineseVoice.Say(_word);
         for (int i = 0; i < Options; i++)
             _hud.SetAnchor(i, _answers[i].transform);
 
@@ -202,6 +231,7 @@ public class ChineseQuest : MonoBehaviour
         int fleet = (roster != null && roster.HasRobots) ? roster.robots.Length : 1;
 
         _hero = BrawlFighter.Spawn(_stageRoot.transform, roster, 0, 0);
+        _hero.Tempo = FightTempo;
         _hero.ResetAt(HeroPost.x, HeroPost.z);
         _hero.OnHitLanded = (victim, damage, knockdown) => _heroLanded = true;
         _hero.OnHitBlocked = (victim, move) => _heroBlocked = true;
@@ -212,6 +242,7 @@ public class ChineseQuest : MonoBehaviour
             int model = fleet > 1 ? 1 + i % (fleet - 1) : 0;
             var bot = BrawlFighter.Spawn(_stageRoot.transform, roster, model, 1);
             bot.name = $"Answer_{i + 1}";
+            bot.Tempo = FightTempo;
             bot.ResetAt(AnswerPosts[i].x, AnswerPosts[i].z);
             bot.OnHitLanded = (victim, damage, knockdown) => _heroHurt = true;
             _answers[i] = bot;
@@ -284,6 +315,10 @@ public class ChineseQuest : MonoBehaviour
         _hud.ShowQuestion(_word, _options);
         _hud.SetCardsLive(true);
         _director.Relax();
+        // Said the moment it appears, not only once it is answered. A learner
+        // who never hears the character until after they have guessed is being
+        // tested, not taught — and the sound is half of what a character IS.
+        ChineseVoice.Say(_word);
 
         _phase = Phase.Asking;
         _phaseTime = 0f;
@@ -303,6 +338,9 @@ public class ChineseQuest : MonoBehaviour
         gap.y = 0f;
         bool travelled = gap.magnitude > 0.6f;
         fighter.ResetAt(post.x, post.z);
+        // Also where rocket boots are taken off: a charge abandoned by the
+        // watchdog or by PLAY AGAIN must not leave a robot stuck at 4x.
+        fighter.Tempo = FightTempo;
         if (!travelled)
             return;
         var spark = new Color(0.45f, 0.85f, 1f);
@@ -454,7 +492,9 @@ public class ChineseQuest : MonoBehaviour
         Vector3 crown = _hero.transform.position + Vector3.up * 2.1f;
         VfxUtil.SpawnBurst(crown, new Color(1f, 0.86f, 0.3f), 26, 4.5f, 0.16f);
         VfxUtil.Explosion(target.transform.position + Vector3.up, MatchAnnouncer.TeamColor(1), 0.6f);
-        BrawlAudio.PlayFlat(BrawlAudio.Id.Victory, 0.7f);
+        // Pulled back from 0.7: the sting and the spoken word land together,
+        // and the word is the half worth hearing.
+        BrawlAudio.PlayFlat(BrawlAudio.Id.Victory, 0.45f);
 
         _hud.SetScore(_score, _streak);
         _hud.Correct(_word, _streak);
@@ -522,10 +562,16 @@ public class ChineseQuest : MonoBehaviour
         }
 
         var move = BrawlMoveSet.Table[BrawlMoveSet.Move.Kick];
+        // Rocket boots on for the crossing, off for the strike — the charge is
+        // dead time, the strike is the thing being watched.
+        attacker.Tempo = ChargeTempo;
+        VfxUtil.SpawnBurst(attacker.transform.position + Vector3.up * 0.35f,
+            new Color(0.5f, 0.9f, 1f), 14, 5f, 0.12f);
         // Stop just inside reach: BrawlFighter's own Separate() holds the
         // pair 0.9 m apart, so anything tighter is a wall the walk cannot pass.
         yield return CloseIn(attacker, target, Mathf.Max(BrawlMoveSet.MinSeparation + 0.15f,
             move.range * 0.8f), 3.2f);
+        attacker.Tempo = FightTempo;
         yield return Press(attacker, punch: Random.value < 0.45f, kick: true);
     }
 
@@ -613,6 +659,14 @@ public class ChineseQuest : MonoBehaviour
     /// </summary>
     void ReadPick()
     {
+        // Say it again. Space because it is the biggest key on the board and
+        // this is the one thing a player will want to repeat.
+        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.H))
+        {
+            ChineseVoice.Say(_word);
+            return;
+        }
+
         for (int i = 0; i < Options; i++)
         {
             if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))

@@ -26,7 +26,14 @@ public class ChineseQuestCamera : MonoBehaviour
     const float Pitch = 30f;
 
     /// <summary>What the wide shot is aimed at: chest height, just ahead of the hero's post.</summary>
-    static readonly Vector3 HomeLook = new Vector3(0f, 1.15f, 0.8f);
+    static readonly Vector3 HomeLook = new Vector3(0f, 1.15f, 0.6f);
+
+    /// <summary>
+    /// Where the fit starts walking backward from. Low enough that a tight
+    /// cast actually gets a tight shot — start it at the old 12 and the fit
+    /// never discovers that 10 would have fitted too.
+    /// </summary>
+    const float NearestShot = 6f;
 
     /// <summary>Viewport box every robot must sit inside. Generous — the HUD clamps its own cards.</summary>
     const float MarginX = 0.045f;
@@ -175,8 +182,8 @@ public class ChineseQuestCamera : MonoBehaviour
         // gives the offset from the aim point to the camera.
         Vector3 back = Quaternion.Euler(Pitch, 0f, 0f) * Vector3.back;
 
-        float distance = 12f;
-        for (int step = 0; step < 60; step++)
+        float distance = NearestShot;
+        for (int step = 0; step < 90; step++)
         {
             _homePos = HomeLook + back * distance;
             if (_points.Length == 0 || AllOnScreen())
