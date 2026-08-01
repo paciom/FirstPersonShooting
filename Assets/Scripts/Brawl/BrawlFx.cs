@@ -185,7 +185,37 @@ public static class BrawlFx
     /// <summary>True when a prefab override brings its own light rig.</summary>
     public static bool HasOwnLight(GameObject instance)
     {
-        return instance != null && instance.GetComponentInChildren<Light>(true) != null;
+        return instance != null
+               && (instance.GetComponentInChildren<Light>(true) != null || EmitsLights(instance));
+    }
+
+    static bool EmitsLights(GameObject instance)
+    {
+        foreach (var system in instance.GetComponentsInChildren<ParticleSystem>(true))
+            if (system.lights.enabled)
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Silence an effect's lighting. Copies of a fire placed side by side
+    /// to widen it must not each drag in their own light rig: these packs
+    /// spawn a real point light per light-particle, and a handful of
+    /// stacked instances would blow past what forward rendering will carry
+    /// for one object — flickering, not brightness.
+    /// </summary>
+    public static void MuteLights(GameObject instance)
+    {
+        if (instance == null)
+            return;
+        foreach (var system in instance.GetComponentsInChildren<ParticleSystem>(true))
+        {
+            var lights = system.lights;
+            if (lights.enabled)
+                lights.enabled = false;
+        }
+        foreach (var light in instance.GetComponentsInChildren<Light>(true))
+            light.enabled = false;
     }
 
     /// <summary>Stop a prefab override emitting so it can die down naturally.</summary>

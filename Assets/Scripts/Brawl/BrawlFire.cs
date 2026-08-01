@@ -20,8 +20,20 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     const float BurnSeconds = 30f;
     const float DieDownSeconds = 4f;
     const float FallSpeed = 11f;
-    /// <summary>Scale a dropped-in fire prefab to cover the burn patch.</summary>
-    const float PatchScale = 1.15f;
+    /// <summary>
+    /// A bought fire is authored as a campfire — about knee height on a
+    /// robot, and far narrower than the circle that actually burns them.
+    /// The hazard has to LOOK like its 2.5 m damage circle, so the middle
+    /// flame is scaled up and two quieter satellites widen the base into a
+    /// burning patch rather than a candle.
+    /// </summary>
+    const float PatchScale = 2.6f;
+    const float SatelliteScale = 1.7f;
+    static readonly Vector3[] SatelliteOffsets =
+    {
+        new Vector3(-0.72f, 0f, 0.28f),
+        new Vector3(0.68f, 0f, -0.34f),
+    };
 
     float _groundY;
     bool _burning;
@@ -31,6 +43,8 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     ParticleSystem[] _systems;
     float[] _baseRates;
     GameObject _prefabFx;
+    readonly System.Collections.Generic.List<GameObject> _satellites =
+        new System.Collections.Generic.List<GameObject>();
     float _prefabCheck = -1f;
     Light _glow;
     float _flicker;
@@ -80,7 +94,7 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         // as-is — its own updraught is the trail.
         // The comet rides the pack's BIG fire shrunk down — its Small and
         // Medium prefabs are the ones missing materials.
-        var custom = BrawlFx.TryPrefab("firecomet", _comet.transform, Vector3.zero, 0.3f);
+        var custom = BrawlFx.TryPrefab("firecomet", _comet.transform, Vector3.zero, 0.5f);
         if (custom == null)
             BrawlFx.BuildFire(_comet.transform, 0.16f, 0.55f);
 
@@ -99,9 +113,20 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
     {
         _prefabFx = BrawlFx.TryPrefab("fire", transform, Vector3.zero, PatchScale);
         if (_prefabFx == null)
+        {
             BuildOwnFire();
+        }
         else
+        {
             _prefabCheck = 0.8f;   // …and prove it is really burning
+            foreach (var offset in SatelliteOffsets)
+            {
+                var satellite = BrawlFx.TryPrefab("fire", transform, offset, SatelliteScale);
+                BrawlFx.MuteLights(satellite);   // one light rig per fire, not three
+                if (satellite != null)
+                    _satellites.Add(satellite);
+            }
+        }
 
         // The scorch only exists for the HAND-BUILT fire, which has no
         // ground element of its own. A bought floor fire brings its own
@@ -167,6 +192,9 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
                          "falling back to the built-in flames.");
         Destroy(_prefabFx);          // takes the prefab's own light with it
         _prefabFx = null;
+        foreach (var satellite in _satellites)
+            Destroy(satellite);
+        _satellites.Clear();
         BuildOwnFire();
         EnsureGlow();
     }
@@ -212,7 +240,11 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
                 emission.rateOverTime = _baseRates[i] * strength;
             }
         else if (_prefabFx != null && strength < 1f)
+        {
             BrawlFx.StopEmitting(_prefabFx);
+            foreach (var satellite in _satellites)
+                BrawlFx.StopEmitting(satellite);
+        }
 
         if (_glow != null)
         {
