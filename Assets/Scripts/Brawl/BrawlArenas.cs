@@ -147,16 +147,27 @@ public static class BrawlArenas
     /// <summary>Mining pit: crystal walls — the corners BITE (wall slams).</summary>
     static void CrystalQuarry(GameObject root, RobotRoster roster)
     {
+        // The pit floor beyond the ring. Without it the background crystals
+        // stand on nothing — the deck stops at z = 6.5 and the backdrop is
+        // ten metres further out, so anything between them hangs in the void.
+        var rock = BrawlCrystal.RockMaterial;
+        Box(root, new Vector3(0f, -0.55f, 11f), new Vector3(46f, 1.1f, 10f), rock).name = "PitFloor";
+        // Terraced back wall: a quarry is cut in steps.
+        Box(root, new Vector3(0f, 1.1f, 15.2f), new Vector3(46f, 2.2f, 2.6f), rock).name = "PitStep1";
+        Box(root, new Vector3(0f, 2.6f, 17.4f), new Vector3(46f, 5.2f, 2.6f), rock).name = "PitStep2";
+
         foreach (float side in new[] { -1f, 1f })
         {
             float x = side * (BrawlStage.LaneHalf + 0.9f);
-            for (int i = 0; i < 4; i++)
-                Crystal(root, new Vector3(x + side * Random.Range(0f, 0.8f),
-                    0f, Random.Range(-1.8f, 1.8f)), Random.Range(0.8f, 1.8f));
+            for (int i = 0; i < 3; i++)
+                BrawlCrystal.Build(root.transform,
+                    new Vector3(x + side * Random.Range(0f, 0.8f), 0f, Random.Range(-2.2f, 2.2f)),
+                    Random.Range(0.7f, 1.4f), light: i == 0);
         }
         for (int i = 0; i < 9; i++)
-            Crystal(root, new Vector3(Random.Range(-15f, 15f), 0f, Random.Range(8f, 13f)),
-                Random.Range(0.6f, 2.2f));
+            BrawlCrystal.Build(root.transform,
+                new Vector3(Random.Range(-16f, 16f), 0f, Random.Range(7.5f, 13.5f)),
+                Random.Range(0.7f, 2.0f), light: i % 4 == 0);
     }
 
     // ---------------------------------------------------------- primitives
@@ -185,12 +196,7 @@ public static class BrawlArenas
 
     static void Crystal(GameObject root, Vector3 position, float scale)
     {
-        var shard = Box(root, position + Vector3.up * (scale * 0.6f),
-            new Vector3(scale * 0.4f, scale * 1.2f, scale * 0.4f),
-            ArenaMaterials.Emissive("brawl-crystal", new Color(0.45f, 0.9f, 1f), 1.6f));
-        shard.name = "Crystal";
-        shard.transform.localRotation = Quaternion.Euler(
-            Random.Range(-14f, 14f), Random.Range(0f, 360f), 45f);
+        BrawlCrystal.Build(root.transform, position, scale);
     }
 
     static GameObject Box(GameObject root, Vector3 position, Vector3 size, Material material)
