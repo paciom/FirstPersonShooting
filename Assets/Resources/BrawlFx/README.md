@@ -35,6 +35,21 @@ Requirements for a prefab dropped here:
   materials are Built-in RP — use `Edit > Rendering > Materials > Convert
   Selected Built-in Materials to URP`.
 
+## Two pipeline settings these effects depend on
+
+In `Assets/Settings/PhotonArena_URP.asset`:
+
+- **Depth Texture — ON, and it must stay on.** Particle shaders almost
+  always soft-fade where a quad meets the floor, which samples scene
+  depth (`SAMPLE_SCENE_DEPTH`). With the depth texture off, that term
+  collapses to zero and multiplies the flames' opacity to nothing: the
+  fire emits, lights the ground, and draws *absolutely nothing*. That
+  cost an afternoon — the symptom looks exactly like "the effect is
+  missing", not like "a setting is off".
+- **Opaque Texture — off, deliberately.** It costs a full-screen copy
+  every frame and only feeds refraction. `BrawlFx` strips heat-distortion
+  layers instead. Turn it on and remove that strip if you want shimmer.
+
 ## Where to get good fire
 
 Verified on the Unity Asset Store (2026-08-01):
