@@ -745,7 +745,7 @@ public class CommanderUnit : MonoBehaviour
                 if (current != null)
                     Destroy(current.gameObject);
                 if (_stages[i] != null)
-                    GroundAlignedInstance(_stages[i], 2.0f);
+                    GroundAlignedInstance(_stages[i], 2.0f, VehicleSkin_StageYaw);
                 VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
                 yield return new WaitForSeconds(StageSeconds);
             }
@@ -770,23 +770,44 @@ public class CommanderUnit : MonoBehaviour
         _morphRoutine = null;
     }
 
+    /// <summary>Stage stills are authored facing -Z — VehicleSkin.stageYawOffset's twin.</summary>
+    const float VehicleSkin_StageYaw = 180f;
+
     /// <summary>
     /// Stage and vehicle models carry no RobotLocomotion, so the factory's
     /// normalizer would centre them mid-air; ground them by bounds instead,
     /// nose along +Z with the unit's facing.
+    ///
+    /// "Nose along +Z" takes enforcing: generated models don't agree on
+    /// which way is forward, so this applies VehicleSkin.FitToRobot's rule
+    /// verbatim — a ground vehicle is longer than it is wide, so the long
+    /// horizontal axis is turned to run down +Z (plus the stage stills'
+    /// authored 180). Without it, an X-long tank drives the whole map
+    /// SIDEWAYS. Rotation lands before anything is measured; fitting first
+    /// would solve centring and grounding for the wrong orientation.
     /// </summary>
-    void GroundAlignedInstance(GameObject prefab, float targetSize)
+    void GroundAlignedInstance(GameObject prefab, float targetSize, float extraYaw = 0f)
     {
         if (prefab == null)
             return;
         var instance = Instantiate(prefab, _body);
         instance.name = "Model";
+        // Zeroed BEFORE the first measure, exactly as VehicleSkin holds
+        // these same assets: the long-axis test must read the mesh in a
+        // known pose, not through whatever rotation the prefab root
+        // happened to ship with.
+        instance.transform.localRotation = Quaternion.identity;
         var renderers = instance.GetComponentsInChildren<Renderer>();
         if (renderers.Length == 0)
             return;
-        var bounds = renderers[0].bounds;
-        foreach (var renderer in renderers)
-            bounds.Encapsulate(renderer.bounds);
+
+        var bounds = MeasureBounds(renderers);
+        float yaw = (bounds.size.x > bounds.size.z ? 90f : 0f) + extraYaw;
+        if (!Mathf.Approximately(yaw, 0f))
+        {
+            instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            bounds = MeasureBounds(renderers);
+        }
 
         float scale = targetSize / Mathf.Max(0.01f,
             Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)));
@@ -799,6 +820,14 @@ public class CommanderUnit : MonoBehaviour
             -bottom.y * scale - _body.localPosition.y,
             -centre.z * scale);
         TeamPaint.Apply(renderers, _tint, TeamPaint.DefaultSize, false, _paintAnchorHue);
+    }
+
+    static Bounds MeasureBounds(Renderer[] renderers)
+    {
+        var bounds = renderers[0].bounds;
+        foreach (var renderer in renderers)
+            bounds.Encapsulate(renderer.bounds);
+        return bounds;
     }
 
     /// <summary>
