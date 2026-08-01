@@ -93,6 +93,28 @@ def profile(path):
     return dists[n // 2], dists[int(n * 0.95)], dists[-1], n
 
 
+def arm_proportions(path):
+    """(upper arm, forearm) as fractions of model height."""
+    gltf, data, bin_start = load(path)
+    skin = gltf["skins"][0]
+    acc, off = offset_of(gltf, skin["inverseBindMatrices"], bin_start)
+    bind = {}
+    for slot, joint in enumerate(skin["joints"]):
+        m = struct.unpack_from("<16f", data, off + slot * 64)
+        rot = [[m[0], m[4], m[8]], [m[1], m[5], m[9]], [m[2], m[6], m[10]]]
+        t = [m[12], m[13], m[14]]
+        scale_sq = sum(rot[i][0] ** 2 for i in range(3))
+        bind[gltf["nodes"][joint].get("name")] = [
+            -sum(rot[k][i] * t[k] for k in range(3)) / scale_sq for i in range(3)]
+    prim = next(m["primitives"][0] for m in gltf["meshes"]
+                if "JOINTS_0" in m["primitives"][0]["attributes"])
+    pa, poff = offset_of(gltf, prim["attributes"]["POSITION"], bin_start)
+    ys = [struct.unpack_from("<3f", data, poff + i * 12)[1] for i in range(pa["count"])]
+    height = max(max(ys) - min(ys), 1e-6)
+    return (math.dist(bind["LeftArm"], bind["LeftForeArm"]) / height,
+            math.dist(bind["LeftForeArm"], bind["LeftHand"]) / height)
+
+
 def audit(names):
     print(f"{'robot':10s} {'file':16s} {'p50':>6s} {'p95':>6s} {'max':>6s}  "
           f"{'p95 vs own -rig':>16s}")
@@ -103,6 +125,7 @@ def audit(names):
             print(f"{robot:10s} no original -rig.glb — cannot compare")
             continue
         b50, b95, bmax, _ = profile(base)
+        base_arm = arm_proportions(base)
         print(f"{robot:10s} {'-rig.glb':16s} {b50:6.3f} {b95:6.3f} {bmax:6.3f}  "
               f"{'(reference)':>16s}")
 
@@ -112,6 +135,22 @@ def audit(names):
                 continue
             t50, t95, tmax, _ = profile(target)
             ratio = t95 / b95 if b95 > 1e-6 else 0.0
+
+            # The ratio only means anything while both rigs put the joints in
+            # roughly the same places. A re-rig that moved them legitimately
+            # scores high for a reason that is NOT misbinding — titan's
+            # 2026-08-01 replacement rig read 1.55x with perfectly good
+            # weights, and transplanting on that verdict made him WORSE
+            # (fragmented under load). Say "not comparable" rather than cry
+            # wolf; a gate that fires on healthy files gets ignored.
+            arm = arm_proportions(target)
+            drift = max(abs(a - b) / max(b, 1e-6) for a, b in zip(arm, base_arm))
+            if drift > 0.20:
+                print(f"{'':10s} {suffix + '.glb':16s} {t50:6.3f} {t95:6.3f} {tmax:6.3f}  "
+                      f"{ratio:15.2f}x  <-- not comparable "
+                      f"(joints moved {drift:.0%}; judge by eye)")
+                continue
+
             flag = "  <-- MISBOUND" if ratio > RATIO_LIMIT else ""
             print(f"{'':10s} {suffix + '.glb':16s} {t50:6.3f} {t95:6.3f} {tmax:6.3f}  "
                   f"{ratio:15.2f}x{flag}")
@@ -121,9 +160,10 @@ def audit(names):
     if bad:
         print("BROKEN SKIN BINDING: " + ", ".join(bad))
         print("Fix with:  python fixskinweights.py <robot>   "
-              "(transplants the original rig's weights)")
+              "(transplants the original rig's weights — ONLY valid when the "
+              "two rigs place joints alike; see the note above)")
     else:
-        print("All re-rigged models bind like their originals.")
+        print("All comparable re-rigged models bind like their originals.")
     return bad
 
 
