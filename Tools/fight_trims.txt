@@ -105,7 +105,7 @@ titan jab 0.27 0.82
 titan kick 1.27 1.82
 titan kneestrike 0.59 1.14
 titan lowkick 0.64 1.19
-titan punch 1.45 2.00
+titan punch 2.97 3.52
 titan sidekick 0.29 0.84
 titan spinkick 0.76 1.31
 titan uppercut 0.32 0.87
