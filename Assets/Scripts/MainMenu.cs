@@ -159,6 +159,13 @@ public static class MainMenu
         fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
         fitter.aspectRatio = 16f / 9f;
 
+        // Before the scrims, not after: a vignette laid over the tray modulates
+        // the tray itself, so its clear centre brightened a band straight
+        // across the card deck. Under them it only shades the picture.
+        var vignette = MakeImage(parent, "Vignette", new Color(Ink.r, Ink.g, Ink.b, 0.55f));
+        vignette.sprite = MenuArt.Vignette();
+        Stretch(vignette.rectTransform);
+
         var sky = MakeImage(parent, "SkyScrim", new Color(Ink.r, Ink.g, Ink.b, 0.62f));
         sky.sprite = MenuArt.FadeDown();
         Band(sky.rectTransform, top: true, height: 500f);
@@ -181,9 +188,6 @@ public static class MainMenu
         floor.sprite = MenuArt.FadeUp();
         Band(floor.rectTransform, top: false, height: 300f);
 
-        var vignette = MakeImage(parent, "Vignette", new Color(Ink.r, Ink.g, Ink.b, 0.60f));
-        vignette.sprite = MenuArt.Vignette();
-        Stretch(vignette.rectTransform);
     }
 
     // -- logo lockup -----------------------------------------------------

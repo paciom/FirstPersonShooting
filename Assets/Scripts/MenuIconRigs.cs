@@ -708,7 +708,12 @@ public static class MenuIconRigs
         }
 
         AddLights(rig, TableReach);
-        return AddCamera(rig, rt, new Vector3(0f, 1.05f, 4.9f), 3f, 40f, 16f);
+        // Far enough back that the OUTER robots' hands clear the frame. At
+        // z=4.9 the horizontal half-width at their depth was ~2.5 and the
+        // widest hand reached ~2.44, so the end robots came back with their
+        // outside hands sliced off by the render's own edge — which then
+        // showed up mid-screen once the cutout was scaled into the title art.
+        return AddCamera(rig, rt, new Vector3(0f, 1.05f, 6.6f), 3f, 40f, 18f);
     }
 
     static void AddLights(Transform rig, float reach)

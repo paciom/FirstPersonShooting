@@ -98,7 +98,11 @@ public static class MenuArt
             for (int x = 0; x < size; x++)
             {
                 float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), mid) / (size * 0.5f);
-                float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1.15f, d));
+                // Wide clear centre, late falloff. A tighter ellipse leaves its
+                // most-transparent ring lying along the screen's midline, which
+                // reads as a bright horizontal stripe across the whole width
+                // rather than as darkened corners.
+                float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.78f, 1.5f, d));
                 pixels[y * size + x] = new Color32(255, 255, 255, (byte)(255f * a));
             }
         }
