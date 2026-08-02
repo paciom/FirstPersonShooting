@@ -330,25 +330,7 @@ public static class BrawlMoveForge
     static AnimationClip Bake(BrawlPoseRig rig, string name, float duration, bool loop,
         System.Action<BrawlPoseRig, float> pose)
     {
-        var clip = new AnimationClip { name = name, frameRate = Fps };
-        int samples = Mathf.Max(2, Mathf.CeilToInt(duration * Fps) + 1);
-
-        var curves = rig.NewRecorder();
-        for (int i = 0; i < samples; i++)
-        {
-            float t = i / (float)(samples - 1) * duration;
-            rig.RestoreRest();
-            pose(rig, t / duration);
-            rig.Record(curves, t);
-        }
-        rig.RestoreRest();
-        rig.Write(clip, curves);
-        clip.EnsureQuaternionContinuity();
-
-        var settings = AnimationUtility.GetAnimationClipSettings(clip);
-        settings.loopTime = loop;
-        AnimationUtility.SetAnimationClipSettings(clip, settings);
-        return SaveClip(clip, $"{AnimDir}/{name}.anim");
+        return SaveClip(rig.BakeClip(name, duration, loop, Fps, pose), $"{AnimDir}/{name}.anim");
     }
 
     // -------------------------------------------------------- clip plumbing

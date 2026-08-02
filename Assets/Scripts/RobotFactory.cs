@@ -8,6 +8,22 @@ using UnityEngine;
 /// </summary>
 public static class RobotFactory
 {
+    /// <summary>
+    /// Height every roster robot is fitted to, in metres. The roster's models
+    /// arrive at wildly different sizes; normalizing here is what lets one set
+    /// of arena, camera and jump numbers apply to all of them.
+    /// </summary>
+    public const float NormalizedHeight = 1.6f;
+
+    /// <summary>
+    /// How high a robot leaps, as a multiple of its own height: its own head
+    /// plus 20%. One constant because both jump paths must agree — the
+    /// player's motor (CharacterMotor.Jump) and the bots' link leaps
+    /// (RobotJump) — or the same robot would jump two different heights
+    /// depending on who was driving it.
+    /// </summary>
+    public const float JumpHeights = 1.2f;
+
     /// <summary>Creates the "Body" rig under <paramref name="root"/> and returns its transform.</summary>
     public static Transform Build(GameObject root, Material armor, Material glow, Material darkMetal)
     {
@@ -45,12 +61,16 @@ public static class RobotFactory
 
     /// <summary>
     /// Builds the "Body" rig from an imported 3D model (e.g. Meshy-generated GLB)
-    /// instead of primitives. Normalizes the model to character height, applies a
-    /// subtle team tint, and adds a glowing team ring underneath. Same rig
-    /// contract as Build(), so DeRezEffect/HoverBob/ShieldBubble work unchanged.
+    /// instead of primitives. Normalizes the model to character height and applies
+    /// a subtle team tint. Same rig contract as Build(), so DeRezEffect/HoverBob/
+    /// ShieldBubble work unchanged.
+    ///
+    /// No floor marker: the robots are painted in their team's colour, which is
+    /// what tells the teams apart now. A ring under every pair of feet only
+    /// repeated what the paint already said.
     /// </summary>
     public static Transform BuildFromModel(GameObject root, GameObject modelPrefab, Color teamTint,
-        Material ringGlow, float paintAnchorHue = -1f)
+        float paintAnchorHue = -1f)
     {
         var body = new GameObject("Body").transform;
         body.SetParent(root.transform, false);
@@ -58,48 +78,38 @@ public static class RobotFactory
 
         InstantiateNormalized(modelPrefab, body, teamTint, paintAnchorHue);
 
-        // Team marker under the robot for instant team readability on camera:
-        // a crisp team-colored donut ring plus a faint wider glow wash — flat
-        // sprites on the floor instead of the old solid cylinder, which bloom
-        // blew out into a plain white blob. The additive shader is two-sided
-        // and ZWrite Off, so the flat quads can't z-fight the floor.
-        // (ringGlow material kept in the signature for the primitive-robot path.)
-        var ringRoot = new GameObject("TeamRing");
-        ringRoot.transform.SetParent(body, false);
-        ringRoot.transform.localPosition = new Vector3(0f, -0.85f, 0f);
-        FlatGlowQuad(ringRoot.transform, "Ring", "VFX/ring", teamTint, 1.5f, 1.5f, 0.02f);
-        FlatGlowQuad(ringRoot.transform, "Wash", "VFX/glow", teamTint, 0.35f, 2.4f, 0f);
-
         return body;
     }
 
-    /// <summary>A floor-flat additive sprite quad (team rings, hover washes).</summary>
-    static void FlatGlowQuad(Transform parent, string name, string texturePath, Color color,
-        float intensity, float size, float yOffset)
+    /// <summary>
+    /// Destroys the team ring an older ArenaBuilder baked under a robot.
+    ///
+    /// The rings are serialized into the shipped arena scene, so dropping the
+    /// code that makes them would leave the existing six bots wearing theirs
+    /// until somebody rebuilt the scene. Sweeping them at load costs nothing on
+    /// a rebuilt scene, where there is nothing to find.
+    /// </summary>
+    public static void StripTeamRing(Transform root)
     {
-        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        quad.name = name;
-        var collider = quad.GetComponent<Collider>();
-        if (Application.isPlaying) Object.Destroy(collider);
-        else Object.DestroyImmediate(collider);
-        quad.transform.SetParent(parent, false);
-        quad.transform.localPosition = new Vector3(0f, yOffset, 0f);
-        quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat
-        quad.transform.localScale = Vector3.one * size;
-
-        var mat = new Material(Shader.Find("PhotonArena/Additive"));
-        mat.SetTexture("_MainTex", Resources.Load<Texture2D>(texturePath));
-        mat.SetColor("_Color", color);
-        mat.SetFloat("_Intensity", intensity);
-        quad.GetComponent<MeshRenderer>().sharedMaterial = mat;
+        if (root == null)
+            return;
+        var children = root.GetComponentsInChildren<Transform>(true);
+        foreach (var child in children)
+        {
+            if (child == null || child.name != TeamRingName)
+                continue;
+            if (Application.isPlaying) Object.Destroy(child.gameObject);
+            else Object.DestroyImmediate(child.gameObject);
+        }
     }
+
+    const string TeamRingName = "TeamRing";
 
     /// <summary>
     /// Runtime robot swap: replaces the model inside an existing "Body" rig
-    /// with a different roster robot, keeping the Blaster (weapon components
-    /// live on it) and the TeamRing untouched. Everything DeRezEffect /
-    /// HoverBob / ShieldBubble reference is the Body transform itself, so the
-    /// swap is invisible to them.
+    /// with a different roster robot, keeping the Blaster untouched (weapon
+    /// components live on it). Everything DeRezEffect / HoverBob / ShieldBubble
+    /// reference is the Body transform itself, so the swap is invisible to them.
     /// </summary>
     public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint,
         float paintAnchorHue = -1f)
@@ -110,8 +120,7 @@ public static class RobotFactory
             // VehicleRig belongs to TransformMode, which builds it once and
             // hands out no way to rebuild it — losing it to a reskin would
             // leave a robot that transforms with no wheels.
-            if (child.name == "Blaster" || child.name == "TeamRing" ||
-                child.name == TransformMode.RigName)
+            if (child.name == "Blaster" || child.name == TransformMode.RigName)
                 continue;
             Object.Destroy(child.gameObject);
         }
@@ -140,7 +149,7 @@ public static class RobotFactory
 
             // Multiply (never replace) the prefab's own scale — glTF roots often
             // carry a unit-conversion scale factor that must be preserved.
-            float scale = 1.6f / Mathf.Max(0.01f, bounds.size.y);
+            float scale = NormalizedHeight / Mathf.Max(0.01f, bounds.size.y);
             instance.transform.localScale *= scale;
             Vector3 localCenter = body.InverseTransformPoint(bounds.center);
 
@@ -167,6 +176,54 @@ public static class RobotFactory
             TeamPaint.Apply(renderers, teamTint, TeamPaint.DefaultSize, false, paintAnchorHue);
         }
         return instance;
+    }
+
+    /// <summary>
+    /// How tall the robot standing on <paramref name="character"/> actually is,
+    /// in metres.
+    ///
+    /// Measures the "Model" child specifically rather than everything under the
+    /// character: the held blaster, and any floor decal a scene still carries,
+    /// are renderers too, and a flat 2.4-unit quad on the ground would answer a
+    /// question nobody asked. Falls back to <see cref="NormalizedHeight"/> — which is
+    /// what the model will be fitted to anyway — for a character whose model
+    /// has not been built yet, which is every pawn before the roster screen
+    /// dresses it.
+    /// </summary>
+    public static float MeasureHeight(Transform character)
+    {
+        var model = FindDeep(character, "Model");
+        if (model == null)
+            return NormalizedHeight;
+        var renderers = model.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+            return NormalizedHeight;
+        float height = MeasureWorldBounds(renderers).size.y;
+        return height > 0.01f ? height : NormalizedHeight;
+    }
+
+    /// <summary>
+    /// Apex a robot standing on <paramref name="character"/> must clear: its
+    /// own height plus 20%. See <see cref="JumpHeights"/>.
+    /// </summary>
+    public static float JumpApex(Transform character)
+    {
+        return MeasureHeight(character) * JumpHeights;
+    }
+
+    static Transform FindDeep(Transform root, string name)
+    {
+        if (root == null)
+            return null;
+        if (root.name == name)
+            return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var found = FindDeep(root.GetChild(i), name);
+            if (found != null)
+                return found;
+        }
+        return null;
     }
 
     /// <summary>

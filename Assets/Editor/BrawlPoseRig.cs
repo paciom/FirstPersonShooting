@@ -111,6 +111,29 @@ public class BrawlPoseRig
     /// <summary>The Hips' rest local position — the pin every in-place clip shares.</summary>
     public Vector3 RestHipsPosition => _restPosition[Hips];
 
+    /// <summary>
+    /// Multiplies every <see cref="Shift"/>. Templates author their body
+    /// travel in metres against a robot the roster's own height, so a rig
+    /// modelled at some other size needs the sink of a crouch scaled with it
+    /// — otherwise the same 22 cm absorb is a deep landing on one robot and
+    /// a twitch on the next.
+    ///
+    /// Left at 1 by BrawlMoveForge: the Brawl fleet's clips are baked and
+    /// verified at that scale, and re-scaling them now would re-bake all
+    /// nine fighters to fix nothing. MeshyWalkerForge sets it, because its
+    /// sources are raw Meshy exports that arrive at whatever size Meshy felt
+    /// like.
+    /// </summary>
+    public float PoseScale = 1f;
+
+    /// <summary>The world-space height of the posed model, at its rest pose.</summary>
+    public float MeasureHeight()
+    {
+        RestoreRest();
+        var renderers = Root.GetComponentsInChildren<Renderer>();
+        return renderers.Length == 0 ? 0f : RobotFactory.MeasureWorldBounds(renderers).size.y;
+    }
+
     public void RestoreRest()
     {
         foreach (var joint in _recorded)
@@ -161,7 +184,7 @@ public class BrawlPoseRig
     {
         if (joint == null)
             return;
-        joint.position += delta * weight;
+        joint.position += delta * (weight * PoseScale);
     }
 
     // ---------------------------------------------------------- recording
@@ -209,5 +232,35 @@ public class BrawlPoseRig
     {
         foreach (var pair in recorder.Curves)
             AnimationUtility.SetEditorCurve(clip, pair.Key, pair.Value);
+    }
+
+    /// <summary>
+    /// Samples a pose template into a clip — restore rest, pose, record, one
+    /// frame at a time. Shared by both forges so a template that is baked in
+    /// two places bakes to the same thing in both. The clip is returned
+    /// unsaved; each forge owns where its clips live.
+    /// </summary>
+    public AnimationClip BakeClip(string name, float duration, bool loop, float fps,
+        System.Action<BrawlPoseRig, float> pose)
+    {
+        var clip = new AnimationClip { name = name, frameRate = fps };
+        int samples = Mathf.Max(2, Mathf.CeilToInt(duration * fps) + 1);
+
+        var curves = NewRecorder();
+        for (int i = 0; i < samples; i++)
+        {
+            float t = i / (float)(samples - 1) * duration;
+            RestoreRest();
+            pose(this, t / duration);
+            Record(curves, t);
+        }
+        RestoreRest();
+        Write(clip, curves);
+        clip.EnsureQuaternionContinuity();
+
+        var settings = AnimationUtility.GetAnimationClipSettings(clip);
+        settings.loopTime = loop;
+        AnimationUtility.SetAnimationClipSettings(clip, settings);
+        return clip;
     }
 }

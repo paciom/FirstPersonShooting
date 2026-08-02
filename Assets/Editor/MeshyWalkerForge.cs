@@ -35,6 +35,19 @@ public static class MeshyWalkerForge
     const float WalkSpeed = 3.2f;
     const float RunSpeed = 7f;
 
+    // The jump, template-baked from BrawlPoses onto each robot's own rig.
+    // Meshy's rigging result ships walking and running and nothing else, so
+    // there is no leap to adopt — and the alternative, freezing the walk mid
+    // -stride and sliding it through the air, is what this replaces.
+    const float JumpFps = 30f;
+    const float LaunchTime = 0.20f;
+    const float AirTime = 0.70f;    // looped for as long as the flight lasts
+    const float LandTime = 0.32f;
+
+    const string LaunchState = "JumpLaunch";
+    const string AirState = "JumpAir";
+    const string LandState = "JumpLand";
+
     [MenuItem("Photon Arena/Forge Meshy Walker Robots")]
     public static void ForgeAll()
     {
@@ -90,6 +103,14 @@ public static class MeshyWalkerForge
             return true;
 
         string title = Title(robot);
+
+        // A robot forged before the jump existed has a perfectly good prefab
+        // and no way to leap in it — nothing about its GLB sources changed, so
+        // only asking after the clips themselves catches it.
+        foreach (string state in new[] { LaunchState, AirState, LandState })
+            if (AssetDatabase.LoadAssetAtPath<AnimationClip>($"{AnimDir}/{title}_{state}.anim") == null)
+                return true;
+
         var prefabWritten = File.GetLastWriteTimeUtc(prefabPath);
         foreach (var pair in new[] { ("walk", "_Walk"), ("run", "_Run"), ("rig", "_Idle") })
         {
@@ -142,7 +163,8 @@ public static class MeshyWalkerForge
             run = walk;
         }
 
-        var controller = BuildController($"{AnimDir}/{title}.controller", idle, walk, run);
+        var jump = BakeJump(model, title);
+        var controller = BuildController($"{AnimDir}/{title}.controller", idle, walk, run, jump);
 
         var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
         try
@@ -175,8 +197,65 @@ public static class MeshyWalkerForge
         }
 
         Debug.Log($"[MeshyWalkerForge] Forged {prefabPath} (idle/walk/run: " +
-                  $"{idle.length:0.00}s / {walk.length:0.00}s / {run.length:0.00}s).");
+                  $"{idle.length:0.00}s / {walk.length:0.00}s / {run.length:0.00}s" +
+                  $"{(jump.Count > 0 ? ", + jump" : ", NO JUMP")}).");
         return true;
+    }
+
+    /// <summary>
+    /// Bakes the leap onto this robot's own skeleton from the kung-fu pose
+    /// templates the Brawl fighters are built from — a jumping knee with the
+    /// arms driving it, not a vertical slide.
+    ///
+    /// Baked here rather than adopted from a GLB because Meshy's rigging
+    /// result ships exactly two motions, walking and running. Baked per robot
+    /// rather than once because the templates are relative to each rig's own
+    /// measured rest pose; that is the whole reason a template transfers
+    /// between these skeletons at all (see BrawlPoseRig).
+    ///
+    /// Empty when the model is not a recognizable humanoid — the controller
+    /// then simply has no jump states, and RobotLocomotion falls back to
+    /// holding the legs still in the air.
+    /// </summary>
+    static Dictionary<string, AnimationClip> BakeJump(GameObject model, string title)
+    {
+        var clips = new Dictionary<string, AnimationClip>();
+        var instance = Object.Instantiate(model);
+        try
+        {
+            instance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            var rig = BrawlPoseRig.Discover(instance);
+            if (rig == null)
+            {
+                Debug.LogWarning($"[MeshyWalkerForge] {title}: no 'Hips' bone — not a Meshy " +
+                                 "humanoid rig, so no jump animation. It will still leap, " +
+                                 "just without a pose.");
+                return clips;
+            }
+
+            // These sources are raw Meshy exports at whatever size Meshy chose;
+            // the templates' crouches and sinks are authored in metres against
+            // a roster-height robot. Without this the same landing absorb is a
+            // deep sink on a small export and invisible on a large one.
+            float height = rig.MeasureHeight();
+            if (height > 0.01f)
+                rig.PoseScale = height / RobotFactory.NormalizedHeight;
+
+            clips[LaunchState] = SaveClip(
+                rig.BakeClip($"{title}_{LaunchState}", LaunchTime, false, JumpFps, BrawlPoses.JumpLaunch),
+                $"{AnimDir}/{title}_{LaunchState}.anim");
+            clips[AirState] = SaveClip(
+                rig.BakeClip($"{title}_{AirState}", AirTime, true, JumpFps, BrawlPoses.JumpAir),
+                $"{AnimDir}/{title}_{AirState}.anim");
+            clips[LandState] = SaveClip(
+                rig.BakeClip($"{title}_{LandState}", LandTime, false, JumpFps, BrawlPoses.JumpLand),
+                $"{AnimDir}/{title}_{LandState}.anim");
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
+        return clips;
     }
 
     /// <summary>
@@ -230,8 +309,29 @@ public static class MeshyWalkerForge
         return clip;
     }
 
-    /// <summary>Same Speed blend tree contract as the script-forged strider.</summary>
-    static AnimatorController BuildController(string path, AnimationClip idle, AnimationClip walk, AnimationClip run)
+    /// <summary>
+    /// Same Speed blend tree contract as the script-forged strider, plus the
+    /// jump — launch, a looping flight, and a landing — hung off the single
+    /// Airborne bool.
+    ///
+    /// ONE BOOL, THREE STATES, and no jump trigger anywhere: how long a robot
+    /// is off the ground is decided by physics (the motor's arc, or the width
+    /// of the link a bot is crossing), never by a clip length. So the flight
+    /// state loops until the flag clears, and the landing is entered by the
+    /// flag clearing rather than by the launch running out. A one-shot leap
+    /// clip would land early on a long jump and still be extending on a short
+    /// one.
+    ///
+    /// NO ANY-STATE TRANSITIONS, unlike the Brawl controller next door. That
+    /// one enters its moves on triggers, which are consumed on arrival; a bool
+    /// is not, so an Any State entry on Airborne would re-enter the launch
+    /// every frame of the flight and the robot would take off over and over
+    /// without ever reaching the tuck. The jump is chained off Locomotion
+    /// instead — which is also what keeps a folded tank driving off a ramp
+    /// from being yanked out of its own vehicle state.
+    /// </summary>
+    static AnimatorController BuildController(string path, AnimationClip idle, AnimationClip walk,
+        AnimationClip run, Dictionary<string, AnimationClip> jump)
     {
         if (AssetDatabase.LoadAssetAtPath<AnimatorController>(path) != null)
             AssetDatabase.DeleteAsset(path);
@@ -246,7 +346,62 @@ public static class MeshyWalkerForge
         tree.AddChild(idle, 0f);
         tree.AddChild(walk, WalkSpeed);
         tree.AddChild(run, RunSpeed);
+
+        if (jump.Count == 3)
+            AddJumpStates(controller, jump);
         return controller;
+    }
+
+    static void AddJumpStates(AnimatorController controller, Dictionary<string, AnimationClip> jump)
+    {
+        controller.AddParameter(RobotLocomotion.AirborneParameter, AnimatorControllerParameterType.Bool);
+
+        var machine = controller.layers[0].stateMachine;
+        var locomotion = machine.defaultState;
+        Vector3 anchor = Vector3.zero;
+        foreach (var child in machine.states)
+            if (child.state == locomotion)
+                anchor = child.position;   // graph layout lives on the slot
+
+        var launch = machine.AddState(LaunchState, anchor + new Vector3(300f, -180f, 0f));
+        var air = machine.AddState(AirState, anchor + new Vector3(580f, -180f, 0f));
+        var land = machine.AddState(LandState, anchor + new Vector3(300f, -280f, 0f));
+        launch.motion = jump[LaunchState];
+        air.motion = jump[AirState];
+        land.motion = jump[LandState];
+
+        // Feet leave the floor. Also straight out of the landing, so a robot
+        // that jumps again during the 0.3 s absorb goes now rather than after
+        // the recovery it has already abandoned.
+        foreach (var from in new[] { locomotion, land })
+        {
+            var takeoff = from.AddTransition(launch);
+            takeoff.AddCondition(AnimatorConditionMode.If, 0f, RobotLocomotion.AirborneParameter);
+            takeoff.hasExitTime = false;
+            takeoff.duration = 0.06f;
+        }
+
+        // Drive runs out while still up there: hold the tuck.
+        var toAir = launch.AddTransition(air);
+        toAir.AddCondition(AnimatorConditionMode.If, 0f, RobotLocomotion.AirborneParameter);
+        toAir.hasExitTime = true;
+        toAir.exitTime = 1f;
+        toAir.duration = 0.10f;
+
+        // Touchdown, from either half of the flight — a jump short enough to
+        // end during the drive never reaches the tuck at all.
+        foreach (var from in new[] { launch, air })
+        {
+            var touchdown = from.AddTransition(land);
+            touchdown.AddCondition(AnimatorConditionMode.IfNot, 0f, RobotLocomotion.AirborneParameter);
+            touchdown.hasExitTime = false;
+            touchdown.duration = 0.08f;
+        }
+
+        var recover = land.AddTransition(locomotion);
+        recover.hasExitTime = true;
+        recover.exitTime = 1f;
+        recover.duration = 0.12f;
     }
 
     static void EnsureFolder(string path)

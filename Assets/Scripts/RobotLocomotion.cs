@@ -22,6 +22,14 @@ public class RobotLocomotion : MonoBehaviour
     /// <summary>Animator float parameter the locomotion blend tree reads (m/s).</summary>
     public const string SpeedParameter = "Speed";
 
+    /// <summary>
+    /// Animator bool parameter that runs the jump states: true from takeoff
+    /// until the feet are back down. MeshyWalkerForge builds the states behind
+    /// it; a controller without them simply has no such parameter and the
+    /// robot keeps the old settle-in-the-air behaviour.
+    /// </summary>
+    public const string AirborneParameter = "Airborne";
+
     [Tooltip("How quickly the animator's Speed follows the real speed (higher = snappier).")]
     public float responsiveness = 12f;
 
@@ -29,9 +37,9 @@ public class RobotLocomotion : MonoBehaviour
     public bool disableHoverBob = true;
 
     /// <summary>
-    /// Set while the character is mid-leap (see RobotJump). The legs settle
-    /// instead of sprinting through the air — a robot running on nothing reads
-    /// worse than one holding a pose.
+    /// Set while the character is off the ground — a link leap (RobotJump) or
+    /// the player's own jump (CharacterMotor). Drives the martial-arts jump
+    /// states, and stops the legs sprinting through the air on the way.
     /// </summary>
     public bool Airborne { get; set; }
 
@@ -40,11 +48,15 @@ public class RobotLocomotion : MonoBehaviour
     Vector3 _lastPosition;
     float _speed;
     int _speedHash;
+    int _airborneHash;
+    bool _hasAirborne;
 
     void Awake()
     {
         _animator = GetComponent<Animator>();
         _speedHash = Animator.StringToHash(SpeedParameter);
+        _airborneHash = Animator.StringToHash(AirborneParameter);
+        _hasAirborne = HasParameter(_airborneHash);
 
         var motor = GetComponentInParent<CharacterMotor>();
         _character = motor != null ? motor.transform : transform.root;
@@ -77,5 +89,23 @@ public class RobotLocomotion : MonoBehaviour
 
         _speed = Mathf.Lerp(_speed, planar, 1f - Mathf.Exp(-responsiveness * dt));
         _animator.SetFloat(_speedHash, _speed);
+        if (_hasAirborne)
+            _animator.SetBool(_airborneHash, Airborne);
+    }
+
+    /// <summary>
+    /// Checked once instead of setting blind: writing a parameter a controller
+    /// does not have is a console error every frame, and this same component
+    /// runs on the Brawl fighters and the robot-select turntable, whose
+    /// controllers know nothing about jumping.
+    /// </summary>
+    bool HasParameter(int hash)
+    {
+        if (_animator == null || _animator.runtimeAnimatorController == null)
+            return false;
+        foreach (var parameter in _animator.parameters)
+            if (parameter.nameHash == hash)
+                return true;
+        return false;
     }
 }

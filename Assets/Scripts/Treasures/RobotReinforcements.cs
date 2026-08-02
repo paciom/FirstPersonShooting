@@ -6,16 +6,19 @@ using UnityEngine.AI;
 /// Builds extra robots mid-match when a team banks enough gold.
 ///
 /// Rather than re-running the editor-time robot construction at runtime, a
-/// healthy team-mate is cloned: Instantiate remaps every internal reference
-/// (weapons → the clone's own components, DeRezEffect.body → the clone's body,
-/// muzzle/ownerRoot → the clone's rig), so the new robot is wired exactly like
-/// the ones ArenaBuilder made — including whichever roster model the team
-/// picked on the select screen.
+/// healthy team-mate is cloned through <see cref="TeamRoster.Clone"/> — the
+/// same path the select screen's team size builds its robots on, so a bought
+/// robot and a tenth starter are wired identically. This class owns the rest:
+/// who is eligible to be copied, where the gold puts them, and taking them off
+/// the field again when the match ends.
 /// </summary>
 public static class RobotReinforcements
 {
-    /// <summary>Ceiling per team, counting the three built into the scene.</summary>
-    public const int MaxPerTeam = 6;
+    /// <summary>
+    /// Stamped into the name of every robot bought here, so TeamRoster can tell
+    /// them apart from the scene's own permanent cast.
+    /// </summary>
+    public const string BoughtMarker = "_Reinforcement";
 
     static readonly List<GameObject> Spawned = new List<GameObject>();
 
@@ -47,37 +50,22 @@ public static class RobotReinforcements
                 template = brain;
         }
 
-        if (roster >= MaxPerTeam || template == null)
+        if (roster >= TeamRoster.BotCapacity(teamId) || template == null)
             return false;
 
         Vector3 spawn = PickSpawnPoint(teamId);
-        var clone = Object.Instantiate(template.gameObject, spawn, template.transform.rotation);
-        clone.name = $"{StripClone(template.name)}_Reinforcement{Spawned.Count + 1}";
-        Spawned.Add(clone);
+        // Every trap Instantiate sets for a robot is handled in there, and the
+        // robot-form template check above is what lands this clone on a form it
+        // actually owns rather than a half-folded tank.
+        var cloneBrain = TeamRoster.Clone(template, spawn, template.transform.rotation,
+            $"{StripClone(template.name)}{BoughtMarker}{Spawned.Count + 1}");
+        if (cloneBrain == null)
+            return false;
 
-        // A NavMeshAgent placed by Instantiate hasn't attached to the mesh yet.
-        var agent = clone.GetComponent<NavMeshAgent>();
-        if (agent != null && agent.enabled)
-            agent.Warp(spawn);
-
-        var cloneBrain = clone.GetComponent<AIBrain>();
-        if (cloneBrain != null)
-        {
-            cloneBrain.SetActive(true);
-            GameModeController.Instance?.RegisterBot(cloneBrain);
-        }
-
-        // Fresh robots start at full shield and with no inherited treasure gun.
-        clone.GetComponent<EnergyShield>()?.Rematerialize();
-        clone.GetComponent<WeaponLoadout>()?.ClearSpecial();
-
-        // Instantiate copies the models VehicleSkin and TransformMode built,
-        // but none of the private fields tracking them, so the clone would
-        // otherwise build a second set over the top of the inherited one and
-        // leave that one hanging under its Body forever. Belt and braces with
-        // the robot-form template check above: this lands the clone on a form
-        // it actually owns, whatever it was copied from.
-        clone.GetComponent<TransformMode>()?.ForceRobotForm();
+        Spawned.Add(cloneBrain.gameObject);
+        // Bought mid-match, so unlike a team the roster screen sized, this one
+        // starts thinking the moment it lands.
+        cloneBrain.SetActive(true);
 
         Color tint = MatchAnnouncer.TeamColor(teamId);
         VfxUtil.Explosion(spawn + Vector3.up * 1f, tint, 1.6f);

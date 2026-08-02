@@ -479,6 +479,118 @@ public static class BrawlPoses
         rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.70f, -0.15f, 0.35f), extend);
     }
 
+    // ------------------------------------------------------------- the leap
+    //
+    // The jump is three templates rather than one, because how long a robot
+    // is off the ground is decided by physics, not by a clip: CharacterMotor
+    // throws it at whatever height the rule asks for and RobotJump's arc is
+    // as long as the gap it crosses. So the drive plays once, the tuck holds
+    // for as long as the flight actually lasts, and the landing plays once.
+    // A single fixed-length leap clip would either end in mid-air or still
+    // be taking off after the feet were back down.
+    //
+    // These stand on the RIG'S REST POSE, not on StanceBase: the Gunfight
+    // robot is carrying a blaster and blends out of a walk cycle, so a
+    // fighter's bladed guard would be the wrong thing to land back into.
+
+    /// <summary>
+    /// The airborne shape, shared so the landing can begin in EXACTLY what
+    /// the flight was holding: lead knee speared up with the shin folded
+    /// hard under it, trail leg swept back, rear fist chambered at the hip
+    /// and the lead knife-hand out — a jumping knee, not a ragdoll.
+    /// </summary>
+    public static void JumpTuck(BrawlPoseRig rig, float w)
+    {
+        if (w <= 0f)
+            return;
+        rig.Rotate(rig.Hips, Vector3.up, 10f, w);
+        rig.Rotate(rig.Chest, Vector3.right, 9f, w);      // crunches over the knee
+        rig.Rotate(rig.Head, Vector3.up, -12f, w);        // eyes stay downrange
+
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.02f, 0.55f, 0.62f), w);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.88f, -0.32f), w);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.06f, -0.55f, -0.62f), w);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -0.85f, -0.38f), w);
+
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.40f, -0.60f, -0.40f), w);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.20f, -0.15f, -0.85f), w);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.30f, 0.35f, 0.75f), w);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.10f, 0.45f, 0.85f), w);
+    }
+
+    /// <summary>
+    /// The drive, played the instant the feet leave the floor. There is no
+    /// anticipation frame in it on purpose — the motor has already launched
+    /// by the time this state is entered, so a crouch here would be a robot
+    /// squatting in mid-air. What survives of the push-off is the tail of
+    /// the extension: legs snapping straight and trailing, both arms
+    /// swinging up through the takeoff, chest and chin opening to the sky.
+    /// </summary>
+    public static void JumpLaunch(BrawlPoseRig rig, float u)
+    {
+        float drive = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.55f));
+        float snap = Pulse(u, 0.00f, 0.10f, 0.14f, 0.40f);   // the last of the push
+
+        // Legs finish the extension and trail behind the body.
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.05f, -0.94f, -0.28f), drive);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -0.98f, -0.18f), drive);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.05f, -0.95f, -0.18f), drive);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -0.98f, -0.12f), drive);
+
+        // Both arms swing up — the swing is where a jump gets its height.
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.28f, 0.85f, 0.32f), drive);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.14f, 0.94f, 0.22f), drive);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.28f, 0.85f, 0.32f), drive);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.14f, 0.94f, 0.22f), drive);
+
+        rig.Rotate(rig.Chest, Vector3.right, -13f, drive);   // opens up off the floor
+        rig.Rotate(rig.Head, Vector3.right, -8f, drive);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.05f, 0f), drive);
+        rig.Shift(rig.Hips, new Vector3(0f, -0.05f, 0f), snap);
+    }
+
+    /// <summary>
+    /// The flight, looped for however long the robot is actually up there.
+    /// First and last frames match — every oscillation is a full sine.
+    /// </summary>
+    public static void JumpAir(BrawlPoseRig rig, float u)
+    {
+        JumpTuck(rig, 1f);
+        float sway = Mathf.Sin(u * 2f * Mathf.PI);
+        rig.Rotate(rig.Chest, Vector3.up, 4f * sway, 1f);
+        rig.Rotate(rig.Hips, Vector3.up, -3f * sway, 1f);
+        rig.Shift(rig.Hips, new Vector3(0f, 0.018f * sway, 0f), 1f);
+        // The speared knee breathes rather than hanging frozen.
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.02f, 0.62f, 0.58f), 0.12f + 0.10f * sway);
+    }
+
+    /// <summary>
+    /// The landing: the tuck unwinds, the feet reach down and plant, the
+    /// whole frame sinks into an absorbing crouch and rises back out of it.
+    /// Ends on the rest pose exactly, which is what the walk blend tree is
+    /// expecting to take back.
+    /// </summary>
+    public static void JumpLand(BrawlPoseRig rig, float u)
+    {
+        float tuck = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.30f));
+        float absorb = Pulse(u, 0.14f, 0.34f, 0.48f, 1.00f);
+
+        JumpTuck(rig, tuck);
+
+        // Knees eat the landing, torso folds over them, eyes come up first.
+        rig.Shift(rig.Hips, new Vector3(0f, -0.22f, 0f), absorb);
+        rig.Aim(rig.UpLegR, rig.LegR, new Vector3(0.10f, -0.55f, 0.62f), absorb);
+        rig.Aim(rig.LegR, rig.FootR, new Vector3(0f, -1f, -0.30f), absorb);
+        rig.Aim(rig.UpLegL, rig.LegL, new Vector3(-0.10f, -0.58f, 0.55f), absorb);
+        rig.Aim(rig.LegL, rig.FootL, new Vector3(0f, -1f, -0.24f), absorb);
+        rig.Rotate(rig.Chest, Vector3.right, 17f, absorb);
+        rig.Rotate(rig.Head, Vector3.right, -15f, absorb);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(0.55f, -0.45f, 0.35f), absorb);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(0.30f, -0.20f, 0.85f), absorb);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(-0.55f, -0.45f, 0.35f), absorb);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(-0.30f, -0.20f, 0.85f), absorb);
+    }
+
     public static void Block(BrawlPoseRig rig, float u)
     {
         StanceBase(rig, 1f);

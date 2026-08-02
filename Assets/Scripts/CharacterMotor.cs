@@ -11,7 +11,14 @@ public class CharacterMotor : MonoBehaviour
     [Header("Movement")]
     public float walkSpeed = 6f;
     public float sprintSpeed = 9f;
+
+    [Tooltip("Apex floor in metres, for a pawn wearing no robot model yet.")]
     public float jumpHeight = 1.2f;
+
+    [Tooltip("Apex as a multiple of the robot's own height; overrides jumpHeight " +
+             "whenever the robot is taller than it. See RobotFactory.JumpHeights.")]
+    public float jumpBodyHeights = RobotFactory.JumpHeights;
+
     public float gravity = -22f;
 
     [Header("Look")]
@@ -104,8 +111,20 @@ public class CharacterMotor : MonoBehaviour
         if (IsFrozen)
             return;
         if (_controller.isGrounded)
-            _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            _verticalVelocity = Mathf.Sqrt(JumpApex * -2f * gravity);
     }
+
+    /// <summary>
+    /// How high this jump goes: the robot's own height plus 20%, so a leap
+    /// visibly clears the robot doing it whichever one the player picked.
+    ///
+    /// Measured at the moment of the jump rather than cached, because the
+    /// roster screen swaps the model underneath a live pawn (RobotFactory
+    /// .Reskin) and a height cached at Awake would be the previous robot's.
+    /// Jumps are rare enough that walking the model's renderers once each is
+    /// nothing.
+    /// </summary>
+    public float JumpApex => Mathf.Max(jumpHeight, RobotFactory.MeasureHeight(transform) * jumpBodyHeights);
 
     public void Teleport(Vector3 position)
     {
@@ -135,5 +154,53 @@ public class CharacterMotor : MonoBehaviour
         Vector3 motion = planar + Vector3.up * _verticalVelocity + externalVelocity;
         _controller.Move(motion * Time.deltaTime);
         externalVelocity = Vector3.MoveTowards(externalVelocity, Vector3.zero, 18f * Time.deltaTime);
+
+        UpdateAirborne();
+    }
+
+    /// <summary>
+    /// Tells the legs when they are off the floor, which is what puts the
+    /// robot into the jump animation instead of running on nothing. The bots'
+    /// half of the same signal is RobotJump.SetAirborne.
+    ///
+    /// Grounding is not read raw: CharacterController.isGrounded drops out for
+    /// single frames on stairs and slope seams, and a raw read would flicker
+    /// the whole robot through takeoff-and-land every time it walked up a
+    /// ramp. Only <see cref="GroundGrace"/> of continuous air counts.
+    ///
+    /// Float mode is deliberately NOT airborne: moonboots are a hover, and a
+    /// robot holding a jumping-knee tuck for the ten seconds of a drift reads
+    /// as a frozen animation, not as flying.
+    /// </summary>
+    void UpdateAirborne()
+    {
+        bool grounded = _controller.isGrounded || floatMode;
+        _airTime = grounded ? 0f : _airTime + Time.deltaTime;
+
+        bool inRobotForm = _vehicle == null || (!_vehicle.IsVehicle && !_vehicle.IsBusy);
+        SetAirborne(inRobotForm && _airTime > GroundGrace);
+    }
+
+    /// <summary>
+    /// Ungrounded frames shorter than this are step seams, not flight.
+    /// </summary>
+    const float GroundGrace = 0.08f;
+
+    float _airTime;
+    bool _airborne;
+
+    /// <summary>
+    /// Looked up on the edge rather than cached: a robot swap destroys the
+    /// whole model, taking its RobotLocomotion with it, and a cached reference
+    /// would leave the new skeleton never hearing about a jump again.
+    /// </summary>
+    void SetAirborne(bool airborne)
+    {
+        if (airborne == _airborne)
+            return;
+        _airborne = airborne;
+        var legs = GetComponentInChildren<RobotLocomotion>();
+        if (legs != null)
+            legs.Airborne = airborne;
     }
 }

@@ -7,8 +7,10 @@ using UnityEngine.AI;
 /// NavMeshAgents traverse an off-mesh link by sliding along it in a straight
 /// line, so a robot stepping off a ZIGGURAT tier or a FOUNDRY catwalk floated
 /// down like it was on a wire. This takes manual control of that traversal and
-/// throws the robot along a parabola instead — which is all "jumping" needs to
-/// be, because the arena links already mark exactly where a jump is necessary.
+/// throws the robot along a parabola instead, peaking a full body height and a
+/// bit over the far end — the arena links already mark exactly where a jump is
+/// necessary. The martial-arts jump animation rides on top of it, via
+/// RobotLocomotion.Airborne.
 ///
 /// Only robot form jumps. A transformed robot is a ground vehicle, so it is
 /// routed around every link by the pathfinder (see <see cref="UpdateAreaMask"/>)
@@ -25,12 +27,16 @@ using UnityEngine.AI;
 public class RobotJump : MonoBehaviour
 {
     [Tooltip("Shortest a leap may take, seconds. Below this it reads as a twitch.")]
-    public float minAirTime = 0.34f;
+    public float minAirTime = 0.45f;
 
     [Tooltip("Longest a leap may take. Above this the robot hangs.")]
-    public float maxAirTime = 0.85f;
+    public float maxAirTime = 0.95f;
 
-    [Tooltip("How high the arc peaks above the higher end of the link.")]
+    [Tooltip("Apex above the higher end of the link, as a multiple of the robot's " +
+             "own height. See RobotFactory.JumpHeights.")]
+    public float clearanceBodyHeights = RobotFactory.JumpHeights;
+
+    [Tooltip("Apex floor in metres, for a bot wearing no robot model yet.")]
     public float clearance = 0.9f;
 
     /// <summary>
@@ -39,6 +45,21 @@ public class RobotJump : MonoBehaviour
     /// fought.
     /// </summary>
     const float HijackDistance = 1.5f;
+
+    /// <summary>
+    /// The gravity a leap is TIMED to. Nothing here is simulated — the arc is
+    /// an interpolation — but a body-height leap crossed in a third of a second
+    /// reads as a slingshot, so how long the robot hangs is taken from how high
+    /// it goes, at the same pull the player's own jump falls under
+    /// (CharacterMotor.gravity). The two jumps then look like the same jump.
+    /// </summary>
+    const float TimedGravity = 22f;
+
+    /// <summary>Seconds to fall <paramref name="height"/> metres under <see cref="TimedGravity"/>.</summary>
+    static float FallTime(float height)
+    {
+        return Mathf.Sqrt(2f * Mathf.Max(0f, height) / TimedGravity);
+    }
 
     /// <summary>
     /// Unity's built-in "Jump" NavMesh area. ArenaKit puts every link on it so
@@ -133,10 +154,16 @@ public class RobotJump : MonoBehaviour
         // end. Refusing outright would park it on the link permanently.
         bool asVehicle = _vehicle != null && _vehicle.IsVehicle;
 
-        _peak = asVehicle ? 0f : Mathf.Max(clearance, rise + clearance);
+        // Its own height plus 20%, measured off the robot actually wearing the
+        // rig — the roster is swapped underneath a live bot, so this cannot be
+        // a number decided when the component was added.
+        float apex = Mathf.Max(clearance,
+            RobotFactory.MeasureHeight(transform) * clearanceBodyHeights);
+
+        _peak = asVehicle ? 0f : Mathf.Max(apex, rise + apex);
         _duration = asVehicle
             ? Mathf.Clamp(span / 9f, 0.15f, 0.45f)
-            : Mathf.Clamp(span / 6f, minAirTime, maxAirTime);
+            : Mathf.Clamp(Mathf.Max(span / 6f, FallTime(_peak) * 2f), minAirTime, maxAirTime);
 
         _t = 0f;
         _jumping = true;
@@ -188,8 +215,9 @@ public class RobotJump : MonoBehaviour
     }
 
     /// <summary>
-    /// Hold the legs still while airborne. Looked up per leap rather than
-    /// cached: a robot swap destroys the whole skeleton, taking this with it.
+    /// Hand the leap to the animator: the launch, the tuck and the landing
+    /// play off this one flag. Looked up per leap rather than cached — a robot
+    /// swap destroys the whole skeleton, taking this with it.
     /// </summary>
     void SetAirborne(bool airborne)
     {
