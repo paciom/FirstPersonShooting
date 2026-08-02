@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageDraw, ImageFilter
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "Assets", "Resources", "Menu")
+PLATE_OUT = os.path.join(os.path.dirname(__file__), "menu_plates")
 ENDPOINT = "https://api.minimax.io/v1/image_generation"
 
 # The robots are toon-shaded, high-saturation, hard-surface transformers on a
@@ -35,6 +36,11 @@ STYLE = (
     "polished AAA mobile game key art quality, vibrant and heroic"
 )
 NO_TEXT = "no text, no letters, no words, no numbers, no logo, no watermark, no UI"
+# Applied to the card plates only: they are backdrops for a 3D render laid on
+# top, so anything robot-shaped in them would double up with the real robot.
+PLATE = ("empty environment background plate, no robots, no mecha, no people, "
+         "no characters, no creatures, defocused shallow depth of field, soft "
+         "blurred background bokeh, wide establishing shot")
 
 # key -> (aspect, subject). Card keys match MenuIcon enum names, lowercased.
 ART = {
@@ -42,24 +48,14 @@ ART = {
     # matters as much as the subject: the model only leaves the upper third
     # genuinely empty if you tell it so first, before describing anything.
     "keyart": ("16:9", (
-        "IMPORTANT COMPOSITION: the top 40 percent of the image is completely "
-        "empty glowing sky with nothing in it, no robots and no structures "
-        "intrude into the upper 40 percent. A wide heroic team of armored "
-        "transforming robots stands shoulder to shoulder along the bottom half "
-        "of the picture seen from a low angle, their heads reaching only up to "
-        "the middle line of the image, above them nothing but a vast empty "
-        "glowing teal sky with soft clouds and drifting light motes, dark "
-        "smoke at the very bottom edge, symmetrical hero shot"
-    )),
-    # Unused by the menu today, but this is the alternate hero framing worth
-    # keeping around: one giant robot dead centre under an arena dome halo.
-    "keyart_hero": ("16:9", (
-        "IMPORTANT COMPOSITION: the top 40 percent of the image is completely "
-        "empty glowing sky with nothing in it. In the lower 60 percent one "
-        "giant heroic teal and orange armored robot stands facing the camera "
-        "at a low hero angle with two smaller robots flanking it, thick dark "
-        "mist swallows the very bottom edge, a huge soft glowing circular "
-        "arena dome halo fills the empty sky above them, symmetrical"
+        "IMPORTANT COMPOSITION: the top 45 percent of the image is completely "
+        "empty glowing sky with nothing in it. A vast empty glowing teal and "
+        "cyan sky over a distant futuristic arena city on the horizon, the "
+        "city tiny and far away along the bottom third, sweeping searchlight "
+        "beams, soft clouds, drifting light motes, dark smoke and haze along "
+        "the very bottom edge, symmetrical, wide cinematic establishing shot, "
+        "completely empty of robots mecha people characters or foreground "
+        "objects"
     )),
     "emblem": ("1:1", (
         "ornate heraldic esports crest emblem, a robot knight visor helmet "
@@ -69,77 +65,77 @@ ART = {
         "sharp vector-clean metal insignia"
     )),
 
+    # --- background plates -------------------------------------------
+    # DELIBERATELY EMPTY OF CHARACTERS. The robots on these cards are the
+    # game's own, rendered by MenuArtForge and composited on top by
+    # Tools/menucomposite.py -- a painted robot underneath would collide with
+    # the real one. They are also prompted defocused: a soft, shallow-focus
+    # plate sits under a sharp 3D render without fighting it for perspective,
+    # which a crisp environment with its own strong vanishing point does.
     "aivai": ("16:9", (
-        "two armored transforming robots duelling across a neon laser arena, "
-        "both firing bright cyan and orange energy bolts, streaking tracer "
-        "beams crossing the middle of the frame, sparks on their armor"
+        "empty futuristic laser arena interior at night, glowing cyan floor "
+        "grid stretching away, dark tiered stands, drifting smoke, streaks of "
+        "stray energy fire in the distance"
     )),
     "playervsai": ("16:9", (
-        "first person shooter view: a glowing futuristic energy blaster held "
-        "in the lower right foreground, aimed down a neon arena at an armored "
-        "robot charging the camera, muzzle flash, cyan targeting reticle glow"
+        "empty neon arena corridor seen head on, glowing target rings and "
+        "warning stripes on the walls, harsh cyan floodlight down the middle, "
+        "haze and lens flare"
     )),
     "brawl": ("16:9", (
-        "two armored mecha in a brutal close quarters fistfight, one landing a "
-        "massive punch on the other's chest plate, shockwave ring at the "
-        "impact, debris and sparks flying, hand to hand fighting game splash"
+        "empty floodlit fighting ring at night, dark crowd stands with "
+        "thousands of tiny lights, hot spotlights raking down through smoke, "
+        "sparks drifting"
     )),
     "brawlwar": ("16:9", (
-        "two armored mecha clashing in midair, one throwing a flying kick and "
-        "the other blocking with crossed forearms, energy shockwave between "
-        "them, floodlit fighting ring below, arena crowd lights in the haze"
+        "empty combat arena under a huge glowing dome, banks of stadium "
+        "floodlights, heavy atmospheric haze, orange and cyan light beams "
+        "crossing"
     )),
     "brawlshow": ("16:9", (
-        "a single elegant armored mecha frozen mid martial arts kata, one leg "
-        "extended in a high crane kick, ribbons of light trailing its limbs, "
-        "single dramatic spotlight from above, dark dojo arena, graceful and "
-        "ceremonial"
+        "empty ceremonial dojo stage at night, one dramatic overhead "
+        "spotlight pooling on a dark polished floor, red and gold banners far "
+        "back in shadow, drifting motes"
     )),
     "tankraid": ("16:9", (
-        "steep top down aerial view of one heroic hero tank speeding up a "
-        "neon highway strip, surrounded by a swarm of small enemy tanks and "
-        "turrets firing, glowing projectile streaks everywhere, arcade "
-        "vertical shooter battlefield"
+        "empty neon highway strip seen from high above, glowing lane markings "
+        "and hazard chevrons, scorch marks and craters, dark ground either "
+        "side, tracer streaks in the distance"
     )),
     "onlinepvp": ("16:9", (
-        "two armored robots facing each other in profile on opposite sides of "
-        "a glowing holographic wireframe planet, network lines arcing between "
-        "continents, versus standoff composition, split cyan and orange "
-        "lighting"
+        "a glowing holographic wireframe planet floating in dark space, "
+        "network lines arcing between continents, cyan and orange data "
+        "streams, empty foreground"
     )),
     "commander": ("16:9", (
-        "real time strategy overhead battlefield view: a fortified futuristic "
-        "command base with glowing hexagonal buildings and turrets, ranks of "
-        "small robot units and tanks marching out in formation, holographic "
-        "grid overlay on the terrain"
+        "empty futuristic battlefield terrain seen from high above, "
+        "holographic command grid projected over rock and metal plating, "
+        "glowing resource nodes, smoke drifting, no vehicles"
     )),
     "commanderwar": ("16:9", (
-        "sweeping overhead view of two huge robot armies colliding across a "
-        "canyon battlefield, hundreds of tiny units and tanks, crossfire of "
-        "cyan and orange tracer fire, explosions and smoke columns, epic scale "
-        "war"
+        "vast empty war-torn plain seen from high above, trench lines and "
+        "craters, columns of smoke, distant fires, crossing tracer light in "
+        "the far distance, no vehicles"
     )),
     "towerdefense": ("16:9", (
-        "a winding canyon path lined with glowing futuristic defense turrets "
-        "and missile towers all firing down at a long column of advancing "
-        "enemy robots, tracer arcs, tower defense diorama, three quarter view"
+        "empty winding canyon path seen three quarter from above, glowing "
+        "waypoint markers along the route, sheer rock walls, mist in the "
+        "gully, no towers and no units"
     )),
     "chinesequest": ("16:9", (
-        "a friendly armored robot student sitting cross legged before a "
-        "floating glowing scroll and red paper lanterns, jade and gold "
-        "ornaments, ink brush and inkstone, warm red and gold Chinese "
-        "temple courtyard at night, magical study scene"
+        "empty Chinese temple courtyard at night, rows of glowing red paper "
+        "lanterns, red lacquered columns, jade and gold ornament, wet stone "
+        "floor, warm mist"
     )),
     "chineserun": ("16:9", (
-        "an armored robot sprinting straight toward the camera down an endless "
-        "neon corridor, glowing gates and floating jade rings rushing past, "
-        "motion blur speed lines, red and gold lantern light streaking"
+        "empty endless neon corridor rushing toward the viewer, glowing gates "
+        "and floating jade rings, red and gold lantern light streaking with "
+        "motion blur"
     )),
     "arenabuilder": ("16:9", (
-        "a futuristic arena under construction assembling itself in midair "
-        "from glowing holographic blueprint blocks, translucent cyan wireframe "
-        "pieces snapping into solid platforms and ramps, drafting table "
-        "hologram, creative sandbox feel"
+        "empty holographic drafting void, a faint cyan wireframe construction "
+        "grid receding into darkness, translucent blueprint planes and "
+        "floating measurement guides, no buildings"
     )),
 }
 
@@ -147,11 +143,15 @@ ART = {
 # The prompt optimizer rewrites the prompt before rendering, and it treats a
 # composition instruction as flavour text -- it puts the robots right back in
 # the sky. Any prompt whose LAYOUT matters has to go through verbatim.
-NO_OPTIMIZE = {"keyart", "keyart_hero"}
+NO_OPTIMIZE = {"keyart"}
 
 # Keys whose flat backdrop should become alpha, so the art can sit over the
 # key art instead of inside a black box.
 CUTOUT = {"emblem"}
+
+# Everything except the crest is a backdrop for rendered robots. These stage
+# in Tools/menu_plates and only reach Resources once composited.
+PLATES = {k for k in ART if k != "emblem"}
 
 
 def cut_out_background(path):
@@ -186,14 +186,15 @@ def cut_out_background(path):
 
 
 def generate(key, aspect, subject, force=False):
-    path = os.path.abspath(os.path.join(OUT, key + ".png"))
+    plate = key in PLATES
+    path = os.path.abspath(os.path.join(PLATE_OUT if plate else OUT, key + ".png"))
     if os.path.exists(path) and not force:
         print(f"  skip  {key} (exists)")
         return path
 
     body = json.dumps({
         "model": "image-01",
-        "prompt": f"{subject}. {STYLE}. {NO_TEXT}",
+        "prompt": f"{subject}. {STYLE}. {PLATE + '. ' if plate else ''}{NO_TEXT}",
         "aspect_ratio": aspect,
         "response_format": "url",
         "n": 1,
