@@ -67,15 +67,18 @@ public static class RobotSelectMenu
     // stage (1.90 x 1.43 x 1.78) and a thin robot (1.40 x 1.80 x 0.83) then
     // agree on one number while differing enormously in bulk, and bulk is what
     // the eye compares.
-    const float PreviewRobotHeight = 1.6f;
-    const float StageVehicleDiagonal = 1.45f;
+    // Internal because TransformCast's corner panel builds the same stop motion
+    // from the same stages: a robot that folds at one set of proportions on its
+    // card and another in the HUD reads as two different robots.
+    internal const float PreviewRobotHeight = 1.6f;
+    internal const float StageVehicleDiagonal = 1.45f;
 
     // Generated stages come out of the image-to-3D pipeline nose-down -Z, so
     // they face away from the camera the robot faces. Stage one is the real rig
     // and is already correct, so only the generated stages are turned — the
     // same offset VehicleSkin.stageYawOffset applies in the arena, and the two
     // must agree or a robot faces one way on its card and the other in a match.
-    const float StageYawOffset = 180f;
+    internal const float StageYawOffset = 180f;
 
     public static GameObject Build(GameModeController controller, RobotRoster roster,
         GameMode pendingMode, int cyanIndex, int magentaIndex)
@@ -137,6 +140,12 @@ public static class RobotSelectMenu
         // is picked here.
         if (pendingMode == GameMode.Brawl || pendingMode == GameMode.BrawlWar)
             BuildLevelPicker(canvasGo.transform, pendingMode);
+
+        // The two Gunfight modes pick how many robots a side as well as which
+        // one. Nothing else does: every other mode's cast is fixed by its rules
+        // (two corners in a Brawl, one driver in Tank Raid).
+        if (pendingMode == GameMode.AIvAI || pendingMode == GameMode.PlayerVsAI)
+            BuildTeamSizePicker(canvasGo.transform, pendingMode == GameMode.PlayerVsAI);
 
         inspector.BuildUI(canvasGo.transform);
 
@@ -399,7 +408,7 @@ public static class RobotSelectMenu
     }
 
     /// <summary>Combined renderer bounds of an instance, or an empty box.</summary>
-    static Bounds MeasureBounds(GameObject instance)
+    internal static Bounds MeasureBounds(GameObject instance)
     {
         if (instance == null)
             return new Bounds(Vector3.zero, Vector3.zero);
@@ -507,6 +516,149 @@ public static class RobotSelectMenu
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
         }
         Refresh();
+    }
+
+    /// <summary>
+    /// How many robots a side, on the strip between the subtitle and the cyan
+    /// row: the four matchups worth one click each, then a box for any other
+    /// number.
+    ///
+    /// The box and the chips are one setting shown twice, so they stay in step
+    /// — a preset empties the box back to its placeholder, and a typed number
+    /// puts the chips out. Only the chips are redrawn while the box is being
+    /// typed into: rewriting a field's text under a live caret moves the caret
+    /// to the end, which turns typing "10" into a fight with the cursor.
+    ///
+    /// The line on the right says what the number actually fields, because in
+    /// Player v AI it is not obvious — the player is one of their team's
+    /// robots, so 4 v 4 gives them three allies rather than four.
+    /// </summary>
+    static void BuildTeamSizePicker(Transform parent, bool playerPlays)
+    {
+        const float RowY = 350f;
+        const float ChipPitch = 100f, FirstChipX = -440f;
+
+        var chips = new Image[TeamSize.Presets.Length];
+        var labels = new Text[chips.Length];
+        InputField box = null;
+        Text summary = null;
+        bool echoing = false;
+
+        var selectedTint = new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f);
+
+        void RefreshChips()
+        {
+            int size = TeamSize.PerTeam;
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = TeamSize.Presets[i] == size;
+                chips[i].color = on ? selectedTint : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+            summary.text = TeamSize.Describe(size, playerPlays);
+        }
+
+        void Refresh()
+        {
+            RefreshChips();
+            // The box carries the number only while it is the one in charge; on
+            // a preset it drops back to its placeholder.
+            echoing = true;
+            int size = TeamSize.PerTeam;
+            box.text = TeamSize.IsPreset(size) ? "" : size.ToString();
+            echoing = false;
+        }
+
+        var caption = MakeText(parent, "TeamSizeLabel", "ROBOTS  PER  TEAM", 18,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(-640f, RowY), new Vector2(220f, 26f));
+        caption.alignment = TextAnchor.MiddleRight;
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            int size = TeamSize.Presets[i];
+            var chip = MakeImage(parent, $"TeamSize_{size}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(FirstChipX + i * ChipPitch, RowY);
+            rect.sizeDelta = new Vector2(92f, 46f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                TeamSize.PerTeam = size;
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", TeamSize.Matchup(size), 22,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(88f, 42f));
+        }
+
+        box = BuildAmountBox(parent, new Vector2(-10f, RowY));
+        MakeText(parent, "TeamSizeRange", $"ANY  {TeamSize.Min} – {TeamSize.Max}", 15,
+            new Color(1f, 1f, 1f, 0.38f), FontStyle.Normal,
+            new Vector2(0.5f, 0.5f), new Vector2(130f, RowY), new Vector2(160f, 24f));
+
+        summary = MakeText(parent, "TeamSizeSummary", "", 20, HoloCyan, FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(470f, RowY), new Vector2(500f, 46f));
+        summary.alignment = TextAnchor.MiddleLeft;
+
+        box.onValueChanged.AddListener(typed =>
+        {
+            if (echoing)
+                return;
+            // Out-of-range and half-typed entries are ignored rather than
+            // clamped: clamping mid-keystroke rewrites the field, and "1" on
+            // the way to "16" is not a request for a 1 v 1.
+            if (int.TryParse(typed, out int size) && size >= TeamSize.Min && size <= TeamSize.Max)
+            {
+                TeamSize.PerTeam = size;
+                RefreshChips();
+            }
+        });
+        // Leaving the box is where anything unusable snaps back to the truth:
+        // an emptied field, or a number past the ceiling.
+        box.onEndEdit.AddListener(typed =>
+        {
+            if (int.TryParse(typed, out int size))
+                TeamSize.PerTeam = size;
+            Refresh();
+        });
+
+        Refresh();
+    }
+
+    /// <summary>The type-a-number box, built the way MainMenu builds its map-code field.</summary>
+    static InputField BuildAmountBox(Transform parent, Vector2 position)
+    {
+        var frame = MakeImage(parent, "TeamSizeBox", new Color(0.04f, 0.09f, 0.15f, 0.95f));
+        var rect = frame.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = new Vector2(104f, 46f);
+
+        var underline = MakeImage(frame.transform, "Underline", new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.55f));
+        underline.rectTransform.anchorMin = new Vector2(0f, 0f);
+        underline.rectTransform.anchorMax = new Vector2(1f, 0f);
+        underline.rectTransform.offsetMin = new Vector2(6f, 0f);
+        underline.rectTransform.offsetMax = new Vector2(-6f, 2f);
+
+        var text = MakeText(frame.transform, "Text", "", 22, Color.white, FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(92f, 40f));
+        var placeholder = MakeText(frame.transform, "Placeholder", "OTHER", 18,
+            new Color(1f, 1f, 1f, 0.30f), FontStyle.Italic,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(92f, 40f));
+
+        var field = frame.gameObject.AddComponent<InputField>();
+        field.targetGraphic = frame;
+        field.textComponent = text;
+        field.placeholder = placeholder;
+        field.characterLimit = TeamSize.Max.ToString().Length;
+        field.contentType = InputField.ContentType.IntegerNumber;
+        return field;
     }
 
     // ---------- uGUI helpers (same idiom as MainMenu) ----------

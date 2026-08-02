@@ -1,50 +1,97 @@
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
-using UnityEngine.Video;
 
 /// <summary>
-/// Plays the player's transformation clip in a corner panel whenever they fold,
-/// in Player-v-AI only. First person means you never see your own robot change
-/// shape — this is the replay that shows what just happened to you.
+/// Top-right corner panel that always says which form the robot on screen is
+/// in — ROBOT or TANK — and plays the stop-motion transformation whenever that
+/// robot morphs.
 ///
-/// Unfolding back into a robot plays a PRE-REVERSED file rather than running
-/// the clip backwards: VideoPlayer.playbackSpeed rejects negative values, and
-/// on WebGL the underlying &lt;video&gt; element ignores a negative playbackRate
-/// outright. Tools/make_reverse_clips.py bakes &lt;robot&gt;-transform-back.mp4
-/// next to each source clip; a robot without one falls back to playing forward.
+/// WHY IT EXISTS. In Player v AI first person you never see your own robot, so
+/// pressing Morph used to have no picture at all; in AI v AI the fold is 0.55
+/// seconds somewhere in a firefight and is easy to miss entirely. The panel is
+/// the readable copy of an event the camera is bad at showing.
 ///
-/// Clips are streamed by URL out of StreamingAssets on every platform, not just
-/// WebGL as the robot inspector does. The reversed file has no VideoClip asset
-/// in the roster to reference, and one code path that works everywhere beats
-/// two that differ per platform.
+/// WHY STOP MOTION RATHER THAN THE GENERATED CLIP. This panel used to stream
+/// &lt;robot&gt;-transform.mp4 out of StreamingAssets. The clip is prettier but it
+/// is not what is happening: it is one canned robot in one canned paint,
+/// pre-rendered, so it could not follow a magenta bot, could not follow the
+/// spectator camera cutting to a different robot, and drifted out of step with
+/// the real fold. The stages are the same meshes the arena folds through, so
+/// the corner and the arena now show the same event, in the team's colours, for
+/// whichever robot is actually on camera.
+///
+/// The rig is the one the select screen's cards use — stage models on a
+/// turntable, three point lights, a small camera into a RenderTexture — parked
+/// far below the arena. Sizing constants are shared with RobotSelectMenu on
+/// purpose: a robot that folds at different proportions on its card and in the
+/// HUD reads as two different robots.
+///
+/// One rig per team, built on demand and kept: AI v AI cuts between cyan and
+/// magenta every few seconds, and rebuilding eight GLB stages on every cut
+/// would hitch the frame the camera cuts on. Both go when the panel hides,
+/// which is when the match ends.
 /// </summary>
 public class TransformCast : MonoBehaviour
 {
-    const float PanelSize = 320f;
-    const float FadeInSeconds = 0.18f;
-    const float FadeOutSeconds = 0.4f;
+    /// <summary>Side of the rendered square, on the 1920x1080 reference canvas.</summary>
+    const float PanelSize = 200f;
 
-    /// <summary>Stop waiting for a clip that is never going to arrive.</summary>
-    const float MaxSeconds = 9f;
+    const float FadeInSeconds = 0.2f;
+    const float FadeOutSeconds = 0.35f;
+
+    /// <summary>
+    /// Floor on how long one stage may be held. The arena's fold is 0.55s, which
+    /// across eight stages is 69ms each — under the point where a still
+    /// registers, so the panel would flicker rather than read as a sequence.
+    /// The cast is a replay, not the event, so it is allowed to run slightly
+    /// past the fold it started with; the arena keeps its own timing.
+    /// </summary>
+    const float MinStageSeconds = 0.11f;
+
+    const float IdleSpinDegrees = 20f;
+    const float FoldSpinDegrees = 85f;
+
+    /// <summary>
+    /// How fast the swap flash fades, in units of alpha per second. The same
+    /// trick StopMotionTransformer's light burst plays: consecutive stages share
+    /// no topology, so every change is a pop, and the films cut around a pop
+    /// with light.
+    /// </summary>
+    const float FlashFade = 5.5f;
+
+    /// <summary>
+    /// Where the rigs are parked. Clear of the select screen's own preview rigs,
+    /// which sit at RobotSelectMenu.PreviewDepth (-150), 40 above it, and 60
+    /// below it for the inspector — nothing of theirs reaches this far down.
+    /// </summary>
+    const float RigDepth = -300f;
+
+    /// <summary>Gap between the two team rigs. Wider than the 6-unit preview lights.</summary>
+    const float RigSpacing = 30f;
 
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
 
     public static TransformCast Instance { get; private set; }
 
     CanvasGroup _group;
+    Image _frame;
+    Image _flash;
     RawImage _view;
     Text _caption;
-    RenderTexture _texture;
-    VideoPlayer _video;
-    TransformMode _player;
+    Text _title;
 
-    Text _missing;
-    bool _showing;
-    float _elapsed;
-    float _deadline = MaxSeconds;
-    bool _triedFallback;
-    string _forwardUrl;
-    VideoClip _forwardClip;
+    readonly FormRig[] _rigs = new FormRig[2];
+
+    TransformMode _subject;
+    int _subjectTeam;
+    bool _shown;
+
+    bool _folding;
+    bool _foldToVehicle;
+    float _foldClock;
+    float _foldSeconds;
+    float _flashAmount;
 
     /// <summary>Create the panel if it isn't there yet. Safe to call repeatedly.</summary>
     public static TransformCast Ensure()
@@ -65,243 +112,361 @@ public class TransformCast : MonoBehaviour
     void Start()
     {
         BuildUi();
-        BuildPlayer();
-        Subscribe();
     }
 
     void OnDestroy()
     {
-        if (_player != null)
-            _player.OnFoldStarted -= HandleFold;
-        if (_video != null)
-        {
-            _video.loopPointReached -= HandleFinished;
-            _video.errorReceived -= HandleError;
-        }
-        if (_texture != null)
-            _texture.Release();
+        Unsubscribe();
+        DestroyRigs();
         if (Instance == this) Instance = null;
-    }
-
-    /// <summary>
-    /// The player rig outlives every match, so one subscription holds — but it
-    /// may not exist yet on the frame this component is created.
-    /// </summary>
-    void Subscribe()
-    {
-        if (_player != null || PlayerBrain.Local == null)
-            return;
-        _player = PlayerBrain.Local.GetComponent<TransformMode>();
-        if (_player != null)
-            _player.OnFoldStarted += HandleFold;
     }
 
     void Update()
     {
-        Subscribe();
-
-        if (_group == null || !_group.gameObject.activeSelf)
+        if (_group == null)
             return;
 
-        float dt = Time.unscaledDeltaTime;
+        TrackSubject();
 
-        if (_showing)
+        float dt = Time.unscaledDeltaTime;
+        _group.alpha = Mathf.MoveTowards(_group.alpha, _shown ? 1f : 0f,
+            dt / (_shown ? FadeInSeconds : FadeOutSeconds));
+
+        if (!_shown)
         {
-            _elapsed += dt;
-            // Nothing to replay to someone who has left the match, and a clip
-            // that never loaded must not leave the panel up forever.
-            bool inMatch = GameModeController.Instance == null
-                || GameModeController.Instance.Mode == GameMode.PlayerVsAI;
-            if (!inMatch || _elapsed > _deadline)
-                BeginHide();
+            if (_group.alpha <= 0.001f && _group.gameObject.activeSelf)
+            {
+                _group.gameObject.SetActive(false);
+                // Nothing to render and nothing to render it for: give back the
+                // render textures and the eight stage models per team.
+                DestroyRigs();
+            }
+            return;
         }
 
-        _group.alpha = Mathf.MoveTowards(_group.alpha, _showing ? 1f : 0f,
-            dt / (_showing ? FadeInSeconds : FadeOutSeconds));
+        var rig = ActiveRig();
+        if (rig == null)
+            return;
 
-        if (!_showing && _group.alpha <= 0.001f)
-            Finish();
+        AdvanceFold(rig);
+        rig.Spin((_folding ? FoldSpinDegrees : IdleSpinDegrees) * Time.deltaTime);
+
+        _flashAmount = Mathf.MoveTowards(_flashAmount, 0f, FlashFade * dt);
+        _flash.color = new Color(1f, 1f, 1f, 0.5f * _flashAmount);
     }
+
+    // ------------------------------------------------------------------ subject
+
+    /// <summary>
+    /// Point the panel at whoever the audience is watching: the local player in
+    /// Player v AI, and whichever bot the spectator camera is on in AI v AI.
+    ///
+    /// Re-resolved every frame rather than once at match start, because both can
+    /// change underneath us — the player's robot is built after the mode starts,
+    /// and the spectator cuts to a new bot every few seconds.
+    /// </summary>
+    void TrackSubject()
+    {
+        var mode = GameModeController.Instance != null
+            ? GameModeController.Instance.Mode : GameMode.Menu;
+
+        TransformMode subject = null;
+        int team = 0;
+
+        if (mode == GameMode.PlayerVsAI)
+        {
+            if (PlayerBrain.Local != null)
+                subject = PlayerBrain.Local.GetComponent<TransformMode>();
+            team = 0;
+        }
+        else if (mode == GameMode.AIvAI)
+        {
+            var director = SpectatorCamera.Active;
+            var watched = director != null ? director.Subject : null;
+            if (watched != null)
+            {
+                subject = watched.GetComponent<TransformMode>();
+                var shield = watched.GetComponent<EnergyShield>();
+                team = shield != null ? shield.teamId : 0;
+            }
+        }
+
+        // A robot with no vehicle clips can never morph, so a panel describing
+        // its form would never change — say nothing instead.
+        if (subject != null && !subject.CanTransform)
+            subject = null;
+
+        if (subject != _subject)
+        {
+            Unsubscribe();
+            _subject = subject;
+            _subjectTeam = team;
+            _folding = false;
+            if (_subject != null)
+                _subject.OnFoldStarted += HandleFold;
+        }
+        else
+        {
+            _subjectTeam = team;
+        }
+
+        bool want = _subject != null;
+        if (want && !_group.gameObject.activeSelf)
+            _group.gameObject.SetActive(true);
+        _shown = want;
+
+        if (want)
+            _frame.color = new Color(TeamTint().r, TeamTint().g, TeamTint().b, 0.85f);
+    }
+
+    void Unsubscribe()
+    {
+        if (_subject != null)
+            _subject.OnFoldStarted -= HandleFold;
+        _subject = null;
+    }
+
+    Color TeamTint() => MatchAnnouncer.TeamColor(_subjectTeam);
 
     void HandleFold(bool toVehicle)
     {
-        if (GameModeController.Instance != null
-            && GameModeController.Instance.Mode != GameMode.PlayerVsAI)
-            return;
-
-        // Transforming again mid-clip restarts this one rather than stacking a
-        // second panel; whatever alpha it had carries over.
-        _showing = true;
-        _elapsed = 0f;
-        _deadline = MaxSeconds;
-        _caption.text = toVehicle ? "TRANSFORMING" : "BACK TO ROBOT";
-        _group.gameObject.SetActive(true);
-
-        // The panel goes up either way. A fold that plays no clip used to leave
-        // the corner empty with nothing said anywhere, which is impossible to
-        // tell apart from the whole feature being broken.
-        string clip = ResolveClipName();
-        if (string.IsNullOrEmpty(clip))
-        {
-            ShowMissing("NO  ROBOT  CLIP");
-            return;
-        }
-
-        _missing.enabled = false;
-        _view.enabled = true;
-        string root = $"{Application.streamingAssetsPath}/{clip}";
-        _forwardUrl = $"{root}.mp4";
-        _forwardClip = GameModeController.Instance != null
-            ? GameModeController.Instance.PlayerRobot.transformVideo : null;
-        _triedFallback = toVehicle;   // folding out is already the forward clip
-
-        if (toVehicle)
-            Play(_forwardClip, _forwardUrl);
-        else
-            Play(null, $"{root}-back.mp4");   // no asset exists for the reversed file
+        var rig = ActiveRig();
+        _folding = true;
+        _foldToVehicle = toVehicle;
+        _foldClock = 0f;
+        _foldSeconds = Mathf.Max(TransformMode.FoldSeconds,
+            (rig != null ? rig.StageCount : 1) * MinStageSeconds);
     }
 
     /// <summary>
-    /// Prefers the imported clip asset and falls back to streaming the file.
+    /// Step the stop motion, then land the panel on whatever form the subject is
+    /// actually in.
     ///
-    /// WebGL is the exception in the other direction: it strips VideoClip
-    /// assets to stubs that render black with the reference still non-null, so
-    /// there the URL is the only thing that works. Same rule the robot
-    /// inspector follows.
+    /// The end state is read off the subject rather than assumed from the fold
+    /// that started, because a fold does not always finish the way it began: a
+    /// de-rez calls ForceRobotForm mid-fold, and a request that arrived while
+    /// busy turns straight around into the opposite one.
     /// </summary>
-    void Play(VideoClip clip, string url)
+    void AdvanceFold(FormRig rig)
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        clip = null;
-#endif
-        _video.Stop();
-        if (clip != null)
+        int last = Mathf.Max(0, rig.StageCount - 1);
+        int stage;
+
+        if (_folding)
         {
-            Debug.Log($"[TransformCast] clip {clip.name}");
-            _video.source = VideoSource.VideoClip;
-            _video.clip = clip;
+            _foldClock += Time.deltaTime;
+            float progress = Mathf.Clamp01(_foldClock / Mathf.Max(0.01f, _foldSeconds));
+            // Unfolding runs the same stages backwards — one sequence serves both
+            // directions, exactly as the arena's fold does.
+            float along = _foldToVehicle ? progress : 1f - progress;
+            stage = Mathf.Clamp(Mathf.FloorToInt(along * (last + 1)), 0, last);
+            if (_foldClock >= _foldSeconds)
+                _folding = false;
         }
         else
         {
-            Debug.Log($"[TransformCast] url {url}");
-            _video.source = VideoSource.Url;
-            _video.url = url;
+            stage = _subject != null && _subject.IsVehicle ? last : 0;
         }
-        _video.Play();
+
+        if (rig.Show(stage))
+            _flashAmount = 1f;
+
+        _caption.text = _folding
+            ? (_foldToVehicle ? "TRANSFORMING" : "BACK  TO  ROBOT")
+            : (_subject != null && _subject.IsVehicle ? "TANK" : "ROBOT");
+        _caption.color = _folding ? new Color(0.02f, 0.06f, 0.10f, 0.75f)
+                                  : new Color(0.02f, 0.06f, 0.10f);
     }
 
+    // --------------------------------------------------------------------- rigs
+
     /// <summary>
-    /// Base name of the player's transformation clip, without extension —
-    /// "ranger-transform", which the reversed file suffixes with "-back".
-    ///
-    /// The clip ASSET's own name is the authority, exactly as the robot
-    /// inspector's WebGL path uses it: the roster's display name only happens
-    /// to match the file today, and a roster serialized before the video field
-    /// existed would send us looking for a file that was never named that.
-    ///
-    /// The robot comes from the mode controller rather than being read off the
-    /// player, whose model instance is renamed "Model" on the way in and so
-    /// can't be asked what it is.
+    /// The rig for the subject's team, built if this is the first sight of it and
+    /// rebuilt if that team has since changed robot. Only the rig being shown
+    /// renders — the other team's camera is switched off rather than drawing a
+    /// texture nothing samples.
     /// </summary>
-    static string ResolveClipName()
+    FormRig ActiveRig()
     {
-        if (GameModeController.Instance == null)
+        if (_subject == null || GameModeController.Instance == null)
             return null;
 
-        // The robot the player actually wears, which is their own pick for the
-        // cyan team — not necessarily roster entry 0.
-        var entry = GameModeController.Instance.PlayerRobot;
-        if (entry.modelPrefab == null)
-        {
-            Debug.LogWarning("[TransformCast] No robot roster in the scene — rerun Build Greybox Arena.");
+        int team = Mathf.Clamp(_subjectTeam, 0, _rigs.Length - 1);
+        int robot = GameModeController.Instance.RobotIndexFor(team);
+        if (robot < 0)
             return null;
+
+        var rig = _rigs[team];
+        if (rig != null && rig.robotIndex != robot)
+        {
+            rig.Dispose();
+            rig = _rigs[team] = null;
+        }
+        if (rig == null)
+        {
+            rig = _rigs[team] = FormRig.Build(transform, GameModeController.Instance.RobotFor(team),
+                                              robot, MatchAnnouncer.TeamColor(team), team);
+            if (rig == null)
+                return null;
+            _view.texture = rig.texture;
         }
 
-        if (entry.transformVideo != null)
-            return entry.transformVideo.name;
+        if (_view.texture != rig.texture)
+            _view.texture = rig.texture;
 
-        // Roster from before the video field: fall back to the naming
-        // convention the clips have always followed.
-        if (!string.IsNullOrEmpty(entry.displayName))
-            return $"{entry.displayName.ToLowerInvariant()}-transform";
+        for (int i = 0; i < _rigs.Length; i++)
+            if (_rigs[i] != null && _rigs[i].camera != null)
+                _rigs[i].camera.enabled = _rigs[i] == rig;
 
-        Debug.LogWarning("[TransformCast] Roster entry 0 has neither a clip nor a name.");
-        return null;
+        return rig;
     }
 
-    void HandleFinished(VideoPlayer source)
+    void DestroyRigs()
     {
-        BeginHide();
+        for (int i = 0; i < _rigs.Length; i++)
+        {
+            if (_rigs[i] != null)
+                _rigs[i].Dispose();
+            _rigs[i] = null;
+        }
+        if (_view != null)
+            _view.texture = null;
     }
 
     /// <summary>
-    /// A robot whose reversed clip was never generated falls back to the
-    /// forward one — a transformation played the wrong way beats a black box in
-    /// the corner, and it is the same footage.
+    /// One team's stop-motion set: the stage models on a turntable, a camera
+    /// looking at them, and the texture it renders into.
     /// </summary>
-    void HandleError(VideoPlayer source, string message)
+    class FormRig
     {
-        if (!_triedFallback && (_forwardClip != null || !string.IsNullOrEmpty(_forwardUrl)))
+        public GameObject root;
+        public Transform turntable;
+        public Camera camera;
+        public RenderTexture texture;
+        public GameObject[] stages;
+        public int robotIndex = -1;
+
+        int _shown = -1;
+
+        public int StageCount => stages != null ? stages.Length : 0;
+
+        public static FormRig Build(Transform parent, RobotRoster.Entry entry, int robotIndex,
+                                    Color tint, int team)
         {
-            _triedFallback = true;
-            Debug.LogWarning($"[TransformCast] {message} — falling back to the forward clip.");
-            Play(_forwardClip, _forwardUrl);
-            return;
+            // Stages are the whole point; a robot that has none still gets a
+            // panel, built from the two models it does have.
+            GameObject[] sources = entry.HasStages
+                ? entry.transformStages
+                : new[] { entry.modelPrefab, entry.vehiclePrefab };
+            if (sources == null || sources.Length == 0 || sources[0] == null)
+                return null;
+
+            var rig = new FormRig { robotIndex = robotIndex };
+
+            rig.root = new GameObject($"FormRig_{team}");
+            rig.root.transform.SetParent(parent, false);
+            rig.root.transform.position = new Vector3(team * RigSpacing, RigDepth, 0f);
+
+            var spin = new GameObject("Turntable");
+            spin.transform.SetParent(rig.root.transform, false);
+            rig.turntable = spin.transform;
+
+            var built = new System.Collections.Generic.List<GameObject>(sources.Length);
+            foreach (var source in sources)
+                built.Add(source != null ? Object.Instantiate(source, rig.turntable) : null);
+
+            // Stage one's target comes from its own proportions rather than a
+            // fixed number, so every robot stands the same height in the panel
+            // however tall or wide its rig happens to be. Measured before
+            // anything is normalised, exactly as the cards do it.
+            float robotDiagonal = RobotSelectMenu.StageVehicleDiagonal;
+            var first = RobotSelectMenu.MeasureBounds(built[0]);
+            if (first.size.y > 0.01f)
+                robotDiagonal = first.size.magnitude
+                              * (RobotSelectMenu.PreviewRobotHeight / first.size.y);
+
+            // Generated stages come out of the image-to-3D pipeline nose-down -Z.
+            // The separately generated vehicle models do not — the same split
+            // VehicleSkin.stageYawOffset draws in the arena.
+            float laterYaw = entry.HasStages ? RobotSelectMenu.StageYawOffset : 0f;
+
+            for (int i = 0; i < built.Count; i++)
+            {
+                if (built[i] == null)
+                    continue;
+                RobotSelectMenu.NormalizeByDiagonal(built[i], rig.turntable,
+                    i == 0 ? robotDiagonal : RobotSelectMenu.StageVehicleDiagonal,
+                    i == 0 ? 0f : laterYaw);
+                // Every stage, not just the robot: a fold that starts cyan and
+                // ends in the other team's tank would be worse than no paint.
+                TeamPaint.Apply(built[i], tint, TeamPaint.CardSize, false, entry.paintAnchorHue);
+                built[i].SetActive(false);
+            }
+            rig.stages = built.ToArray();
+
+            rig.texture = new RenderTexture(256, 256, 16);
+
+            var camGo = new GameObject("FormCam");
+            camGo.transform.SetParent(rig.root.transform, false);
+            camGo.transform.localPosition = new Vector3(0f, 0.55f, 2.7f);
+            camGo.transform.localRotation = Quaternion.Euler(10f, 180f, 0f);
+            rig.camera = camGo.AddComponent<Camera>();
+            rig.camera.targetTexture = rig.texture;
+            rig.camera.fieldOfView = 40f;
+            rig.camera.nearClipPlane = 0.05f;
+            rig.camera.farClipPlane = 12f;
+            rig.camera.clearFlags = CameraClearFlags.SolidColor;
+            rig.camera.backgroundColor = RobotSelectMenu.PreviewBackdrop;
+            var data = camGo.AddComponent<UniversalAdditionalCameraData>();
+            data.renderPostProcessing = false;
+
+            // The arena's key light travels toward +Z, so it hits the far side of
+            // anything this camera looks at. Every preview needs its own.
+            RobotSelectMenu.AddThreePointLights(rig.root.transform);
+
+            rig.Show(0);
+            return rig;
         }
-        Debug.LogWarning($"[TransformCast] {message}");
-        ShowMissing("CLIP  WOULD  NOT  PLAY");
-    }
 
-    /// <summary>
-    /// Keep the panel up, briefly, saying why it is empty. Silence here reads
-    /// as a broken feature; a caption reads as a missing file.
-    /// </summary>
-    void ShowMissing(string reason)
-    {
-        _missing.text = reason;
-        _missing.enabled = true;
-        _view.enabled = false;
-        _deadline = Mathf.Min(_deadline, _elapsed + 2.5f);
-    }
-
-    /// <summary>Start the fade out, holding the last frame while it runs.</summary>
-    void BeginHide()
-    {
-        _showing = false;
-        if (_video != null)
-            _video.Pause();
-    }
-
-    void Finish()
-    {
-        if (_video != null)
-            _video.Stop();       // decoding a clip nobody can see is pure cost
-        if (_group != null)
+        public void Spin(float degrees)
         {
-            _group.alpha = 0f;
-            _group.gameObject.SetActive(false);
+            if (turntable != null)
+                turntable.Rotate(0f, degrees, 0f);
+        }
+
+        /// <summary>Show one stage. Returns true when this was a change.</summary>
+        public bool Show(int index)
+        {
+            if (stages == null || stages.Length == 0)
+                return false;
+            index = Mathf.Clamp(index, 0, stages.Length - 1);
+            if (index == _shown)
+                return false;
+
+            for (int i = 0; i < stages.Length; i++)
+                if (stages[i] != null)
+                    stages[i].SetActive(i == index);
+
+            bool changed = _shown >= 0;   // the first show is an appearance, not a swap
+            _shown = index;
+            return changed;
+        }
+
+        public void Dispose()
+        {
+            if (camera != null)
+                camera.targetTexture = null;
+            if (texture != null)
+                texture.Release();
+            texture = null;
+            if (root != null)
+                Object.Destroy(root);
+            root = null;
+            stages = null;
         }
     }
 
-    void BuildPlayer()
-    {
-        _texture = new RenderTexture(512, 512, 0);
-        _view.texture = _texture;
-
-        var videoGo = new GameObject("Clip");
-        videoGo.transform.SetParent(transform, false);
-        _video = videoGo.AddComponent<VideoPlayer>();
-        _video.playOnAwake = false;
-        _video.isLooping = false;
-        _video.renderMode = VideoRenderMode.RenderTexture;
-        _video.targetTexture = _texture;
-        // The clips carry an audio track; this is a silent picture-in-picture,
-        // and the fold already has its own sound in the arena.
-        _video.audioOutputMode = VideoAudioOutputMode.None;
-        _video.waitForFirstFrame = true;
-        _video.loopPointReached += HandleFinished;
-        _video.errorReceived += HandleError;
-    }
+    // ----------------------------------------------------------------------- ui
 
     void BuildUi()
     {
@@ -321,14 +486,23 @@ public class TransformCast : MonoBehaviour
         var panel = new GameObject("Panel");
         panel.transform.SetParent(canvasGo.transform, false);
         _group = panel.AddComponent<CanvasGroup>();
-        var frame = panel.AddComponent<Image>();
-        frame.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.85f);
-        frame.raycastTarget = false;
-        var frameRect = frame.rectTransform;
+        _frame = panel.AddComponent<Image>();
+        _frame.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.85f);
+        _frame.raycastTarget = false;
+        var frameRect = _frame.rectTransform;
         frameRect.anchorMin = frameRect.anchorMax = new Vector2(1f, 1f);
         frameRect.pivot = new Vector2(1f, 1f);
         frameRect.anchoredPosition = new Vector2(-40f, -40f);
-        frameRect.sizeDelta = new Vector2(PanelSize + 8f, PanelSize + 54f);
+        frameRect.sizeDelta = new Vector2(PanelSize + 8f, PanelSize + 76f);
+
+        _title = MakeLabel(panel.transform, "Title", "FORM", 16, FontStyle.Bold,
+            new Color(0.02f, 0.06f, 0.10f, 0.6f));
+        var titleRect = _title.rectTransform;
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.pivot = new Vector2(0.5f, 1f);
+        titleRect.offsetMin = new Vector2(0f, -22f);
+        titleRect.offsetMax = new Vector2(0f, -2f);
 
         var viewGo = new GameObject("View");
         viewGo.transform.SetParent(panel.transform, false);
@@ -337,43 +511,49 @@ public class TransformCast : MonoBehaviour
         var viewRect = _view.rectTransform;
         viewRect.anchorMin = viewRect.anchorMax = new Vector2(0.5f, 1f);
         viewRect.pivot = new Vector2(0.5f, 1f);
-        viewRect.anchoredPosition = new Vector2(0f, -4f);
+        viewRect.anchoredPosition = new Vector2(0f, -24f);
         viewRect.sizeDelta = new Vector2(PanelSize, PanelSize);
 
-        var missingGo = new GameObject("Missing");
-        missingGo.transform.SetParent(panel.transform, false);
-        _missing = missingGo.AddComponent<Text>();
-        _missing.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        _missing.text = "";
-        _missing.fontSize = 20;
-        _missing.alignment = TextAnchor.MiddleCenter;
-        _missing.color = new Color(0.02f, 0.06f, 0.10f, 0.75f);
-        _missing.raycastTarget = false;
-        _missing.enabled = false;
-        var missingRect = _missing.rectTransform;
-        missingRect.anchorMin = missingRect.anchorMax = new Vector2(0.5f, 1f);
-        missingRect.pivot = new Vector2(0.5f, 1f);
-        missingRect.anchoredPosition = new Vector2(0f, -PanelSize * 0.5f + 20f);
-        missingRect.sizeDelta = new Vector2(PanelSize - 20f, 40f);
+        // Sits over the render, not over the caption: this is the light burst
+        // that covers a stage swap, and a caption that strobes with it would
+        // just look broken.
+        var flashGo = new GameObject("Flash");
+        flashGo.transform.SetParent(panel.transform, false);
+        _flash = flashGo.AddComponent<Image>();
+        _flash.color = new Color(1f, 1f, 1f, 0f);
+        _flash.raycastTarget = false;
+        var flashRect = _flash.rectTransform;
+        flashRect.anchorMin = flashRect.anchorMax = new Vector2(0.5f, 1f);
+        flashRect.pivot = new Vector2(0.5f, 1f);
+        flashRect.anchoredPosition = viewRect.anchoredPosition;
+        flashRect.sizeDelta = viewRect.sizeDelta;
 
-        var captionGo = new GameObject("Caption");
-        captionGo.transform.SetParent(panel.transform, false);
-        _caption = captionGo.AddComponent<Text>();
-        _caption.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        _caption.text = "TRANSFORMING";
-        _caption.fontSize = 24;
-        _caption.fontStyle = FontStyle.Bold;
-        _caption.alignment = TextAnchor.MiddleCenter;
-        _caption.color = new Color(0.02f, 0.06f, 0.10f);
-        _caption.raycastTarget = false;
+        _caption = MakeLabel(panel.transform, "Caption", "ROBOT", 24, FontStyle.Bold,
+            new Color(0.02f, 0.06f, 0.10f));
         var captionRect = _caption.rectTransform;
         captionRect.anchorMin = new Vector2(0f, 0f);
         captionRect.anchorMax = new Vector2(1f, 0f);
         captionRect.pivot = new Vector2(0.5f, 0f);
         captionRect.offsetMin = new Vector2(0f, 6f);
-        captionRect.offsetMax = new Vector2(0f, 42f);
+        captionRect.offsetMax = new Vector2(0f, 44f);
 
         _group.alpha = 0f;
         panel.SetActive(false);
+    }
+
+    static Text MakeLabel(Transform parent, string name, string content, int fontSize,
+                          FontStyle style, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var text = go.AddComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = content;
+        text.fontSize = fontSize;
+        text.fontStyle = style;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = color;
+        text.raycastTarget = false;
+        return text;
     }
 }

@@ -90,8 +90,8 @@ public class GameModeController : MonoBehaviour
         // Builds nothing until a touch actually happens (or the platform is
         // mobile), so desktop play is unaffected.
         TouchControls.Ensure();
-        // Corner replay of the player's own transformation — first person never
-        // sees it otherwise.
+        // Corner panel naming the form of whichever robot is on camera, and
+        // playing its stop-motion transformation as it morphs.
         TransformCast.Ensure();
         EnterMenu();
     }
@@ -231,6 +231,10 @@ public class GameModeController : MonoBehaviour
     {
         _treasureSpawner?.EndMatch();
         RobotReinforcements.DespawnAll();
+        // Puts the scene's own cast back the way it was found — the robots a
+        // sized team parked, and the ones it built. Every mode entry runs this
+        // before it takes the world, so no mode inherits another's team size.
+        TeamRoster.Reset();
         TeamBank.Reset();
     }
 
@@ -468,6 +472,18 @@ public class GameModeController : MonoBehaviour
     public RobotRoster.Entry PlayerRobot =>
         (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
 
+    /// <summary>
+    /// Roster entry a given team wears. The player is cyan, so team 0 is also
+    /// <see cref="PlayerRobot"/> — <see cref="TransformCast"/> asks by team
+    /// because the robot it describes is whoever the spectator camera is on.
+    /// </summary>
+    public RobotRoster.Entry RobotFor(int team) =>
+        (_roster != null && _roster.HasRobots) ? _roster.Get(team == 1 ? _magentaRobot : _cyanRobot) : default;
+
+    /// <summary>Roster index a given team wears; -1 when there is no roster.</summary>
+    public int RobotIndexFor(int team) =>
+        (_roster != null && _roster.HasRobots) ? (team == 1 ? _magentaRobot : _cyanRobot) : -1;
+
     // Online PvP reads these to describe the local setup to the other client
     // and to dress their mirror pawn in the robot they actually picked.
     public int PlayerRobotIndex => _cyanRobot;
@@ -597,6 +613,10 @@ public class GameModeController : MonoBehaviour
         // Also reached when the roster screen is skipped entirely, which is
         // where the player would otherwise still be a capsule.
         EnsurePlayerRobot();
+        // The player is one of the cyan robots, so a 4 v 4 fields them and
+        // three allies. Before the brains come on and after the arena loaded:
+        // slots are read off the live arena's spawn lines.
+        TeamRoster.Apply(TeamSize.PerTeam, playerPlays: true);
 
         if (_player != null)
         {
@@ -685,6 +705,8 @@ public class GameModeController : MonoBehaviour
         ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
+        // Nobody is holding a cyan slot here, so both sides field the full size.
+        TeamRoster.Apply(TeamSize.PerTeam, playerPlays: false);
 
         if (_player != null)
             _player.SetActive(false);
@@ -697,7 +719,8 @@ public class GameModeController : MonoBehaviour
         _spectatorRig.AddComponent<SpectatorCamera>();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("AI v AI — ESC for Menu", "AI v AI — tap MENU to go back");
+        ShowOverlay($"AI v AI   ·   {TeamSize.Matchup(TeamSize.PerTeam)}   ·   ESC for Menu",
+                    $"AI v AI   ·   {TeamSize.Matchup(TeamSize.PerTeam)}   ·   tap MENU to go back");
         LockCursor(false);
     }
 
