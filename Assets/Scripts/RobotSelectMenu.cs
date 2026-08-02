@@ -592,9 +592,13 @@ public static class RobotSelectMenu
                 Refresh();
             });
 
-            labels[i] = MakeText(chip.transform, "Label", TeamSize.Matchup(size), 22,
+            labels[i] = MakeText(chip.transform, "Label", TeamSize.Matchup(size), 19,
                 Color.white, FontStyle.Bold,
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(88f, 42f));
+            // "10  v  10" is the widest label and sits within a hair of the
+            // chip; wrapped instead of overflowed it would break onto two lines
+            // and only that one chip would look wrong.
+            labels[i].horizontalOverflow = HorizontalWrapMode.Overflow;
         }
 
         box = BuildAmountBox(parent, new Vector2(-10f, RowY));

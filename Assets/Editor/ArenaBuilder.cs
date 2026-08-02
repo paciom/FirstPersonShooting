@@ -936,7 +936,7 @@ public static class ArenaBuilder
             bot.transform.rotation = Quaternion.Euler(0, yRotation, 0);
 
             var body = robotModel != null
-                ? RobotFactory.BuildFromModel(bot, robotModel, teamColor, glow)
+                ? RobotFactory.BuildFromModel(bot, robotModel, teamColor)
                 : RobotFactory.Build(bot, armor, glow, darkMetal);
 
             var hitCapsule = bot.AddComponent<CapsuleCollider>();
