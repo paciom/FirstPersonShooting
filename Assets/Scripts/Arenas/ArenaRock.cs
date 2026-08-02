@@ -294,21 +294,13 @@ public static class ArenaRock
     /// </summary>
     public static Form FormFor(ArenaMaterials.SurfaceStyle style, int index)
     {
-        switch (style)
-        {
-            case ArenaMaterials.SurfaceStyle.Crystal:
-                return index % 3 == 0 ? Form.Monolith : Form.Shard;
-            case ArenaMaterials.SurfaceStyle.Organic:
-                return index % 4 == 0 ? Form.Shard : Form.Boulder;
-            case ArenaMaterials.SurfaceStyle.Stone:
-            case ArenaMaterials.SurfaceStyle.Strata:
-                return index % 3 == 0 ? Form.Buttress : Form.Boulder;
-            default:
-                // Built surfaces — plating, brick, tread — want BUILT cover.
-                // Rocks in a cargo bay look like they wandered in from
-                // another game; here it is containers, with the odd squared
-                // pillar among them.
-                return index % 5 == 0 ? Form.Monolith : Form.Crate;
-        }
+        // COVER IS MANUFACTURED, everywhere. Every organic form here comes
+        // out of the same jittered generator, so "a bit less strange" is
+        // not a dial — they either read as weathered rock or they do not,
+        // and lumpy rock beside hard-edged robots looks like an accident
+        // rather than a style. Variety comes from the container's own
+        // proportions and how it is placed, not from bending its shape.
+        // The rock forms stay in the file: the horizon rings want mountains.
+        return Form.Crate;
     }
 }

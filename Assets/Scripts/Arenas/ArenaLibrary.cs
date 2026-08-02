@@ -28,6 +28,7 @@ public static class ArenaLibrary
                     new CrystalHollowArena(), // rough cave rock, faceted crystal
                     new ToyboxArena(),      // grained wood, glossy plastic
                     new DrydockArena(),     // industrial bay: catwalks, gantry, cargo
+                    new ReactorArena(),     // radial ship core: tiers, gallery, red glow
                 };
             }
             return _all;

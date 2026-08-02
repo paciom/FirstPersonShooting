@@ -75,7 +75,12 @@ public class ArenaKit
         if (collide)
         {
             go.AddComponent<MeshCollider>().convex = true;
-            go.AddComponent<ArenaColumn>();
+            // Only a TALL cylinder is a column. A squat one is a dais, a
+            // tier, a plinth — something built to stand on — and marking
+            // those "never floor" would leave robots unable to walk up
+            // their own reactor.
+            if (height > radius * 2.2f)
+                go.AddComponent<ArenaColumn>();
         }
         return go;
     }
