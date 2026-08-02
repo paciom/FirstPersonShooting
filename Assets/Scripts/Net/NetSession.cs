@@ -96,7 +96,8 @@ public class NetSession : MonoBehaviour
     /// (see Server/signaling/README.md); until then, deployed pages need
     /// `?net=wss://…` and only localhost pages get the localhost default.
     /// </summary>
-    const string ProductionServerUrl = "";
+    const string ProductionServerUrl =
+        "wss://photon-arena-signaling.politefield-7858d743.eastus.azurecontainerapps.io";
 
     /// <summary>
     /// Signaling server address: `?net=wss://…` on the page URL wins, then
