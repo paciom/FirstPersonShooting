@@ -43,20 +43,6 @@ public class SpectatorCamera : MonoBehaviour
     /// <summary>Orbit offsets tried, in order of preference — nearest shot first.</summary>
     static readonly float[] CandidateOffsets = { 0f, 35f, -35f, 75f, -75f, 120f, -120f, 180f };
 
-    /// <summary>
-    /// The rig currently directing AI v AI, or null outside that mode. One at a
-    /// time by construction — GameModeController builds exactly one and destroys
-    /// it on the way out.
-    /// </summary>
-    public static SpectatorCamera Active { get; private set; }
-
-    /// <summary>
-    /// The bot on camera right now. <see cref="TransformCast"/> reads it so the
-    /// form panel describes whoever the audience is actually watching, rather
-    /// than a robot off screen.
-    /// </summary>
-    public Transform Subject => _subject;
-
     static readonly RaycastHit[] HitBuffer = new RaycastHit[16];
 
     AIBrain[] _bots;
@@ -73,16 +59,6 @@ public class SpectatorCamera : MonoBehaviour
     // robots mid-match (gold-funded reinforcements).
     Transform[] _characterRoots;
     float _nextRootRescan;
-
-    void Awake()
-    {
-        Active = this;
-    }
-
-    void OnDestroy()
-    {
-        if (Active == this) Active = null;
-    }
 
     void Start()
     {

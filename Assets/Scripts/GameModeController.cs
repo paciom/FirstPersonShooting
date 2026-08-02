@@ -86,10 +86,18 @@ public class GameModeController : MonoBehaviour
         // before TeamRoster clones anyone, so no clone inherits one.
         foreach (var bot in _bots)
             if (bot != null)
+            {
                 RobotFactory.StripTeamRing(bot.transform);
+                WeaponCatalog.TopUp(bot.GetComponent<WeaponLoadout>());
+            }
         if (_player != null)
         {
             RobotFactory.StripTeamRing(_player.transform);
+            // Weapons added to the catalog since the scene was last built exist
+            // in code and nowhere else until this runs — see WeaponCatalog.TopUp.
+            // Ahead of TeamRoster's cloning, so reinforcements are born with the
+            // same arsenal.
+            WeaponCatalog.TopUp(_player.GetComponent<WeaponLoadout>());
             // The player wears a real robot now, and the camera sits inside it.
             // Added here rather than in ArenaBuilder so it needs no scene
             // rebuild, and unconditionally: every mode this player appears in
@@ -488,18 +496,6 @@ public class GameModeController : MonoBehaviour
     /// </summary>
     public RobotRoster.Entry PlayerRobot =>
         (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
-
-    /// <summary>
-    /// Roster entry a given team wears. The player is cyan, so team 0 is also
-    /// <see cref="PlayerRobot"/> — <see cref="TransformCast"/> asks by team
-    /// because the robot it describes is whoever the spectator camera is on.
-    /// </summary>
-    public RobotRoster.Entry RobotFor(int team) =>
-        (_roster != null && _roster.HasRobots) ? _roster.Get(team == 1 ? _magentaRobot : _cyanRobot) : default;
-
-    /// <summary>Roster index a given team wears; -1 when there is no roster.</summary>
-    public int RobotIndexFor(int team) =>
-        (_roster != null && _roster.HasRobots) ? (team == 1 ? _magentaRobot : _cyanRobot) : -1;
 
     // Online PvP reads these to describe the local setup to the other client
     // and to dress their mirror pawn in the robot they actually picked.

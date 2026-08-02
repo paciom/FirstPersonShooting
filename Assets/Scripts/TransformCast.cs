@@ -3,23 +3,25 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 /// <summary>
-/// Top-right corner panel that always says which form the robot on screen is
-/// in — ROBOT or TANK — and plays the stop-motion transformation whenever that
-/// robot morphs.
+/// Top-right corner panel that says which form the PLAYER'S robot is in —
+/// ROBOT or TANK — and plays the stop-motion transformation whenever they morph.
 ///
-/// WHY IT EXISTS. In Player v AI first person you never see your own robot, so
-/// pressing Morph used to have no picture at all; in AI v AI the fold is 0.55
-/// seconds somewhere in a firefight and is easy to miss entirely. The panel is
-/// the readable copy of an event the camera is bad at showing.
+/// WHY IT EXISTS. Player v AI is first person, so you never see your own robot:
+/// pressing Morph had no picture at all, and nothing on screen said which form
+/// you were in afterwards. The panel is the readable copy of an event the camera
+/// cannot show.
+///
+/// PLAYER V AI ONLY, and only the player's own robot. Every other mode either
+/// shows the robot already (the spectator camera in AI v AI orbits it in full
+/// view) or has no player robot to describe, and a panel describing someone
+/// else's form is just a distraction sitting over the arena.
 ///
 /// WHY STOP MOTION RATHER THAN THE GENERATED CLIP. This panel used to stream
 /// &lt;robot&gt;-transform.mp4 out of StreamingAssets. The clip is prettier but it
-/// is not what is happening: it is one canned robot in one canned paint,
-/// pre-rendered, so it could not follow a magenta bot, could not follow the
-/// spectator camera cutting to a different robot, and drifted out of step with
-/// the real fold. The stages are the same meshes the arena folds through, so
-/// the corner and the arena now show the same event, in the team's colours, for
-/// whichever robot is actually on camera.
+/// is not what is happening: pre-rendered, in the factory paint, at its own
+/// pace, so it drifted out of step with the fold it was supposed to be showing.
+/// The stages are the same meshes the arena folds through, so the corner and the
+/// arena now show the same event.
 ///
 /// The rig is the one the select screen's cards use — stage models on a
 /// turntable, three point lights, a small camera into a RenderTexture — parked
@@ -27,10 +29,8 @@ using UnityEngine.UI;
 /// purpose: a robot that folds at different proportions on its card and in the
 /// HUD reads as two different robots.
 ///
-/// One rig per team, built on demand and kept: AI v AI cuts between cyan and
-/// magenta every few seconds, and rebuilding eight GLB stages on every cut
-/// would hitch the frame the camera cuts on. Both go when the panel hides,
-/// which is when the match ends.
+/// The rig is built on the first frame the panel is wanted and thrown away when
+/// it hides, which is when the match ends.
 /// </summary>
 public class TransformCast : MonoBehaviour
 {
@@ -61,15 +61,13 @@ public class TransformCast : MonoBehaviour
     const float FlashFade = 5.5f;
 
     /// <summary>
-    /// Where the rigs are parked. Clear of the select screen's own preview rigs,
+    /// Where the rig is parked. Clear of the select screen's own preview rigs,
     /// which sit at RobotSelectMenu.PreviewDepth (-150), 40 above it, and 60
     /// below it for the inspector — nothing of theirs reaches this far down.
     /// </summary>
     const float RigDepth = -300f;
 
-    /// <summary>Gap between the two team rigs. Wider than the 6-unit preview lights.</summary>
-    const float RigSpacing = 30f;
-
+    /// <summary>The player is always cyan, so the panel is too.</summary>
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
 
     public static TransformCast Instance { get; private set; }
@@ -81,10 +79,9 @@ public class TransformCast : MonoBehaviour
     Text _caption;
     Text _title;
 
-    readonly FormRig[] _rigs = new FormRig[2];
+    FormRig _rig;
 
     TransformMode _subject;
-    int _subjectTeam;
     bool _shown;
 
     bool _folding;
@@ -117,7 +114,7 @@ public class TransformCast : MonoBehaviour
     void OnDestroy()
     {
         Unsubscribe();
-        DestroyRigs();
+        DestroyRig();
         if (Instance == this) Instance = null;
     }
 
@@ -138,8 +135,8 @@ public class TransformCast : MonoBehaviour
             {
                 _group.gameObject.SetActive(false);
                 // Nothing to render and nothing to render it for: give back the
-                // render textures and the eight stage models per team.
-                DestroyRigs();
+                // render texture and the eight stage models.
+                DestroyRig();
             }
             return;
         }
@@ -158,12 +155,12 @@ public class TransformCast : MonoBehaviour
     // ------------------------------------------------------------------ subject
 
     /// <summary>
-    /// Point the panel at whoever the audience is watching: the local player in
-    /// Player v AI, and whichever bot the spectator camera is on in AI v AI.
+    /// Point the panel at the player's own robot, in Player v AI and nowhere
+    /// else.
     ///
-    /// Re-resolved every frame rather than once at match start, because both can
-    /// change underneath us — the player's robot is built after the mode starts,
-    /// and the spectator cuts to a new bot every few seconds.
+    /// Re-resolved every frame rather than once at match start: the player's
+    /// robot is built after the mode starts, and rebuilt whenever they pick a
+    /// different one.
     /// </summary>
     void TrackSubject()
     {
@@ -171,25 +168,8 @@ public class TransformCast : MonoBehaviour
             ? GameModeController.Instance.Mode : GameMode.Menu;
 
         TransformMode subject = null;
-        int team = 0;
-
-        if (mode == GameMode.PlayerVsAI)
-        {
-            if (PlayerBrain.Local != null)
-                subject = PlayerBrain.Local.GetComponent<TransformMode>();
-            team = 0;
-        }
-        else if (mode == GameMode.AIvAI)
-        {
-            var director = SpectatorCamera.Active;
-            var watched = director != null ? director.Subject : null;
-            if (watched != null)
-            {
-                subject = watched.GetComponent<TransformMode>();
-                var shield = watched.GetComponent<EnergyShield>();
-                team = shield != null ? shield.teamId : 0;
-            }
-        }
+        if (mode == GameMode.PlayerVsAI && PlayerBrain.Local != null)
+            subject = PlayerBrain.Local.GetComponent<TransformMode>();
 
         // A robot with no vehicle clips can never morph, so a panel describing
         // its form would never change — say nothing instead.
@@ -200,23 +180,15 @@ public class TransformCast : MonoBehaviour
         {
             Unsubscribe();
             _subject = subject;
-            _subjectTeam = team;
             _folding = false;
             if (_subject != null)
                 _subject.OnFoldStarted += HandleFold;
-        }
-        else
-        {
-            _subjectTeam = team;
         }
 
         bool want = _subject != null;
         if (want && !_group.gameObject.activeSelf)
             _group.gameObject.SetActive(true);
         _shown = want;
-
-        if (want)
-            _frame.color = new Color(TeamTint().r, TeamTint().g, TeamTint().b, 0.85f);
     }
 
     void Unsubscribe()
@@ -225,8 +197,6 @@ public class TransformCast : MonoBehaviour
             _subject.OnFoldStarted -= HandleFold;
         _subject = null;
     }
-
-    Color TeamTint() => MatchAnnouncer.TeamColor(_subjectTeam);
 
     void HandleFold(bool toVehicle)
     {
@@ -281,61 +251,46 @@ public class TransformCast : MonoBehaviour
     // --------------------------------------------------------------------- rigs
 
     /// <summary>
-    /// The rig for the subject's team, built if this is the first sight of it and
-    /// rebuilt if that team has since changed robot. Only the rig being shown
-    /// renders — the other team's camera is switched off rather than drawing a
-    /// texture nothing samples.
+    /// The player's stage set, built on first sight and rebuilt when they pick a
+    /// different robot.
     /// </summary>
     FormRig ActiveRig()
     {
         if (_subject == null || GameModeController.Instance == null)
             return null;
 
-        int team = Mathf.Clamp(_subjectTeam, 0, _rigs.Length - 1);
-        int robot = GameModeController.Instance.RobotIndexFor(team);
-        if (robot < 0)
-            return null;
+        int robot = GameModeController.Instance.PlayerRobotIndex;
 
-        var rig = _rigs[team];
-        if (rig != null && rig.robotIndex != robot)
+        if (_rig != null && _rig.robotIndex != robot)
         {
-            rig.Dispose();
-            rig = _rigs[team] = null;
+            _rig.Dispose();
+            _rig = null;
         }
-        if (rig == null)
+        if (_rig == null)
         {
-            rig = _rigs[team] = FormRig.Build(transform, GameModeController.Instance.RobotFor(team),
-                                              robot, MatchAnnouncer.TeamColor(team), team);
-            if (rig == null)
+            _rig = FormRig.Build(transform, GameModeController.Instance.PlayerRobot, robot, HoloCyan);
+            if (_rig == null)
                 return null;
-            _view.texture = rig.texture;
         }
 
-        if (_view.texture != rig.texture)
-            _view.texture = rig.texture;
+        if (_view.texture != _rig.texture)
+            _view.texture = _rig.texture;
 
-        for (int i = 0; i < _rigs.Length; i++)
-            if (_rigs[i] != null && _rigs[i].camera != null)
-                _rigs[i].camera.enabled = _rigs[i] == rig;
-
-        return rig;
+        return _rig;
     }
 
-    void DestroyRigs()
+    void DestroyRig()
     {
-        for (int i = 0; i < _rigs.Length; i++)
-        {
-            if (_rigs[i] != null)
-                _rigs[i].Dispose();
-            _rigs[i] = null;
-        }
+        if (_rig != null)
+            _rig.Dispose();
+        _rig = null;
         if (_view != null)
             _view.texture = null;
     }
 
     /// <summary>
-    /// One team's stop-motion set: the stage models on a turntable, a camera
-    /// looking at them, and the texture it renders into.
+    /// The stop-motion set: the stage models on a turntable, a camera looking at
+    /// them, and the texture it renders into.
     /// </summary>
     class FormRig
     {
@@ -351,7 +306,7 @@ public class TransformCast : MonoBehaviour
         public int StageCount => stages != null ? stages.Length : 0;
 
         public static FormRig Build(Transform parent, RobotRoster.Entry entry, int robotIndex,
-                                    Color tint, int team)
+                                    Color tint)
         {
             // Stages are the whole point; a robot that has none still gets a
             // panel, built from the two models it does have.
@@ -363,9 +318,9 @@ public class TransformCast : MonoBehaviour
 
             var rig = new FormRig { robotIndex = robotIndex };
 
-            rig.root = new GameObject($"FormRig_{team}");
+            rig.root = new GameObject("FormRig");
             rig.root.transform.SetParent(parent, false);
-            rig.root.transform.position = new Vector3(team * RigSpacing, RigDepth, 0f);
+            rig.root.transform.position = new Vector3(0f, RigDepth, 0f);
 
             var spin = new GameObject("Turntable");
             spin.transform.SetParent(rig.root.transform, false);
@@ -397,8 +352,9 @@ public class TransformCast : MonoBehaviour
                 RobotSelectMenu.NormalizeByDiagonal(built[i], rig.turntable,
                     i == 0 ? robotDiagonal : RobotSelectMenu.StageVehicleDiagonal,
                     i == 0 ? 0f : laterYaw);
-                // Every stage, not just the robot: a fold that starts cyan and
-                // ends in the other team's tank would be worse than no paint.
+                // Every stage, not just the robot: a fold that starts in the
+                // player's colours and ends in the factory paint would be worse
+                // than no paint at all.
                 TeamPaint.Apply(built[i], tint, TeamPaint.CardSize, false, entry.paintAnchorHue);
                 built[i].SetActive(false);
             }
