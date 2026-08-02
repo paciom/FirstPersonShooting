@@ -72,11 +72,19 @@ class MenuCaptureRunner : MonoBehaviour
         var rt = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
         rt.Create();
         var camGo = new GameObject("MenuCaptureCam");
+        // Parked far below every world this game builds (arena y=0, select
+        // rigs -150..-210, icon rigs -300) with a far plane barely past the
+        // canvas. The canvas has to stay in the culling mask to be drawn at
+        // all, and the arena is on that same layer -- so the only way to keep
+        // scenery out of the shot is to have none of it in frame.
+        camGo.transform.position = new Vector3(0f, -5000f, 0f);
         var cam = camGo.AddComponent<Camera>();
         cam.targetTexture = rt;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = Color.black;
         cam.cullingMask = 1 << canvas.gameObject.layer;
+        cam.nearClipPlane = 0.1f;
+        cam.farClipPlane = 12f;
 
         var previousMode = canvas.renderMode;
         var previousCamera = canvas.worldCamera;
