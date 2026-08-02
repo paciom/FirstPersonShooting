@@ -66,15 +66,17 @@ public class LaserBolt : MonoBehaviour
         float step = speed * Time.deltaTime;
         if (Physics.Raycast(transform.position, direction, out RaycastHit hit, step, ~0, QueryTriggerInteraction.Ignore))
         {
-            if (hit.transform.root == ownerRoot)
+            var shield = hit.transform.root.GetComponent<EnergyShield>();
+            if (hit.transform.root == ownerRoot || (shield != null && shield.teamId == teamId))
             {
-                // Skip the shooter's own colliders and keep flying.
+                // Skip the shooter's own colliders — and any teammate's. Lasers
+                // ride the team's frequency: before this, a front-rank ally
+                // silently absorbed the whole rear rank's fire for zero damage.
                 transform.position += direction * step;
                 return;
             }
 
-            var shield = hit.transform.root.GetComponent<EnergyShield>();
-            if (shield != null && shield.teamId != teamId)
+            if (shield != null)
                 shield.TakeHit(damage, hit.point, ownerRoot);
             else
                 WeaponUtil.DamageProp(hit.collider, damage, hit.point);

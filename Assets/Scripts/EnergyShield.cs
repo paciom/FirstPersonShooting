@@ -16,6 +16,17 @@ public class EnergyShield : MonoBehaviour
     [Header("Team")]
     public int teamId;
 
+    [Tooltip("Online PvP: this shield mirrors a remote player's, and only their " +
+             "broadcasts may change it. Local hits become feedback-only.")]
+    [HideInInspector] public bool remoteProxy;
+
+    [Tooltip("Nothing lands at all while this is set — no damage, and no hit " +
+             "feedback either, so the shots visibly do nothing. The respawn " +
+             "grace in an arcade mode: a character that has just re-materialized " +
+             "must not be killed by the shell that was already in the air when " +
+             "it went down.")]
+    [HideInInspector] public bool invulnerable;
+
     public float Current { get; private set; }
     public bool IsDown { get; private set; }
     public float Normalized => Current / maxShield;
@@ -106,11 +117,21 @@ public class EnergyShield : MonoBehaviour
 
     public void TakeHit(float damage, Vector3 hitPoint, Transform attacker = null)
     {
-        if (IsDown)
+        if (IsDown || invulnerable)
             return;
 
         LastDamageMultiplier = DamageMultiplierFor(hitPoint);
         damage *= LastDamageMultiplier;
+
+        // A remote player's mirror: their client decides what their shield is
+        // worth; ours only shows the hit landing. Without this, local
+        // prediction and their broadcasts would fight over Current — and a
+        // predicted de-rez is unrecoverable when the owner disagrees.
+        if (remoteProxy)
+        {
+            OnDamaged?.Invoke(damage, hitPoint);
+            return;
+        }
 
         LastAttacker = attacker;
         Current = Mathf.Max(0f, Current - damage);
@@ -161,6 +182,33 @@ public class EnergyShield : MonoBehaviour
         Current = maxShield;
         IsDown = false;
         OnRematerialized?.Invoke();
+    }
+
+    /// <summary>
+    /// Online PvP reconciliation: adopt the owning client's broadcast value.
+    /// Ignored while down — the de-rez cycle owns the shield until it ends.
+    /// </summary>
+    public void NetworkSet(float current, float max)
+    {
+        if (IsDown)
+            return;
+        if (max > 0f)
+            maxShield = max;
+        Current = Mathf.Clamp(current, 0f, maxShield);
+    }
+
+    /// <summary>
+    /// Online PvP: the owning client reported their own de-rez. Bypasses the
+    /// remoteProxy guard — this is the one legitimate remote kill path.
+    /// </summary>
+    public void NetworkForceDown()
+    {
+        if (IsDown)
+            return;
+        Current = 0f;
+        IsDown = true;
+        DropOvershield();
+        OnDeRezzed?.Invoke();
     }
 
     void Update()

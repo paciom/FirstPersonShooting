@@ -49,13 +49,14 @@ public static class RobotFactory
     /// subtle team tint, and adds a glowing team ring underneath. Same rig
     /// contract as Build(), so DeRezEffect/HoverBob/ShieldBubble work unchanged.
     /// </summary>
-    public static Transform BuildFromModel(GameObject root, GameObject modelPrefab, Color teamTint, Material ringGlow)
+    public static Transform BuildFromModel(GameObject root, GameObject modelPrefab, Color teamTint,
+        Material ringGlow, float paintAnchorHue = -1f)
     {
         var body = new GameObject("Body").transform;
         body.SetParent(root.transform, false);
         body.localPosition = new Vector3(0f, 1.0f, 0f);
 
-        InstantiateNormalized(modelPrefab, body, teamTint);
+        InstantiateNormalized(modelPrefab, body, teamTint, paintAnchorHue);
 
         // Team marker under the robot for instant team readability on camera:
         // a crisp team-colored donut ring plus a faint wider glow wash — flat
@@ -100,7 +101,8 @@ public static class RobotFactory
     /// HoverBob / ShieldBubble reference is the Body transform itself, so the
     /// swap is invisible to them.
     /// </summary>
-    public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint)
+    public static void Reskin(Transform body, GameObject modelPrefab, Color teamTint,
+        float paintAnchorHue = -1f)
     {
         for (int i = body.childCount - 1; i >= 0; i--)
         {
@@ -108,11 +110,12 @@ public static class RobotFactory
             // VehicleRig belongs to TransformMode, which builds it once and
             // hands out no way to rebuild it — losing it to a reskin would
             // leave a robot that transforms with no wheels.
-            if (child.name == "Blaster" || child.name == "TeamRing" || child.name == "VehicleRig")
+            if (child.name == "Blaster" || child.name == "TeamRing" ||
+                child.name == TransformMode.RigName)
                 continue;
             Object.Destroy(child.gameObject);
         }
-        InstantiateNormalized(modelPrefab, body, teamTint);
+        InstantiateNormalized(modelPrefab, body, teamTint, paintAnchorHue);
     }
 
     /// <summary>
@@ -121,7 +124,8 @@ public static class RobotFactory
     /// glTF unit-conversion scale), recenters it, and repaints copies of its
     /// materials into the team's colors.
     /// </summary>
-    public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body, Color teamTint)
+    public static GameObject InstantiateNormalized(GameObject modelPrefab, Transform body,
+        Color teamTint, float paintAnchorHue = -1f)
     {
         var instance = Object.Instantiate(modelPrefab, body);
         instance.name = "Model";
@@ -132,9 +136,7 @@ public static class RobotFactory
         var renderers = instance.GetComponentsInChildren<Renderer>();
         if (renderers.Length > 0)
         {
-            var bounds = renderers[0].bounds;
-            foreach (var r in renderers)
-                bounds.Encapsulate(r.bounds);
+            var bounds = MeasureWorldBounds(renderers);
 
             // Multiply (never replace) the prefab's own scale — glTF roots often
             // carry a unit-conversion scale factor that must be preserved.
@@ -162,9 +164,74 @@ public static class RobotFactory
             // Repaint copies of the imported materials into the team's colours —
             // never the shared import assets. See TeamPaint for why this is a
             // hue replacement rather than the colour multiply it grew out of.
-            TeamPaint.Apply(renderers, teamTint);
+            TeamPaint.Apply(renderers, teamTint, TeamPaint.DefaultSize, false, paintAnchorHue);
         }
         return instance;
+    }
+
+    /// <summary>
+    /// World-space box that actually contains a model's geometry.
+    ///
+    /// WHY NOT Renderer.bounds. On the roster's rigged robots it is not a box
+    /// around the robot. Unity derives a SkinnedMeshRenderer's box from its
+    /// localBounds placed at the ROOT BONE, and the Meshy rigs arrive with no
+    /// skin.skeleton, so glTFast never assigns one (GltfImport only sets
+    /// rootJoint when skeleton >= 0) and the box is left hanging off whichever
+    /// transform Unity falls back to. Close enough for culling — which is all
+    /// Unity uses it for — and half a robot out for code that measures where
+    /// the feet are. That gap is the floating.
+    ///
+    /// The mesh's own bounds ARE in mesh space, and bones[i].localToWorldMatrix
+    /// * bindposes[i] is precisely the matrix skinning uses to put mesh space
+    /// into the world. Measuring through it gives the box the vertices are
+    /// really in, and gives it immediately — Renderer.bounds only becomes
+    /// trustworthy (via updateWhenOffscreen) after a frame of skinning has gone
+    /// by, which is always one frame after a model is instantiated and fitted.
+    /// </summary>
+    public static Bounds MeasureWorldBounds(Renderer[] renderers)
+    {
+        Bounds total = default;
+        bool any = false;
+        foreach (var renderer in renderers)
+        {
+            if (renderer == null)
+                continue;
+            Bounds b = MeasureWorldBounds(renderer);
+            if (!any) { total = b; any = true; }
+            else total.Encapsulate(b);
+        }
+        return any ? total : new Bounds(Vector3.zero, Vector3.zero);
+    }
+
+    /// <summary>One renderer's true world box. Falls back to Renderer.bounds for
+    /// anything that isn't a skinned mesh with usable bind poses.</summary>
+    public static Bounds MeasureWorldBounds(Renderer renderer)
+    {
+        var skin = renderer as SkinnedMeshRenderer;
+        var mesh = skin != null ? skin.sharedMesh : null;
+        if (mesh == null)
+            return renderer.bounds;
+
+        var bones = skin.bones;
+        if (bones == null || bones.Length == 0 || bones[0] == null)
+            return renderer.bounds;
+
+        var bindPoses = mesh.bindposes;
+        if (bindPoses == null || bindPoses.Length == 0)
+            return renderer.bounds;
+
+        return TransformBounds(bones[0].localToWorldMatrix * bindPoses[0], mesh.bounds);
+    }
+
+    /// <summary>Axis-aligned world box of a local box under an arbitrary matrix.</summary>
+    static Bounds TransformBounds(Matrix4x4 m, Bounds local)
+    {
+        Vector3 e = local.extents;
+        var extents = new Vector3(
+            Mathf.Abs(m.m00) * e.x + Mathf.Abs(m.m01) * e.y + Mathf.Abs(m.m02) * e.z,
+            Mathf.Abs(m.m10) * e.x + Mathf.Abs(m.m11) * e.y + Mathf.Abs(m.m12) * e.z,
+            Mathf.Abs(m.m20) * e.x + Mathf.Abs(m.m21) * e.y + Mathf.Abs(m.m22) * e.z);
+        return new Bounds(m.MultiplyPoint3x4(local.center), extents * 2f);
     }
 
     static void Part(Transform parent, PrimitiveType type, Vector3 localPos, Vector3 scale,

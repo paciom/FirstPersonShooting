@@ -3,10 +3,31 @@
 // to the untouched glTF material, so the robots keep their normal lit shading
 // and only their paint changes.
 //
-// HUE IS REPLACED, VALUE IS KEPT. Every coloured pixel is driven to the team's
-// hue at its own brightness, so panel lines, shading and wear survive intact —
-// a multiply tint (what this replaces) can only darken, and turns an orange
-// robot muddy instead of turning it cyan.
+// HUE IS ROTATED, VALUE IS KEPT. Every coloured pixel keeps its own brightness,
+// so panel lines, shading and wear survive intact — a multiply tint (what this
+// replaces) can only darken, and turns an orange robot muddy instead of turning
+// it cyan.
+//
+// FOLDED, NOT REPLACED. Driving every coloured pixel to the SAME team hue
+// collapsed a two-tone robot into one colour: the bolt is blue and yellow, and
+// both came out the same magenta, so the away-team bolt read as a solid purple
+// toy with no markings while the home-team bolt still had two.
+//
+// Instead each pixel keeps its DISTANCE from _AnchorHue — the robot's own
+// dominant hue, measured off its albedo at build time. That distance is taken as
+// an absolute value and added to the team hue, so:
+//   * the dominant colour lands exactly ON the team hue, and
+//   * every other colour fans out to one side of it, as far as it was different.
+// The bolt's blue body goes purple and its yellow trim goes orange; a robot that
+// only ever had one colour still comes out as one colour.
+//
+// ABSOLUTE, and per robot. Both matter. A signed offset sends some robots'
+// accents cool instead of warm — the bolt's yellow trim came out blue-violet,
+// competing with the cyan team it exists to contrast against. And a single
+// global pivot cannot work at all: five of the nine robots are cool-dominant and
+// four are warm, so whichever hue is chosen, one group sits at the fold's fixed
+// point and is barely repainted. The racer, which is almost entirely orange,
+// came out identical to its home-team twin that way.
 //
 // GREYS ARE LEFT ALONE. The blend is weighted by the source pixel's own
 // saturation, so white and grey armour stays neutral metal and only the painted
@@ -33,6 +54,16 @@ Shader "PhotonArena/TeamRecolor"
         // all white plating. TeamPaint.NeutralWash is the one that ships — this
         // default only matters if the material is used by hand.
         _NeutralWash ("Neutral Wash", Range(0, 1)) = 0.22
+        // The robot's own dominant hue — the colour that becomes the team colour
+        // exactly. TeamPaint supplies it per robot; this default is only used if
+        // the material is driven by hand.
+        _AnchorHue ("Anchor Hue", Range(0, 1)) = 0.519
+        // How much of a pixel's distance from the anchor survives. 0 collapses
+        // every colour onto the team hue — the old behaviour, and the bug. High
+        // values push the accent so far round the wheel that it arrives back at
+        // the home team's own trim colour: at 0.7 the bolt's yellow came out
+        // yellow again, making both teams' markings match.
+        _HueSpread ("Hue Spread", Range(0, 1)) = 0.45
     }
 
     SubShader
@@ -55,6 +86,8 @@ Shader "PhotonArena/TeamRecolor"
             half _GreySoftness;
             half _SaturationFloor;
             half _NeutralWash;
+            half _AnchorHue;
+            half _HueSpread;
 
             struct v2f
             {
@@ -105,7 +138,16 @@ Shader "PhotonArena/TeamRecolor"
                 float teamHue = RgbToHsv(team).x;
 
                 float weight = _Strength * smoothstep(_GreyCutoff, _GreyCutoff + _GreySoftness, hsv.y);
-                float3 painted = HsvToRgb(float3(teamHue, max(hsv.y, _SaturationFloor), hsv.z));
+
+                // Distance from the anchor, the short way round and unsigned, so
+                // the fan is always to the same side of the team hue. Short-path
+                // matters: measured in one fixed direction, the wrap sits right
+                // where a dominant colour usually is, and near-neighbour hues
+                // would land at opposite ends of the palette.
+                float delta = abs(frac(hsv.x - _AnchorHue + 0.5) - 0.5);
+                float hue = frac(teamHue + _HueSpread * delta);
+
+                float3 painted = HsvToRgb(float3(hue, max(hsv.y, _SaturationFloor), hsv.z));
                 rgb = lerp(rgb, painted, weight);
 
                 // Whatever the hue rule left alone — white plating, black

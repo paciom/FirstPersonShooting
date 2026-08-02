@@ -67,8 +67,16 @@ public class ArenaKit
         go.transform.position = baseCenter + Vector3.up * (height * 0.5f);
         go.transform.localScale = new Vector3(radius * 2f, height * 0.5f, radius * 2f);
         go.GetComponent<MeshRenderer>().sharedMaterial = mat;
-        if (!collide)
-            Object.Destroy(go.GetComponent<Collider>());
+        // The primitive ships a CapsuleCollider whose rounded caps sit well
+        // inside the visual near the base (fighters waded half into fat
+        // trunks before a wall ray hit anything) and whose dome top reads
+        // as floor. A convex mesh collider IS the cylinder.
+        Object.Destroy(go.GetComponent<Collider>());
+        if (collide)
+        {
+            go.AddComponent<MeshCollider>().convex = true;
+            go.AddComponent<ArenaColumn>();
+        }
         return go;
     }
 
@@ -116,6 +124,8 @@ public class ArenaKit
         go.GetComponent<MeshRenderer>().sharedMaterial = mat;
         if (!collide)
             Object.Destroy(go.GetComponent<Collider>());
+        else
+            go.AddComponent<ArenaColumn>();   // nobody stands on a boulder's crown
         return go;
     }
 

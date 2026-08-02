@@ -40,23 +40,43 @@ public abstract class Weapon : MonoBehaviour
         var shield = ownerRoot.GetComponent<EnergyShield>();
         TeamId = shield != null ? shield.teamId : -1;
 
-        // All weapons on one muzzle share a single light — with a full arsenal
-        // of 50+ weapons per character, one light each would swamp the renderer.
+        EnsureMuzzleLight();
+    }
+
+    /// <summary>
+    /// The flash light, on whichever muzzle this weapon is firing out of now.
+    ///
+    /// Re-homed rather than found once, because <see cref="muzzle"/> moves: a
+    /// tank's siege kit fires out of the turret barrel and hands the gun back to
+    /// the blaster when the robot stands up (see TransformMode), and a light
+    /// left behind on the old muzzle flashes somewhere the shots no longer come
+    /// from. The one it leaves behind is harmless — it decays to zero and stays
+    /// there until the weapon comes back to it.
+    ///
+    /// All weapons on one muzzle share a single light — with a full arsenal of
+    /// 50+ weapons per character, one light each would swamp the renderer.
+    /// </summary>
+    void EnsureMuzzleLight()
+    {
+        if (muzzle == null)
+            return;
+        if (_muzzleLight != null && _muzzleLight.transform.parent == muzzle)
+            return;
+
         var existing = muzzle.Find("MuzzleLight");
         if (existing != null)
         {
             _muzzleLight = existing.GetComponent<Light>();
+            return;
         }
-        else
-        {
-            var lightGo = new GameObject("MuzzleLight");
-            lightGo.transform.SetParent(muzzle, false);
-            _muzzleLight = lightGo.AddComponent<Light>();
-            _muzzleLight.type = LightType.Point;
-            _muzzleLight.color = color;
-            _muzzleLight.range = 4.5f;
-            _muzzleLight.intensity = 0f;
-        }
+
+        var lightGo = new GameObject("MuzzleLight");
+        lightGo.transform.SetParent(muzzle, false);
+        _muzzleLight = lightGo.AddComponent<Light>();
+        _muzzleLight.type = LightType.Point;
+        _muzzleLight.color = color;
+        _muzzleLight.range = 4.5f;
+        _muzzleLight.intensity = 0f;
     }
 
     /// <summary>Called each frame the trigger is held. Direction is normalized.</summary>
@@ -65,6 +85,7 @@ public abstract class Weapon : MonoBehaviour
     /// <summary>Light up the muzzle this frame; it decays automatically.</summary>
     protected void FlashMuzzle(float intensity = 3f)
     {
+        EnsureMuzzleLight();
         if (_muzzleLight != null)
         {
             _muzzleLight.color = color;   // shared light takes the firer's hue

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Photon Arena signaling test</title>
+<style>
+  body { font-family: monospace; background: #06131c; color: #cde; margin: 20px; }
+  .peer { display: inline-block; vertical-align: top; width: 45%; margin-right: 2%;
+          border: 1px solid #1d4; padding: 10px; }
+  h2 { color: #2ef; margin-top: 0; }
+  pre { background: #041019; padding: 8px; height: 300px; overflow-y: auto; font-size: 12px; }
+  .ok { color: #4f8; } .err { color: #f66; }
+  button { background: #0a2433; color: #2ef; border: 1px solid #2ef; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h1>Photon Arena — signaling + WebRTC harness</h1>
+<p>Runs a full host+guest handshake through the real signaling server (two peers
+in this one page), then echo-tests both DataChannels. This mirrors the protocol
+in <code>Assets/Plugins/WebGL/PhotonNet.jslib</code> exactly.</p>
+<button id="run">Run test</button>
+<span id="verdict"></span>
+<div>
+  <div class="peer"><h2>Host</h2><pre id="hostLog"></pre></div>
+  <div class="peer"><h2>Guest</h2><pre id="guestLog"></pre></div>
+</div>
+<script>
+const SERVER = "ws://localhost:8787";
+
+function logger(id) {
+  const el = document.getElementById(id);
+  return (msg, cls) => {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = `[${new Date().toISOString().substr(11, 12)}] ${msg}`;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  };
+}
+
+// One side of the connection. Mirrors the jslib flow: WS signaling with
+// {t:"signal", data:{kind:"desc"|"ice", payload}} trickle, host creates the
+// two channels ("ev" reliable/ordered, "st" unreliable/unordered).
+class Peer {
+  constructor(name, log) {
+    this.name = name;
+    this.log = log;
+    this.ws = null;
+    this.pc = null;
+    this.channels = {};
+    this.onReady = null;
+  }
+
+  connectSignaling() {
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(SERVER);
+      this.ws.onopen = () => { this.log("signaling connected"); resolve(); };
+      this.ws.onerror = () => reject(new Error("signaling connect failed"));
+      this.ws.onmessage = (e) => this.onSignalingMessage(JSON.parse(e.data));
+    });
+  }
+
+  send(msg) { this.ws.send(JSON.stringify(msg)); }
+
+  onSignalingMessage(msg) {
+    switch (msg.t) {
+      case "hosted":
+        this.ice = JSON.parse(msg.ice);
+        this.log(`hosted, code=${msg.code}, ice servers=${this.ice.length}`);
+        this.code = msg.code;
+        if (this.onHosted) this.onHosted(msg.code);
+        break;
+      case "joined":
+        this.ice = JSON.parse(msg.ice);
+        this.log(`joined, ice servers=${this.ice.length}`);
+        this.startRtc(false);
+        break;
+      case "peer-joined":
+        this.log("guest arrived — creating offer");
+        this.startRtc(true);
+        break;
+      case "signal":
+        this.onPeerSignal(msg.data);
+        break;
+      case "peer-left":
+        this.log("peer left", "err");
+        break;
+      case "error":
+        this.log(`server error: ${msg.reason}`, "err");
+        break;
+    }
+  }
+
+  startRtc(isHost) {
+    this.pc = new RTCPeerConnection({ iceServers: this.ice });
+    // payload is stringified JSON — the exact shape the Unity client relays.
+    this.pc.onicecandidate = (e) => {
+      if (e.candidate)
+        this.send({ t: "signal", data: { kind: "ice", payload: JSON.stringify(e.candidate.toJSON()) } });
+    };
+    this.pc.onconnectionstatechange = () =>
+      this.log(`rtc state: ${this.pc.connectionState}`,
+               this.pc.connectionState === "connected" ? "ok" : "");
+    if (isHost) {
+      this.adoptChannel(this.pc.createDataChannel("ev", { ordered: true }));
+      this.adoptChannel(this.pc.createDataChannel("st", { ordered: false, maxRetransmits: 0 }));
+      this.pc.createOffer()
+        .then((d) => this.pc.setLocalDescription(d))
+        .then(() => this.send({ t: "signal", data: { kind: "desc", payload: JSON.stringify(this.pc.localDescription.toJSON()) } }));
+    } else {
+      this.pc.ondatachannel = (e) => this.adoptChannel(e.channel);
+    }
+  }
+
+  adoptChannel(ch) {
+    this.channels[ch.label] = ch;
+    ch.onopen = () => {
+      this.log(`channel "${ch.label}" open`, "ok");
+      if (this.channels.ev?.readyState === "open" &&
+          this.channels.st?.readyState === "open" && this.onReady)
+        this.onReady();
+    };
+    ch.onmessage = (e) => {
+      this.log(`recv on ${ch.label}: ${e.data}`);
+      if (this.onMessage) this.onMessage(ch.label, e.data);
+    };
+  }
+
+  async onPeerSignal(data) {
+    const payload = JSON.parse(data.payload);
+    if (data.kind === "desc") {
+      if (!this.pc) { this.log("desc before rtc start!", "err"); return; }
+      await this.pc.setRemoteDescription(payload);
+      if (payload.type === "offer") {
+        const answer = await this.pc.createAnswer();
+        await this.pc.setLocalDescription(answer);
+        this.send({ t: "signal", data: { kind: "desc", payload: JSON.stringify(this.pc.localDescription.toJSON()) } });
+      }
+    } else if (data.kind === "ice") {
+      try { await this.pc.addIceCandidate(payload); }
+      catch (e) { this.log(`addIceCandidate: ${e.message}`, "err"); }
+    }
+  }
+
+  async path() {
+    const stats = await this.pc.getStats();
+    let pair = null, cands = {};
+    stats.forEach((r) => {
+      if (r.type === "candidate-pair" && (r.selected || r.nominated) && r.state === "succeeded") pair = r;
+      if (r.type === "local-candidate" || r.type === "remote-candidate") cands[r.id] = r;
+    });
+    if (!pair) return "unknown";
+    const l = cands[pair.localCandidateId], r = cands[pair.remoteCandidateId];
+    return (l?.candidateType === "relay" || r?.candidateType === "relay") ? "relay" : "direct";
+  }
+}
+
+document.getElementById("run").onclick = async () => {
+  const verdict = document.getElementById("verdict");
+  verdict.textContent = " running...";
+  const host = new Peer("host", logger("hostLog"));
+  const guest = new Peer("guest", logger("guestLog"));
+  const results = { evEcho: false, stEcho: false };
+
+  try {
+    await host.connectSignaling();
+    await guest.connectSignaling();
+
+    const code = await new Promise((res) => { host.onHosted = res; host.send({ t: "host" }); });
+    guest.send({ t: "join", code });
+
+    await new Promise((res, rej) => {
+      host.onReady = res;
+      setTimeout(() => rej(new Error("channels did not open in 15s")), 15000);
+    });
+
+    // Echo across both channels, both directions.
+    const echoed = new Promise((res) => {
+      let seen = 0;
+      guest.onMessage = (label, data) => {
+        guest.channels[label].send(`echo:${data}`);
+      };
+      host.onMessage = (label, data) => {
+        if (data === "echo:ping-ev" && label === "ev") { results.evEcho = true; seen++; }
+        if (data === "echo:ping-st" && label === "st") { results.stEcho = true; seen++; }
+        if (seen === 2) res();
+      };
+    });
+    host.channels.ev.send("ping-ev");
+    host.channels.st.send("ping-st");
+    await Promise.race([echoed, new Promise((_, rej) =>
+      setTimeout(() => rej(new Error("echo timeout")), 10000))]);
+
+    const path = await host.path();
+    host.log(`connection path: ${path}`, "ok");
+    verdict.innerHTML = `<span class="ok"> PASS — reliable + unreliable echo OK, path=${path}</span>`;
+  } catch (e) {
+    verdict.innerHTML = `<span class="err"> FAIL — ${e.message}</span>`;
+    host.log(e.message, "err");
+  }
+};
+</script>
+</body>
+</html>

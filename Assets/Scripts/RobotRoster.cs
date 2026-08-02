@@ -44,6 +44,22 @@ public class RobotRoster : MonoBehaviour
         /// </summary>
         public UnityEngine.Video.VideoClip transformVideo;
 
+        /// <summary>
+        /// This robot's dominant hue (0–1), measured off its albedo at build
+        /// time. It is the colour that comes out exactly the away team's colour;
+        /// everything else fans away from it. See TeamPaint.
+        ///
+        /// Per robot because the fleet splits: five robots are cool-dominant and
+        /// four are warm, and a single shared pivot leaves one of those groups
+        /// looking almost identical on both teams.
+        ///
+        /// ZERO means "not measured" — TeamPaint falls back to the home team's
+        /// own hue. Zero rather than -1 because Entry is a struct, and a struct
+        /// with a field initializer needs an explicit constructor; a measured
+        /// value is a bucket CENTRE and so is never exactly 0.
+        /// </summary>
+        public float paintAnchorHue;
+
         public bool HasStages => transformStages != null && transformStages.Length > 1;
     }
 

@@ -21,8 +21,16 @@ public static class RobotReinforcements
 
     /// <summary>
     /// Clone a robot onto <paramref name="teamId"/>. Returns false — with no
-    /// gold spent — when the roster is full or every team-mate is currently
-    /// de-rezzed (a shrunken body would clone its shrunken scale as "normal").
+    /// gold spent — when the roster is full or no team-mate is currently
+    /// standing there as a robot.
+    ///
+    /// Only a robot in robot form will do. A clone inherits the template's body
+    /// as it stands, so a de-rezzed one hands over its shrunken scale as
+    /// "normal" and a transformed one hands over a tank: the vehicle models
+    /// hanging off Body, the wheel rig, and a CharacterController already cut
+    /// down to vehicle height, which TransformMode then measures as the height
+    /// this robot stands at. Waiting is free — the gold stays banked and
+    /// TeamBank tries again on its next tick.
     /// </summary>
     public static bool TrySpawn(int teamId)
     {
@@ -35,7 +43,7 @@ public static class RobotReinforcements
             if (shield == null || shield.teamId != teamId)
                 continue;
             roster++;
-            if (template == null && !shield.IsDown)
+            if (template == null && !shield.IsDown && IsStandingRobot(brain))
                 template = brain;
         }
 
@@ -63,6 +71,14 @@ public static class RobotReinforcements
         clone.GetComponent<EnergyShield>()?.Rematerialize();
         clone.GetComponent<WeaponLoadout>()?.ClearSpecial();
 
+        // Instantiate copies the models VehicleSkin and TransformMode built,
+        // but none of the private fields tracking them, so the clone would
+        // otherwise build a second set over the top of the inherited one and
+        // leave that one hanging under its Body forever. Belt and braces with
+        // the robot-form template check above: this lands the clone on a form
+        // it actually owns, whatever it was copied from.
+        clone.GetComponent<TransformMode>()?.ForceRobotForm();
+
         Color tint = MatchAnnouncer.TeamColor(teamId);
         VfxUtil.Explosion(spawn + Vector3.up * 1f, tint, 1.6f);
         MatchAnnouncer.Say($"{MatchAnnouncer.TeamName(teamId)} BUILT A NEW ROBOT",
@@ -89,6 +105,16 @@ public static class RobotReinforcements
             Object.Destroy(robot);
         }
         Spawned.Clear();
+    }
+
+    /// <summary>
+    /// Robot form, and not on its way out of it — mid-fold is a half-built tank
+    /// and clones as one.
+    /// </summary>
+    static bool IsStandingRobot(AIBrain brain)
+    {
+        var mode = brain.GetComponent<TransformMode>();
+        return mode == null || (!mode.IsVehicle && !mode.IsBusy);
     }
 
     /// <summary>Team home strip, nudged onto the navmesh and away from the exact spawn line.</summary>

@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -42,11 +42,23 @@ public class GameModeController : MonoBehaviour
     PlayerBrain _playerBrain;
     CharacterMotor _playerMotor;
     // A list, not an array: teams grow mid-match when a team banks enough gold
-    // to build a reinforcement (see RobotReinforcements).
-    readonly List<AIBrain> _bots = new List<AIBrain>();
+    // to build a reinforcement (see RobotReinforcements). Not readonly: plain
+    // private fields survive a recompile-during-Play reload, readonly ones are
+    // silently reset — and an empty bot list here means no mode can ever pause
+    // or resume the bots again.
+    List<AIBrain> _bots = new List<AIBrain>();
     ArenaBlockManager _blockManager;
     TreasureSpawner _treasureSpawner;
     GameObject _spectatorRig;
+    CommanderController _commander;
+    TDController _towerDefense;
+    BrawlController _brawl;
+    BrawlShow _brawlShow;
+    GameObject _brawlStageSelect;
+    ChineseQuest _chineseQuest;
+    ChineseRun _chineseRun;
+    TankRaid _tankRaid;
+    GameObject _chineseDeckSelect;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -88,6 +100,21 @@ public class GameModeController : MonoBehaviour
     {
         if (Mode != GameMode.Menu && Input.GetKeyDown(KeyCode.Escape))
         {
+            // In Commander, Escape unwinds one intent at a time before it
+            // exits the mode: first a build ghost, then an armed attack-move.
+            // Asked through here rather than read in three Updates, where
+            // execution order would decide which one wins.
+            if (Mode == GameMode.Commander && _commander != null)
+            {
+                if (_commander.Placer != null && _commander.Placer.CancelPending())
+                    return;
+                if (_commander.Selection != null && _commander.Selection.CancelPendingOrder())
+                    return;
+            }
+            // Tower Defense has one intent to unwind: an armed tower ghost.
+            if (Mode == GameMode.TowerDefense && _towerDefense != null
+                && _towerDefense.Placer != null && _towerDefense.Placer.CancelPending())
+                return;
             EnterMenu();
             return;
         }
@@ -97,6 +124,18 @@ public class GameModeController : MonoBehaviour
         if (Mode == GameMode.Menu && _arenaSelect != null && Input.GetKeyDown(KeyCode.Escape))
         {
             CancelArenaSelect();
+            return;
+        }
+
+        if (Mode == GameMode.Menu && _brawlStageSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelBrawlStageSelect();
+            return;
+        }
+
+        if (Mode == GameMode.Menu && _chineseDeckSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelChineseDeckSelect();
             return;
         }
 
@@ -121,7 +160,7 @@ public class GameModeController : MonoBehaviour
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
         // Never while the on-screen controls are up — they need a free cursor.
-        if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview)
+        if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview || Mode == GameMode.OnlinePvP)
             && !TouchControls.Active
             && Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
         {
@@ -197,8 +236,62 @@ public class GameModeController : MonoBehaviour
 
     public void EnterMenu()
     {
+        // Leaving an online match tells the other player before anything is
+        // torn down; a no-op in every other mode (and when the match already
+        // ended itself — NetMatch guards on its own state).
+        if (Mode == GameMode.OnlinePvP)
+            NetMatch.OnLocalLeftMatch();
+
         Mode = GameMode.Menu;
         DestroySpectatorRig();
+        // Torn down before anything touches the characters: Teardown is what
+        // brings the hidden FPS cast back and swaps the arena world back in.
+        if (_commander != null)
+        {
+            _commander.Teardown();
+            _commander = null;
+        }
+        // Tower Defense holds the world the same way Commander does, and
+        // hands it back through the same one-shot Teardown.
+        if (_towerDefense != null)
+        {
+            _towerDefense.Teardown();
+            _towerDefense = null;
+        }
+        // Same contract as Commander: Teardown swaps the arena world back in
+        // before anything touches the characters.
+        if (_brawl != null)
+        {
+            _brawl.Teardown();
+            _brawl = null;
+        }
+        if (_brawlShow != null)
+        {
+            _brawlShow.Teardown();
+            _brawlShow = null;
+        }
+        // Same contract again: Chinese Quest borrows Brawl's world lifecycle
+        // wholesale, so it hands the arena back the same way.
+        if (_chineseQuest != null)
+        {
+            _chineseQuest.Teardown();
+            _chineseQuest = null;
+        }
+        // Same again — and this one also hands back the lane fence it widened
+        // to build a road with no end.
+        if (_chineseRun != null)
+        {
+            _chineseRun.Teardown();
+            _chineseRun = null;
+        }
+        // Same contract once more — and this one also sweeps the tanks, which
+        // live at the SCENE ROOT rather than under its stage (see TankPawn), so
+        // destroying the stage would leave them driving around the arena.
+        if (_tankRaid != null)
+        {
+            _tankRaid.Teardown();
+            _tankRaid = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -211,10 +304,16 @@ public class GameModeController : MonoBehaviour
         }
         SetBotsActive(false);
 
+        // Bring hidden bots back — online matches hide their bodies, and the
+        // menu's arena backdrop expects the full cast standing in it.
+        SetBotsHidden(false);
+
         CloseRobotSelect();
         // Also closed here, or backing out of a match mid-arena-select leaves an
         // orphaned canvas floating over the main menu.
         CloseArenaSelect();
+        CloseBrawlStageSelect();
+        CloseChineseDeckSelect();
         _menuCanvas.SetActive(true);
         _overlayCanvas.SetActive(false);
         LockCursor(false);
@@ -229,7 +328,12 @@ public class GameModeController : MonoBehaviour
     {
         if (_roster == null || !_roster.HasRobots)
         {
-            if (mode == GameMode.AIvAI) StartAIvAI(); else StartPlayerVsAI();
+            if (mode == GameMode.AIvAI) StartAIvAI();
+            else if (mode == GameMode.Brawl) StartBrawl();
+            else if (mode == GameMode.BrawlWar) StartBrawlWar();
+            else if (mode == GameMode.BrawlShow) StartBrawlShow();
+            else if (mode == GameMode.TankRaid) StartTankRaid();
+            else StartPlayerVsAI();
             return;
         }
 
@@ -254,6 +358,31 @@ public class GameModeController : MonoBehaviour
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
         CloseRobotSelect();
+        // The Brawl family skips the FPS-cast reskin — its robots spawn
+        // fresh from the roster. Brawl and its exhibition go through the
+        // stage picker (the same step FPS modes give arenas); the Show
+        // launches straight onto its bench.
+        if (_pendingMode == GameMode.Brawl || _pendingMode == GameMode.BrawlWar)
+        {
+            _menuCanvas.SetActive(false);
+            CloseBrawlStageSelect();
+            _brawlStageSelect = BrawlStageSelect.Build(this, _pendingMode);
+            return;
+        }
+        if (_pendingMode == GameMode.BrawlShow)
+        {
+            StartBrawlShow();
+            return;
+        }
+        // Tank Raid takes the cyan pick as the hero's chassis and builds its own
+        // tanks from the roster, so it skips the FPS-cast reskin the same way
+        // the Brawl family does — and its battlefield is its own set, so there
+        // is no arena step in front of it either.
+        if (_pendingMode == GameMode.TankRaid)
+        {
+            StartTankRaid();
+            return;
+        }
         ApplyRobotSelection();
         OpenArenaSelect();
     }
@@ -339,6 +468,12 @@ public class GameModeController : MonoBehaviour
     public RobotRoster.Entry PlayerRobot =>
         (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
 
+    // Online PvP reads these to describe the local setup to the other client
+    // and to dress their mirror pawn in the robot they actually picked.
+    public int PlayerRobotIndex => _cyanRobot;
+    public int CurrentArenaIndex => _arenaIndex;
+    public RobotRoster Roster => _roster;
+
     /// <summary>
     /// Gives the player the same robot rig the bots wear.
     ///
@@ -370,7 +505,7 @@ public class GameModeController : MonoBehaviour
 
         if (hasModel)
         {
-            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+            RobotFactory.Reskin(body, entry.modelPrefab, tint, entry.paintAnchorHue);
         }
         else
         {
@@ -378,7 +513,7 @@ public class GameModeController : MonoBehaviour
             var placeholder = body.GetComponent<MeshRenderer>();
             if (placeholder != null)
                 placeholder.enabled = false;
-            RobotFactory.InstantiateNormalized(entry.modelPrefab, body, tint);
+            RobotFactory.InstantiateNormalized(entry.modelPrefab, body, tint, entry.paintAnchorHue);
         }
 
         var skin = body.GetComponent<VehicleSkin>();
@@ -387,6 +522,9 @@ public class GameModeController : MonoBehaviour
             skin = body.gameObject.AddComponent<VehicleSkin>();
             skin.holder = body;
         }
+        // Set before either branch: both configure calls rebuild the models,
+        // and each one repaints as it goes.
+        skin.paintAnchorHue = entry.paintAnchorHue;
         if (entry.HasStages)
             skin.SetStages(entry.transformStages, tint);
         else
@@ -425,7 +563,7 @@ public class GameModeController : MonoBehaviour
             if (body == null)
                 continue;
             Color tint = MatchAnnouncer.TeamColor(team);
-            RobotFactory.Reskin(body, entry.modelPrefab, tint);
+            RobotFactory.Reskin(body, entry.modelPrefab, tint, entry.paintAnchorHue);
 
             // A different robot transforms into a different vehicle. Rebuilt
             // after the reskin so it measures against the new robot's height.
@@ -436,6 +574,7 @@ public class GameModeController : MonoBehaviour
             var skin = body.GetComponent<VehicleSkin>();
             if (skin != null)
             {
+                skin.paintAnchorHue = entry.paintAnchorHue;
                 if (entry.HasStages)
                     skin.SetStages(entry.transformStages, tint);
                 else
@@ -472,6 +611,74 @@ public class GameModeController : MonoBehaviour
         LockCursor(true);
     }
 
+    /// <summary>
+    /// The online 1v1: local player vs the other human's mirror pawn (built by
+    /// NetMatch after this returns). No bots — their brains are off AND their
+    /// bodies hidden, since a brainless robot standing at spawn reads as a
+    /// target. No airdrops either: treasure rolls are unseeded randomness that
+    /// the two clients could never agree on (v1).
+    ///
+    /// The guest spawns across the arena on the magenta line so the two
+    /// players' world positions agree on both clients: host = PlayerSpawn,
+    /// guest = TeamSpawns(1)[0], everywhere.
+    /// </summary>
+    public void StartOnlinePvP(int arenaIndex, bool isHost)
+    {
+        _arenaIndex = arenaIndex;
+        CloseRobotSelect();
+        CloseArenaSelect();
+        // Arena before characters, as everywhere: re-baking the NavMesh under
+        // live agents strands them, and spawns come from the loaded arena.
+        ArenaRuntime.Load(arenaIndex);
+
+        Mode = GameMode.OnlinePvP;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+        ScoreKeeper.Reset();
+        EnsurePlayerRobot();
+
+        if (_player != null)
+        {
+            _player.SetActive(true);
+            _playerBrain.enabled = true;
+
+            if (!isHost)
+            {
+                var spot = ArenaContext.Current.TeamSpawns(1)[0];
+                var rotation = Quaternion.Euler(0f, 180f, 0f);
+                if (_playerMotor != null)
+                    _playerMotor.Teleport(spot);
+                else
+                    _player.transform.position = spot;
+                _player.transform.rotation = rotation;
+                var deRez = _player.GetComponent<DeRezEffect>();
+                if (deRez != null)
+                    deRez.SetSpawn(spot, rotation);
+            }
+        }
+
+        SetBotsActive(false);
+        SetBotsHidden(true);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("ONLINE MATCH   ·   T — Transform   ·   Z — Scope   ·   ESC — Leave",
+                    "ONLINE MATCH   ·   tap MENU to leave");
+        LockCursor(true);
+    }
+
+    /// <summary>
+    /// Bots have no place in an online match (yet). Hidden AFTER
+    /// RestoreAllDeRez, which this mode's entry already ran — deactivating a
+    /// mid-cycle character would strand its coroutines. EnterMenu unhides.
+    /// </summary>
+    void SetBotsHidden(bool hidden)
+    {
+        foreach (var bot in _bots)
+            if (bot != null && bot.gameObject.activeSelf == hidden)
+                bot.gameObject.SetActive(!hidden);
+    }
+
     public void StartAIvAI()
     {
         Mode = GameMode.AIvAI;
@@ -491,6 +698,265 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         ShowOverlay("AI v AI — ESC for Menu", "AI v AI — tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The Commander RTS mode. No robot/arena select in front of it (yet):
+    /// the battlefield is its own fixed map, and army composition is decided
+    /// in-match by what you build, not on a select screen.
+    /// </summary>
+    public void StartCommander() => StartCommanderMode(playerCommands: true);
+
+    /// <summary>Commander's AI-v-AI: two machine commanders, a camera that hunts the fight.</summary>
+    public void StartCommanderWar() => StartCommanderMode(playerCommands: false);
+
+    void StartCommanderMode(bool playerCommands)
+    {
+        Mode = GameMode.Commander;
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden: deactivating a mid-cycle de-rez
+        // or fold would strand its coroutine — same order every mode uses.
+        RestoreAllDeRez();
+
+        // The MAP CODE: whatever the menu box asked for, or a fresh roll.
+        // Printed in the hint so a battlefield worth revisiting can be —
+        // type its code back into the menu box.
+        int seed = MainMenu.RequestedSeed ?? Random.Range(1, 1000000);
+        _commander = CommanderController.Begin(this, playerCommands, seed);
+
+        _menuCanvas.SetActive(false);
+        if (playerCommands)
+            ShowOverlay($"MAP #{seed}   ·   Drag — Select   ·   RMB — Move / Attack   ·   " +
+                "A + Click — Attack-move   ·   WASD / Wheel — Camera   ·   H — Home   ·   ESC — Menu",
+                $"MAP #{seed}   ·   tap robot — select   ·   tap ground — move   ·   drag — pan");
+        else
+            ShowOverlay($"AI WAR — MAP #{seed}   ·   the camera follows the fighting — " +
+                "drag / WASD / wheel to take it   ·   ESC — Menu",
+                $"AI WAR — MAP #{seed}   ·   drag — pan   ·   pinch — zoom   ·   MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The Tower Defense siege: raiders pour through a warp gate and march
+    /// a canyon toward the Photon Core; the player builds the towers that
+    /// say otherwise. Its battlefield rolls from the same MAP CODE box
+    /// Commander reads — one code vocabulary for both strategy modes.
+    /// </summary>
+    public void StartTowerDefense()
+    {
+        Mode = GameMode.TowerDefense;
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        int seed = MainMenu.RequestedSeed ?? Random.Range(1, 1000000);
+        _towerDefense = TDController.Begin(this, seed);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay($"MAP #{seed}   ·   Towers on the high ground, robots in the canyon   ·   " +
+            "RALLY FLAG — move the line   ·   RMB tower — Sell   ·   Drag — Pan   ·   H — Core   ·   ESC — Menu",
+            $"MAP #{seed}   ·   tap to build towers and robots   ·   drag — pan   ·   pinch — zoom");
+        LockCursor(false);
+    }
+
+    /// <summary>A stage card was clicked: remember it and fight there.</summary>
+    public void ChooseBrawlStage(int selection)
+    {
+        BrawlArenas.SetSelected(_pendingMode, selection);
+        CloseBrawlStageSelect();
+        if (_pendingMode == GameMode.BrawlWar) StartBrawlWar(); else StartBrawl();
+    }
+
+    /// <summary>Escape/BACK from the stage screen goes back a step, to robot select.</summary>
+    public void CancelBrawlStageSelect()
+    {
+        CloseBrawlStageSelect();
+        if (_roster != null && _roster.HasRobots)
+            _robotSelect = RobotSelectMenu.Build(this, _roster, _pendingMode, _cyanRobot, _magentaRobot);
+        else
+            _menuCanvas.SetActive(true);
+    }
+
+    void CloseBrawlStageSelect()
+    {
+        if (_brawlStageSelect != null)
+        {
+            Destroy(_brawlStageSelect);
+            _brawlStageSelect = null;
+        }
+    }
+
+    /// <summary>The end panel's CHANGE ROBOTS: out through the menu, back into the same select.</summary>
+    public void RestartBrawlSelect()
+    {
+        var variant = Mode == GameMode.BrawlWar ? GameMode.BrawlWar
+            : Mode == GameMode.BrawlShow ? GameMode.BrawlShow : GameMode.Brawl;
+        EnterMenu();
+        OpenRobotSelect(variant);
+    }
+
+    /// <summary>
+    /// The MARTIAL ARTS SHOW: the cyan pick alone on the stage, running its
+    /// whole repertoire with captions — the judging bench for every clip.
+    /// </summary>
+    public void StartBrawlShow()
+    {
+        Mode = GameMode.BrawlShow;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _brawlShow = BrawlShow.Begin(this, _roster, _cyanRobot);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("MARTIAL ARTS SHOW   ·   ← → — Move   ·   ESC — Menu",
+                    "MARTIAL ARTS SHOW   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// The versus mode: the two picked robots duel on the Brawl stage, best
+    /// of three. No arena select in front of it — the stage is its own set,
+    /// exactly as Commander's battlefield is.
+    /// </summary>
+    public void StartBrawl() => StartBrawlMode(playerControls: true);
+
+    /// <summary>Brawl's exhibition bout: two CPU corners, the couch watches.</summary>
+    public void StartBrawlWar() => StartBrawlMode(playerControls: false);
+
+    void StartBrawlMode(bool playerControls)
+    {
+        Mode = playerControls ? GameMode.Brawl : GameMode.BrawlWar;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _brawl = BrawlController.Begin(this, _roster, _cyanRobot, _magentaRobot, playerControls,
+            BrawlDifficulty.For(Mode), BrawlArenas.SelectedFor(Mode));
+
+        _menuCanvas.SetActive(false);
+        if (playerControls)
+            ShowOverlay("WASD — Move   ·   J — Punch   ·   K — Kick   ·   C — Block   ·   " +
+                        "L — Blast   ·   ? — Help   ·   ESC — Menu",
+                        "BRAWL   ·   tap ? for help   ·   tap MENU to go back");
+        else
+            ShowOverlay("BRAWL: AI v AI — F3 for Hitboxes — ESC for Menu",
+                        "BRAWL: AI v AI — tap MENU to go back");
+        LockCursor(false);
+    }
+
+    // ---------- Tank Raid ----------
+
+    /// <summary>
+    /// TANK RAID: the vertical scroller. The player's chosen robot drives up a
+    /// battlefield with no end in its tank form, hull on one stick and turret on
+    /// the other, while raiders come down it. Its own set, like every mode that
+    /// builds its world rather than borrowing an arena — so no arena select
+    /// comes in front of it.
+    /// </summary>
+    public void StartTankRaid()
+    {
+        Mode = GameMode.TankRaid;
+        CloseRobotSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _tankRaid = TankRaid.Begin(this, _roster, _cyanRobot);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
+                    "grab the pods   ·   = — Thumb sticks   ·   ESC — Menu",
+                    "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    // ---------- Chinese Quest ----------
+
+    /// <summary>
+    /// CHINESE QUEST's front screen: which words to fight over. There is no
+    /// robot select in front of it — the hero and the four answers are cast
+    /// from the roster automatically, because five DIFFERENT robots is the
+    /// point (four identical ones holding four different words are hard to
+    /// tell apart at a glance, and glancing is the whole input).
+    /// </summary>
+    public void OpenChineseDeckSelect() => OpenChineseDeckSelect(GameMode.ChineseQuest);
+
+    /// <summary>The runner's front door — same deck picker, different launcher.</summary>
+    public void OpenChineseRunDeckSelect() => OpenChineseDeckSelect(GameMode.ChineseRun);
+
+    void OpenChineseDeckSelect(GameMode mode)
+    {
+        _menuCanvas.SetActive(false);
+        CloseChineseDeckSelect();
+        _chineseDeckSelect = ChineseDeckSelect.Build(this, mode);
+    }
+
+    /// <summary>Escape/BACK from the deck screen goes back a step, to the main menu.</summary>
+    public void CancelChineseDeckSelect()
+    {
+        CloseChineseDeckSelect();
+        _menuCanvas.SetActive(true);
+    }
+
+    void CloseChineseDeckSelect()
+    {
+        if (_chineseDeckSelect != null)
+        {
+            Destroy(_chineseDeckSelect);
+            _chineseDeckSelect = null;
+        }
+    }
+
+    /// <summary>
+    /// A deck was picked: stand five robots around a character and start
+    /// asking. Its stage is its own set, exactly as Commander's battlefield
+    /// and Brawl's ring are, so no arena select comes in front of it.
+    /// </summary>
+    public void StartChineseQuest(int deckIndex)
+    {
+        Mode = GameMode.ChineseQuest;
+        CloseChineseDeckSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _chineseQuest = ChineseQuest.Begin(this, _roster, deckIndex);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("Read the character   ·   click a robot or its card   ·   " +
+                    "1 – 4 to answer   ·   ESC — Menu",
+                    "Read the character   ·   tap a robot or its card   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// CHINESE RUN: the same question asked at a sprint. A road with no end,
+    /// four robots standing across it holding the four meanings, and only as
+    /// long to answer as it takes to reach them. Its own set, like every
+    /// Chinese and Brawl mode — no arena select in front of it.
+    /// </summary>
+    public void StartChineseRun(int deckIndex)
+    {
+        Mode = GameMode.ChineseRun;
+        CloseChineseDeckSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _chineseRun = ChineseRun.Begin(this, _roster, deckIndex);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("Answer before you reach them   ·   click a robot or its card   ·   " +
+                    "1 – 4 to answer   ·   ESC — Menu",
+                    "Answer before you reach them   ·   tap a robot or its card   ·   " +
+                    "tap MENU to go back");
         LockCursor(false);
     }
 

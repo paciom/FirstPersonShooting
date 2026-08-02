@@ -33,6 +33,13 @@ public class TransformMode : MonoBehaviour
     public const string VehicleParameter = "Vehicle";
 
     /// <summary>
+    /// Child of Body holding the wheels and thrusters. Named rather than
+    /// anonymous because RobotFactory.Reskin keeps it by name, and because a
+    /// cloned robot has to be able to find the one it inherited.
+    /// </summary>
+    public const string RigName = "VehicleRig";
+
+    /// <summary>
     /// How far into the fold the light burst fires and the vehicle mesh takes
     /// over. Deliberately before halfway: by this point the robot has crouched
     /// enough to sell the wind-up, but not far enough to look like a heap —
@@ -63,6 +70,27 @@ public class TransformMode : MonoBehaviour
     public bool CanTransform => ResolveAnimator() != null;
 
     /// <summary>
+    /// The tank's turret, which turns on its own so the gun can track a target
+    /// the hull is not pointed at.
+    ///
+    /// Added here rather than in the scene: characters are built by ArenaBuilder
+    /// and by the net match, and a component the scene has to be rebuilt to gain
+    /// is one that is missing from every character already saved in one. Built in
+    /// Awake and left switched off until a fold lands — adding it on demand
+    /// would eventually try to add it during teardown, where ApplyTuning runs
+    /// one last time on a character Unity is already destroying.
+    /// </summary>
+    public TankTurret Turret
+    {
+        get
+        {
+            if (_turret == null)
+                _turret = GetComponent<TankTurret>() ?? gameObject.AddComponent<TankTurret>();
+            return _turret;
+        }
+    }
+
+    /// <summary>
     /// Raised as a fold begins, true when folding into a vehicle. Fires for a
     /// request that was actually accepted, so a listener never has to re-check
     /// CanTransform or the busy state. <see cref="TransformCast"/> uses it to
@@ -72,7 +100,9 @@ public class TransformMode : MonoBehaviour
 
     Animator _animator;
     VehicleSkin _skin;               // swaps in the vehicle mesh, if this robot has one
+    TankTurret _turret;              // turns the gun independently of the hull
     Transform _rig;                  // wheels + thrusters, scaled in during the fold
+    Transform[] _handMuzzles;        // where the vehicle guns fired from before the barrel did
     Coroutine _fold;
     bool _pending;
     bool _hasPending;
@@ -105,6 +135,7 @@ public class TransformMode : MonoBehaviour
             body = found != null ? found : transform;
         }
         _skin = GetComponentInChildren<VehicleSkin>();
+        Turret.enabled = false;
 
         if (_controller != null)
         {
@@ -304,6 +335,9 @@ public class TransformMode : MonoBehaviour
         if (_loadout != null)
             _loadout.SetVehicleMode(vehicle);
 
+        Turret.enabled = vehicle;
+        MountGunsOnBarrel(vehicle);
+
         float f = vehicleHeightFraction;
 
         // Keep the feet where they are while the capsule shrinks: a controller
@@ -332,6 +366,42 @@ public class TransformMode : MonoBehaviour
             _agent.height = vehicle ? _agentHeight * f : _agentHeight;
     }
 
+    /// <summary>
+    /// Fire the siege kit out of the barrel while there is a barrel to fire out
+    /// of, and hand it back to the blaster when the robot stands up.
+    ///
+    /// Worth the swap: the whole point of a turret that turns is that the shots
+    /// come from where it is pointing. The guns are moved onto
+    /// <see cref="TankTurret.Muzzle"/> rather than onto the barrel itself
+    /// because a robot swap destroys the model — and with it any transform a
+    /// weapon was still holding.
+    ///
+    /// Robots whose vehicle form is one unrigged mesh keep the blaster muzzle,
+    /// which is where their shots came from before any of this existed.
+    /// </summary>
+    void MountGunsOnBarrel(bool vehicle)
+    {
+        if (_loadout == null || _loadout.vehicleWeapons == null)
+            return;
+        if (vehicle && !Turret.HasTurret)
+            return;
+
+        var guns = _loadout.vehicleWeapons;
+        if (_handMuzzles == null || _handMuzzles.Length != guns.Length)
+        {
+            _handMuzzles = new Transform[guns.Length];
+            for (int i = 0; i < guns.Length; i++)
+                _handMuzzles[i] = guns[i] != null ? guns[i].muzzle : null;
+        }
+
+        for (int i = 0; i < guns.Length; i++)
+        {
+            if (guns[i] == null)
+                continue;
+            guns[i].muzzle = vehicle ? Turret.Muzzle : _handMuzzles[i];
+        }
+    }
+
     // -------------------------------------------------------------------- props
 
     /// <summary>
@@ -342,10 +412,10 @@ public class TransformMode : MonoBehaviour
     /// </summary>
     void EnsureRig()
     {
-        if (_rig != null)
+        if (ResolveRig() != null)
             return;
 
-        var go = new GameObject("VehicleRig");
+        var go = new GameObject(RigName);
         _rig = go.transform;
         _rig.SetParent(body, false);
 
@@ -417,10 +487,29 @@ public class TransformMode : MonoBehaviour
 
     void ScaleRig(float amount)
     {
-        if (_rig == null)
+        if (ResolveRig() == null)
             return;
         _rig.gameObject.SetActive(amount > 0.001f);
         _rig.localScale = Vector3.one * Mathf.Clamp01(amount);
+    }
+
+    /// <summary>
+    /// The rig already hanging off Body, if there is one.
+    ///
+    /// A cloned robot — how <see cref="RobotReinforcements"/> builds a bought
+    /// one — arrives with the rig its template built, because Instantiate
+    /// copies the child but not the field pointing at it. Adopting it is what
+    /// keeps the clone from growing a second set of wheels over the first, and
+    /// what lets ForceRobotForm retract the inherited set at all.
+    ///
+    /// Also how the rig survives a reskin: RobotFactory keeps the object by
+    /// name precisely because nothing here can rebuild it.
+    /// </summary>
+    Transform ResolveRig()
+    {
+        if (_rig == null && body != null)
+            _rig = body.Find(RigName);
+        return _rig;
     }
 
     /// <summary>

@@ -15,6 +15,17 @@ public static class RobotSelectMenu
     internal static readonly Color HoloMagenta = new Color(1f, 0.25f, 0.9f);
     static readonly Color CardColor = new Color(0.06f, 0.14f, 0.22f, 0.95f);
 
+    /// <summary>
+    /// What the preview cameras clear to, behind the robot. A neutral grey
+    /// rather than the near-black this used to be: several robots are mostly
+    /// dark plating, and their silhouettes disappeared into the background.
+    ///
+    /// Shared by the cards and the inspector so a robot reads the same in both.
+    /// Safe to raise — these cameras render with post-processing off, so a
+    /// lighter backdrop costs no bloom contrast on the cyan trim.
+    /// </summary>
+    internal static readonly Color PreviewBackdrop = new Color(0.29f, 0.30f, 0.32f, 1f);
+
     // Preview rigs live far below the arena so the tiny preview cameras
     // (short far plane) see nothing but their own robot.
     internal const float PreviewDepth = -150f;
@@ -96,7 +107,12 @@ public static class RobotSelectMenu
         MakeText(canvasGo.transform, "Title", "CHOOSE  ROBOTS", 64, HoloCyan, FontStyle.Bold,
             new Vector2(0.5f, 1f), new Vector2(0, -85), new Vector2(1200, 80));
         MakeText(canvasGo.transform, "Subtitle",
-            pendingMode == GameMode.AIvAI ? "AI  v  AI" : "PLAYER  v  AI", 26,
+            pendingMode == GameMode.AIvAI ? "AI  v  AI"
+                : pendingMode == GameMode.Brawl ? "BRAWL"
+                : pendingMode == GameMode.BrawlWar ? "BRAWL  —  AI  v  AI"
+                : pendingMode == GameMode.BrawlShow ? "MARTIAL  ARTS  SHOW  —  CYAN  PERFORMS"
+                : pendingMode == GameMode.TankRaid ? "TANK  RAID  —  CYAN  DRIVES"
+                : "PLAYER  v  AI", 26,
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -145), new Vector2(800, 40));
 
@@ -116,6 +132,11 @@ public static class RobotSelectMenu
             () => controller.LaunchSelectedMatch(state.cyanIndex, state.magentaIndex));
         MakeButton(canvasGo.transform, "BACK", new Vector2(-560, -350), new Vector2(200, 78), 28,
             controller.CancelRobotSelect);
+
+        // The stage gets its own SCREEN after this one; only the CPU level
+        // is picked here.
+        if (pendingMode == GameMode.Brawl || pendingMode == GameMode.BrawlWar)
+            BuildLevelPicker(canvasGo.transform, pendingMode);
 
         inspector.BuildUI(canvasGo.transform);
 
@@ -204,9 +225,11 @@ public static class RobotSelectMenu
 
     /// <summary>
     /// Builds both teams' rig sets. Each team gets its own copy of every robot,
-    /// painted in that team's colours, because a card has to show what the robot
-    /// will actually look like on the field — and on the field the same robot on
-    /// opposite teams is two different-coloured robots.
+    /// because a card has to show what the robot will actually look like on the
+    /// field — and on the field the same robot on opposite teams is two
+    /// different-coloured robots. Only the magenta set is repainted; cyan keeps
+    /// the factory colours (see TeamPaint.FactoryTeam), so its rigs cost nothing
+    /// beyond the camera that renders them.
     /// </summary>
     static void BuildPreviewRigs(GameObject root, RobotRoster roster,
         RenderTexture[] cyanPreviews, RenderTexture[] magentaPreviews)
@@ -259,7 +282,8 @@ public static class RobotSelectMenu
                 {
                     var model = Object.Instantiate(roster.robots[i].modelPrefab, spin.transform);
                     NormalizeToCenter(model, spin.transform);
-                    TeamPaint.Apply(model, teamColor, TeamPaint.CardSize);
+                    TeamPaint.Apply(model, teamColor, TeamPaint.CardSize, false,
+                        roster.robots[i].paintAnchorHue);
                 }
 
                 // Added after the model, so VehicleSkin's Start finds it to measure against.
@@ -269,6 +293,7 @@ public static class RobotSelectMenu
                 skin.heightFraction = PreviewVehicleHeight;
                 skin.tint = teamColor;
                 skin.paintSize = TeamPaint.CardSize;
+                skin.paintAnchorHue = roster.robots[i].paintAnchorHue;
             }
 
             var camGo = new GameObject("PreviewCam");
@@ -281,7 +306,7 @@ public static class RobotSelectMenu
             cam.nearClipPlane = 0.05f;
             cam.farClipPlane = 12f;
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+            cam.backgroundColor = PreviewBackdrop;
             var data = camGo.AddComponent<UniversalAdditionalCameraData>();
             data.renderPostProcessing = false;
             cameras.Add(cam);
@@ -363,7 +388,7 @@ public static class RobotSelectMenu
                 s == 0 ? 0f : StageYawOffset);
             // Every stage, not just the robot: a fold that starts cyan and ends
             // in the other team's tank would be worse than no paint at all.
-            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize);
+            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize, false, entry.paintAnchorHue);
         }
 
         var player = holder.gameObject.AddComponent<StopMotionTransformer>();
@@ -427,6 +452,61 @@ public static class RobotSelectMenu
         instance.transform.localScale *= scale;
         Vector3 localCenter = holder.InverseTransformPoint(bounds.center);
         instance.transform.localPosition = -localCenter * scale;
+    }
+
+    /// <summary>
+    /// The CPU level chips, to the right of START: 1–5 with the chosen
+    /// level's name above them. Remembered per mode (PlayerPrefs) — Player
+    /// v AI opens on CADET, the AI war on CONTENDER, so exhibition bouts
+    /// stay watchable instead of two perfect guards staring.
+    /// </summary>
+    static void BuildLevelPicker(Transform parent, GameMode mode)
+    {
+        var title = MakeText(parent, "LevelTitle", "", 18,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(385f, -312f), new Vector2(360f, 24f));
+
+        var chips = new Image[BrawlDifficulty.Levels.Length];
+        var labels = new Text[chips.Length];
+
+        void Refresh()
+        {
+            int selected = BrawlDifficulty.For(mode);
+            title.text = (mode == GameMode.BrawlWar ? "AI  LEVEL  —  " : "CPU  LEVEL  —  ")
+                         + BrawlDifficulty.NameOf(selected);
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = i + 1 == selected;
+                chips[i].color = on
+                    ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                    : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            int level = i + 1;
+            var chip = MakeImage(parent, $"Level_{level}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(385f + (level - 3) * 68f, -352f);
+            rect.sizeDelta = new Vector2(60f, 52f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                BrawlDifficulty.Set(mode, level);
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", level.ToString(), 26,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
+        }
+        Refresh();
     }
 
     // ---------- uGUI helpers (same idiom as MainMenu) ----------
@@ -717,7 +797,7 @@ public class RobotInspector : MonoBehaviour
         _camera.nearClipPlane = 0.05f;
         _camera.farClipPlane = 12f;
         _camera.clearFlags = CameraClearFlags.SolidColor;
-        _camera.backgroundColor = new Color(0.02f, 0.05f, 0.10f, 1f);
+        _camera.backgroundColor = RobotSelectMenu.PreviewBackdrop;
         camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
         // Only renders while the dialog is up; nine thumbnails are enough work.
         _camera.enabled = false;
