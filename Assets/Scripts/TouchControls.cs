@@ -60,7 +60,7 @@ public class TouchControls : MonoBehaviour
     public float stickRadius = 135f;
 
     [Tooltip("Travel on the AIM stick before it is steering at full rate.")]
-    public float aimStickRadius = 130f;
+    public float aimStickRadius = 160f;
 
     [Tooltip("Degrees per second the body turns at full deflection of the AIM stick.")]
     public float turnDegreesPerSecond = 170f;
@@ -69,7 +69,25 @@ public class TouchControls : MonoBehaviour
     public float pitchDegreesPerSecond = 110f;
 
     [Tooltip("Fraction of the AIM stick's travel that doesn't steer, so a resting thumb doesn't drift the camera.")]
-    [Range(0f, 0.5f)] public float aimStickDeadZone = 0.18f;
+    [Range(0f, 0.5f)] public float aimStickDeadZone = 0.10f;
+
+    /// <summary>
+    /// Shape of the AIM stick's response: rate = full × deflection^expo.
+    ///
+    /// This is the difference between a stick you can steer with and a stick you
+    /// can AIM with. A linear stick spends its useful range in the first
+    /// centimetre of thumb travel — a nudge meant to nudge the crosshair swings
+    /// it past the target, and the only way to correct is another overshoot the
+    /// other way. Squaring it makes the bottom of the range fine and the top
+    /// unchanged: a third of the way out turns at ~11°/s where it used to turn
+    /// at ~32°/s, while the rim still whips round at the full rate — so the
+    /// precision is bought from the middle of the range, not from the top end.
+    ///
+    /// 1 restores the old linear feel; higher is finer near the centre.
+    /// </summary>
+    [Tooltip("Response curve of the AIM stick. 1 is linear; 2 gives fine control near the centre " +
+             "and the same top speed at the rim.")]
+    [Range(1f, 3f)] public float aimExpo = 2f;
 
     [Tooltip("Let the mouse stand in for a finger while the controls are forced on with '='.")]
     public bool simulateWithMouse = true;
@@ -354,6 +372,12 @@ public class TouchControls : MonoBehaviour
         bool flying = mode == GameMode.ArenaPreview;
         bool inMenu = mode == GameMode.Menu;
 
+        var vehicle = PlayerBrain.Local != null ? PlayerBrain.Local.GetComponent<TransformMode>() : null;
+        // A tank has no legs to leap with — CharacterMotor.Jump() already
+        // refuses, so an on-screen JUMP would be a button that does nothing.
+        // Mid-fold counts as tank too, matching that rule.
+        bool canJump = vehicle == null || !(vehicle.IsVehicle || vehicle.IsBusy);
+
         // The menu draws its own buttons and covers the screen; anything of
         // ours underneath would just eat taps.
         _root.SetActive(!inMenu);
@@ -370,7 +394,7 @@ public class TouchControls : MonoBehaviour
             (playing || flying) && _lookHint != null && _lookHint.color.a > 0.01f);
         SetVisible(_fireLeft, playing);
         SetVisible(_fireRight, playing);
-        SetVisible(_jump, playing);
+        SetVisible(_jump, playing && canJump);
         SetVisible(_scope, playing);
         SetVisible(_snipe, playing);
         SetVisible(_prevWeapon, playing);
@@ -387,12 +411,15 @@ public class TouchControls : MonoBehaviour
             _snipePressed = false;
             _weaponCycle = 0;
         }
+        // A jump tapped in the instant before the fold started has nowhere to
+        // land now; letting it sit would pop the robot the moment it unfolds.
+        if (!canJump)
+            _jumpPressed = false;
 
         // MORPH stays on screen for the whole match so it can be found, but
         // dims on robots with no forged vehicle clips, where pressing it does
         // nothing. Hiding it instead made the control look like it came and
         // went with the robot.
-        var vehicle = PlayerBrain.Local != null ? PlayerBrain.Local.GetComponent<TransformMode>() : null;
         SetVisible(_morph, playing && vehicle != null);
         SetDimmed(_morph, vehicle == null || !vehicle.CanTransform);
     }
@@ -547,7 +574,12 @@ public class TouchControls : MonoBehaviour
         if (_aimBase != null && _aimBase.gameObject.activeInHierarchy && _aimFinger == int.MinValue)
         {
             Vector2 center = ToCanvas(RectTransformUtility.WorldToScreenPoint(null, _aimBase.position));
-            if ((ToCanvas(pointer.position) - center).magnitude <= stickRadius * 1.25f)
+            // Against the AIM stick's radius, not the move stick's — they are
+            // different sizes now, and a grab zone smaller than the ring means
+            // a thumb landing on the rim falls through to drag-to-look instead.
+            // Only the free look area can lose a touch here: the buttons are
+            // tested first and return before this.
+            if ((ToCanvas(pointer.position) - center).magnitude <= aimStickRadius * 1.25f)
             {
                 _roles[pointer.id] = RoleAim;
                 _aimFinger = pointer.id;
@@ -613,12 +645,18 @@ public class TouchControls : MonoBehaviour
             _aimKnob.anchoredPosition = offset;
 
         // Rescaled past the dead zone rather than clipped, so the first degree
-        // of steering is gentle instead of arriving at full speed.
+        // of steering is gentle instead of arriving at full speed, then curved
+        // by aimExpo so the bottom of the range is fine enough to aim with.
         Vector2 raw = offset / aimStickRadius;
         float magnitude = raw.magnitude;
-        Turn = magnitude <= aimStickDeadZone
-            ? Vector2.zero
-            : raw.normalized * ((magnitude - aimStickDeadZone) / (1f - aimStickDeadZone));
+        if (magnitude <= aimStickDeadZone)
+        {
+            Turn = Vector2.zero;
+            return;
+        }
+
+        float travel = (magnitude - aimStickDeadZone) / (1f - aimStickDeadZone);
+        Turn = raw.normalized * Mathf.Pow(travel, aimExpo);
     }
 
     void UpdateStick()
@@ -750,10 +788,14 @@ public class TouchControls : MonoBehaviour
         baseImage.raycastTarget = false;
         _aimBase = baseImage.rectTransform;
         _aimBase.anchorMin = _aimBase.anchorMax = new Vector2(1f, 0f);
-        _aimBase.sizeDelta = Vector2.one * (stickRadius * 2f);
+        // Sized from its OWN radius, not the move stick's: the ring is the map
+        // of where the thumb can go, and a knob that travels outside it reads as
+        // a control that has come apart. Wider than the move stick on purpose —
+        // this is the aiming control, and travel is what fine aim is made of.
+        _aimBase.sizeDelta = Vector2.one * (aimStickRadius * 2f);
         _aimBase.anchoredPosition = new Vector2(-370f, 280f);
 
-        _aimKnob = MakeStickKnob(_aimBase, stickRadius * 0.95f);
+        _aimKnob = MakeStickKnob(_aimBase, aimStickRadius * 0.8f);
     }
 
     /// <summary>The bit that follows the thumb. Drawn last so it rides over its base.</summary>
