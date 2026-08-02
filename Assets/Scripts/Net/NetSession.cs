@@ -334,25 +334,32 @@ public class NetSession : MonoBehaviour
         while ((len = NetBridge.PN_RtcPollLocalIce(_buffer, _buffer.Length)) > 0)
             SendSignal("ice", Encoding.UTF8.GetString(_buffer, 0, len));
 
+        // One branch per bridge state, so a live link can never fall through
+        // into a teardown branch. Written as a chain on Status instead, the
+        // healthy steady state (bridge connected, Status already Connected)
+        // reached the peer-gone branch and hung up on every successful
+        // connection exactly one frame after it succeeded.
         int rtc = NetBridge.PN_RtcState();
-        if (rtc == NetBridge.RtcConnected && Status != NetStatus.Connected)
+        if (rtc == NetBridge.RtcConnected)
         {
-            Status = NetStatus.Connected;
-            _nextPing = 0f;
-            _nextPath = 0f;
-            // The signaling socket deliberately STAYS OPEN for the match.
-            //
-            // Leaving the room here looks tidy and breaks the game: whoever
-            // links up first announces its departure, the server relays that
-            // as "peer-left", and the other player — still finishing its own
-            // handshake — reads it as "they quit" and tears down the very
-            // connection that just succeeded. The two sides rarely reach
-            // Connected on the same frame, so this fired almost every match.
-            //
-            // Nothing needs the socket gone: an occupied room never expires
-            // (see the sweep in server.js), a server error arriving while
-            // Connected is ignored below, and keeping it open also lets late
-            // ICE candidates trickle through to improve the route.
+            if (Status != NetStatus.Connected)
+            {
+                Status = NetStatus.Connected;
+                _nextPing = 0f;
+                _nextPath = 0f;
+                // The signaling socket deliberately STAYS OPEN for the match.
+                //
+                // Leaving the room here looks tidy and breaks the game:
+                // whoever links up first announces its departure, the server
+                // relays that as "peer-left", and the other player — still
+                // finishing its own handshake — reads it as "they quit" and
+                // tears down the very connection that just succeeded.
+                //
+                // Nothing needs the socket gone: an occupied room never
+                // expires (see the sweep in server.js), a server error
+                // arriving while Connected is ignored, and keeping it open
+                // lets late ICE candidates improve the route.
+            }
         }
         else if (rtc == NetBridge.RtcFailed)
         {
@@ -361,12 +368,11 @@ public class NetSession : MonoBehaviour
         }
         else if (Status == NetStatus.Connected && rtc != NetBridge.RtcDegraded)
         {
-            // A peer that closes its tab takes the DataChannels with it, but
-            // the browser can leave connectionState at "connected" for a long
-            // time — so the bridge reports Connecting/None, not Failed, and
-            // without this the match plays on against a frozen statue.
-            // Degraded (ICE "disconnected") is excluded: browsers routinely
-            // recover from it within seconds.
+            // Reached only when the bridge is NOT connected and NOT merely
+            // degraded — i.e. the channels are gone while the browser still
+            // reports the connection up, which is what a closed peer tab
+            // looks like. Without it the match plays on against a statue.
+            // Degraded is ICE "disconnected", which browsers often recover.
             Fail("your friend's game closed");
             return;
         }
