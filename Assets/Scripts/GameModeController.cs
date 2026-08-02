@@ -80,6 +80,23 @@ public class GameModeController : MonoBehaviour
             _playerMotor = _player.GetComponent<CharacterMotor>();
         }
         _bots.AddRange(FindObjectsByType<AIBrain>(FindObjectsSortMode.None));
+        // Teams read from the robots' own paint now, so the floor rings the
+        // scene was built with come off. Done here rather than only in
+        // ArenaBuilder because they are baked into the saved scene — and
+        // before TeamRoster clones anyone, so no clone inherits one.
+        foreach (var bot in _bots)
+            if (bot != null)
+                RobotFactory.StripTeamRing(bot.transform);
+        if (_player != null)
+        {
+            RobotFactory.StripTeamRing(_player.transform);
+            // The player wears a real robot now, and the camera sits inside it.
+            // Added here rather than in ArenaBuilder so it needs no scene
+            // rebuild, and unconditionally: every mode this player appears in
+            // is first person.
+            if (_player.GetComponent<FirstPersonBody>() == null)
+                _player.AddComponent<FirstPersonBody>();
+        }
         _deRezEffects = FindObjectsByType<DeRezEffect>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         _blockManager = GetComponent<ArenaBlockManager>();
         _treasureSpawner = GetComponent<TreasureSpawner>();
@@ -545,6 +562,14 @@ public class GameModeController : MonoBehaviour
             skin.SetStages(entry.transformStages, tint);
         else
             skin.SetVehiclePrefab(entry.vehiclePrefab, tint);
+
+        // The reskin built a fresh set of renderers, all of them visible and all
+        // of them around the camera. Hidden now rather than on this component's
+        // next tick, which would be a visible frame or two of the robot's own
+        // chest plate.
+        var hide = _player.GetComponent<FirstPersonBody>();
+        if (hide != null)
+            hide.Refresh();
 
         var scope = FindFirstObjectByType<XRayScope>(FindObjectsInactive.Include);
         if (scope != null)
