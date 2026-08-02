@@ -27,6 +27,7 @@ public static class ArenaLibrary
                     new BiodomeArena(),     // moss, fleshy stalks, bioluminescence
                     new CrystalHollowArena(), // rough cave rock, faceted crystal
                     new ToyboxArena(),      // grained wood, glossy plastic
+                    new DrydockArena(),     // industrial bay: catwalks, gantry, cargo
                 };
             }
             return _all;
