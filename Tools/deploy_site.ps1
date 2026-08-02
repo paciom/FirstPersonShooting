@@ -45,7 +45,11 @@ if (-not $account) { throw 'Not logged in. Run: az login' }
 Write-Host "    subscription: $($account.name)"
 
 Step "Looking for the static web app '$Name'"
-$app = az staticwebapp show --name $Name --resource-group $Group 2>$null | ConvertFrom-Json
+# `az staticwebapp show` on a missing app writes to stderr, which PowerShell
+# turns into a terminating NativeCommandError under $ErrorActionPreference stop.
+# Listing and filtering asks the same question without the exception.
+$app = az staticwebapp list --resource-group $Group `
+    --query "[?name=='$Name'] | [0]" | ConvertFrom-Json
 if (-not $app) {
     Step "Creating it in $Group / $Location (Free tier)"
     $app = az staticwebapp create --name $Name --resource-group $Group `

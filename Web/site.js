@@ -3,8 +3,9 @@
 
 /* Where PLAY goes. The marketing site and the 257 MB player are deliberately
    two deployments (see WEB_PLAN.md); this is the one line that joins them.
-   Point it at https://play.jah.cc/ once that host has TLS on the custom name. */
-const PLAY_URL = 'https://photonarenaweb.z13.web.core.windows.net/';
+   play.jah.cc is Cloudflare in front of the photonarenaweb storage site — and
+   Cloudflare needs an Origin Rule rewriting the Host header, or Azure 404s. */
+const PLAY_URL = 'https://play.jah.cc/';
 
 /* The roster: one row per hero, and the only place a hero's copy lives.
    `key` is also the asset name — Tools/build_site_assets.py writes
