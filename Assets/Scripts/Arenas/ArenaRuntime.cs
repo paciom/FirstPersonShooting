@@ -53,6 +53,7 @@ public static class ArenaRuntime
             _built = null;
         }
         ArenaMaterials.Clear();
+        ArenaRock.Clear();
 
         bool sceneArena = def.SceneAuthored;
         foreach (var go in SceneAuthored)
@@ -122,7 +123,14 @@ public static class ArenaRuntime
         int attempts = 0;
         while (placed.Count < def.CoverCount && attempts++ < 800)
         {
-            var size = new Vector3(Next(1.4f, 3.4f), Next(1.2f, 2.4f), Next(1f, 1.9f));
+            // Mixed heights matter more than mixed footprints: chest-high
+            // rocks to crouch behind, tall ones to break sightlines and be
+            // fought on top of.
+            bool tall = rng.NextDouble() < 0.35;
+            var size = new Vector3(
+                Next(1.4f, 3.2f),
+                tall ? Next(2.6f, 4.2f) : Next(1.1f, 2.0f),
+                Next(1.1f, 2.4f));
             var pos = new Vector3(Next(-extent, extent), def.GroundY + size.y * 0.5f, Next(-extent, extent));
 
             if (!def.IsOpenFloor(pos))
@@ -148,9 +156,19 @@ public static class ArenaRuntime
             block.name = "Cover";
             block.transform.SetParent(_built.transform, false);
             block.transform.position = pos;
-            block.transform.rotation = Quaternion.Euler(0f, Next(-45f, 45f), 0f);
+            // A slight lean sells "landed here" over "placed by a level
+            // editor"; kept small so the flat top stays standable.
+            block.transform.rotation = Quaternion.Euler(
+                Next(-4f, 4f), Next(-180f, 180f), Next(-4f, 4f));
             block.transform.localScale = size;
             block.GetComponent<MeshRenderer>().sharedMaterial = mats[placed.Count % mats.Length];
+
+            // The cube's BoxCollider STAYS — simple, predictable collision is
+            // what every probe, brain and camera in this project was tuned
+            // against. Only the visible mesh becomes a rock.
+            block.GetComponent<MeshFilter>().sharedMesh = ArenaRock.Unit(
+                ArenaRock.FormFor(def.CoverStyle, placed.Count),
+                def.DisplayName.GetHashCode() + placed.Count * 31);
 
             var obstacle = block.AddComponent<NavMeshObstacle>();
             obstacle.shape = NavMeshObstacleShape.Box;
@@ -169,7 +187,7 @@ public static class ArenaRuntime
     {
         var playerBrain = Object.FindFirstObjectByType<PlayerBrain>(FindObjectsInactive.Include);
         if (playerBrain != null)
-            Move(playerBrain.gameObject, def.PlayerSpawn, 0f);
+            PlaceCharacter(playerBrain.gameObject, def.PlayerSpawn, 0f);
 
         var team0 = def.TeamSpawns(0);
         var team1 = def.TeamSpawns(1);
@@ -195,7 +213,7 @@ public static class ArenaRuntime
                 spot = team1[next1++ % team1.Length];
                 yaw = 180f;
             }
-            Move(brain.gameObject, spot, yaw);
+            PlaceCharacter(brain.gameObject, spot, yaw);
         }
     }
 
@@ -204,8 +222,11 @@ public static class ArenaRuntime
     /// cycle returns it to. DeRezEffect captures that at Awake, so without this
     /// every character re-materializes at the PREVIOUS arena's coordinates,
     /// usually inside a wall.
+    ///
+    /// Shared with TeamRoster, which re-places the same characters a moment
+    /// later once it knows how many of them the match wants.
     /// </summary>
-    static void Move(GameObject go, Vector3 position, float yaw)
+    internal static void PlaceCharacter(GameObject go, Vector3 position, float yaw)
     {
         var rotation = Quaternion.Euler(0f, yaw, 0f);
 

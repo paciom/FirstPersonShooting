@@ -24,8 +24,12 @@ public abstract class ArenaDefinition
     /// <summary>The plane dynamic cover slides on. Cover stays on one level.</summary>
     public virtual float GroundY => 0f;
 
-    /// <summary>How many destructible/regrowing cover blocks to scatter.</summary>
-    public virtual int CoverCount => 24;
+    /// <summary>
+    /// How many destructible/regrowing cover blocks to scatter. A shooter
+    /// lives or dies on having somewhere to duck: 24 across a 28 m field
+    /// left long open runs with nothing to break line of sight.
+    /// </summary>
+    public virtual int CoverCount => 34;
 
     /// <summary>
     /// What the cover blocks are made of. They are the most numerous objects in
@@ -125,8 +129,17 @@ public abstract class ArenaDefinition
     public virtual void ApplyAtmosphere()
     {
         var p = Palette;
-        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = p.ambient;
+        // GRADIENT ambient, not flat. Flat ambient lights every face of
+        // every object identically, which is the look of a prototype: a
+        // rock's underside is as bright as its crown, so nothing reads as
+        // sitting ON the ground. Sky above, palette in the middle, a dark
+        // bounce from below does the grounding that a full ambient
+        // occlusion pass would, for nothing.
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor = Color.Lerp(p.ambient, p.keyLight, 0.45f) * 1.15f;
+        RenderSettings.ambientEquatorColor = p.ambient;
+        RenderSettings.ambientGroundColor = Color.Lerp(p.ambient, p.floor, 0.7f) * 0.42f;
+        RenderSettings.ambientLight = p.ambient;   // still read by flat-lit shaders
         RenderSettings.fog = p.fogDensity > 0f;
         RenderSettings.fogMode = FogMode.ExponentialSquared;
         RenderSettings.fogColor = p.fog;
