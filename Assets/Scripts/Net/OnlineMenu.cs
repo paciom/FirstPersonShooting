@@ -105,12 +105,14 @@ public class OnlineMenuUi : MonoBehaviour
             _codeText.text = session.IsHost && session.MatchCode.Length > 0
                 ? "MATCH  CODE:   " + session.MatchCode
                 : "";
+        // Kept short and em-dash free: this line is 44pt in a 900-wide rect,
+        // and LegacyRuntime.ttf has no glyph for "—" (it renders as a gap).
         else if (session.IsHost)
             _codeText.text = match != null && match.State != NetMatch.MatchState.Idle
-                ? "STARTING  MATCH…"
-                : "LINKED  —  READY  WHEN  YOU  ARE";
+                ? "STARTING  MATCH..."
+                : "LINKED  ·  READY  TO  START";
         else
-            _codeText.text = "LINKED  —  WAITING  FOR  THE  HOST  TO  START…";
+            _codeText.text = "WAITING  FOR  THE  HOST...";
 
         // A match that ended (peer left, link dropped, handshake timed out)
         // says why, and keeps saying it until something else happens — landing

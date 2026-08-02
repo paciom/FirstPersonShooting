@@ -748,8 +748,8 @@ public class GameModeController : MonoBehaviour
             _blockManager.enabled = false;
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("ONLINE MATCH   ·   T — Transform   ·   Z — Sniper   ·   RMB — X-Ray   ·   "
-                    + "1/2 — Weapons   ·   ESC — Leave",
+        ShowOverlay("ONLINE MATCH   ·   T Transform   ·   Z Sniper   ·   RMB X-Ray   ·   "
+                    + "1/2 Weapons   ·   ESC Leave",
                     "ONLINE MATCH   ·   tap MENU to leave");
         LockCursor(true);
     }

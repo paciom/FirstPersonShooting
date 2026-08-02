@@ -280,6 +280,12 @@ public class NetSession : MonoBehaviour
                 break;
 
             case "peer-left":
+                // Never tear down a link the bridge says is live. Our own
+                // Status may still be catching up a frame behind the browser,
+                // and a working connection outranks anything the signaling
+                // server has to say about it.
+                if (NetBridge.PN_RtcState() == NetBridge.RtcConnected)
+                    break;
                 if (Status != NetStatus.Connected)
                 {
                     // Challenger bailed mid-handshake: the host goes back to
@@ -334,10 +340,19 @@ public class NetSession : MonoBehaviour
             Status = NetStatus.Connected;
             _nextPing = 0f;
             _nextPath = 0f;
-            // The signaling server's job is done — leave the room and hang
-            // up so the server never has a reason to message us mid-match.
-            NetBridge.PN_SigSend("{\"t\":\"leave\"}");
-            NetBridge.PN_SigClose();
+            // The signaling socket deliberately STAYS OPEN for the match.
+            //
+            // Leaving the room here looks tidy and breaks the game: whoever
+            // links up first announces its departure, the server relays that
+            // as "peer-left", and the other player — still finishing its own
+            // handshake — reads it as "they quit" and tears down the very
+            // connection that just succeeded. The two sides rarely reach
+            // Connected on the same frame, so this fired almost every match.
+            //
+            // Nothing needs the socket gone: an occupied room never expires
+            // (see the sweep in server.js), a server error arriving while
+            // Connected is ignored below, and keeping it open also lets late
+            // ICE candidates trickle through to improve the route.
         }
         else if (rtc == NetBridge.RtcFailed)
         {
