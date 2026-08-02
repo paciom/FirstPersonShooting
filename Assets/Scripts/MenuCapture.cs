@@ -29,6 +29,7 @@ using UnityEngine;
 public static class MenuCapture
 {
     public const string Arg = "-captureMenu";
+    public const string SizeArg = "-captureSize";      // e.g. -captureSize 2560x1080
     public const string OutDir = "PreviewCaptures/MenuIcons";
 
     const string ScenePath = "Assets/Scenes/GreyboxArena.unity";
@@ -52,7 +53,32 @@ public static class MenuCapture
 
 class MenuCaptureRunner : MonoBehaviour
 {
-    const int Width = 1920, Height = 1080;
+    int _width = 1920, _height = 1080;
+    string _suffix = "";
+
+    /// <summary>`-captureSize 2560x1080` shoots the menu at another window
+    /// shape, which is the only way to check that the layout is actually
+    /// aspect-invariant rather than merely correct at the reference size.</summary>
+    void Awake()
+    {
+        var args = Environment.GetCommandLineArgs();
+        int at = Array.IndexOf(args, MenuCapture.SizeArg);
+        if (at < 0 || at + 1 >= args.Length)
+            return;
+        var parts = args[at + 1].Split('x');
+        if (parts.Length == 2
+            && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h)
+            && w > 0 && h > 0)
+        {
+            _width = w;
+            _height = h;
+            _suffix = $"_{w}x{h}";
+        }
+        else
+        {
+            Debug.LogWarning($"MenuCapture: cannot read {MenuCapture.SizeArg} '{args[at + 1]}'");
+        }
+    }
 
     IEnumerator Start()
     {
@@ -69,7 +95,7 @@ class MenuCaptureRunner : MonoBehaviour
             yield break;
         }
 
-        var rt = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+        var rt = new RenderTexture(_width, _height, 24, RenderTextureFormat.ARGB32);
         rt.Create();
         var camGo = new GameObject("MenuCaptureCam");
         // Parked far below every world this game builds (arena y=0, select
@@ -101,13 +127,13 @@ class MenuCaptureRunner : MonoBehaviour
 
         var previous = RenderTexture.active;
         RenderTexture.active = rt;
-        var shot = new Texture2D(Width, Height, TextureFormat.RGB24, false);
-        shot.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
+        var shot = new Texture2D(_width, _height, TextureFormat.RGB24, false);
+        shot.ReadPixels(new Rect(0, 0, _width, _height), 0, 0);
         shot.Apply();
         RenderTexture.active = previous;
 
         Directory.CreateDirectory(MenuCapture.OutDir);
-        string path = $"{MenuCapture.OutDir}/menu_full.png";
+        string path = $"{MenuCapture.OutDir}/menu_full{_suffix}.png";
         File.WriteAllBytes(path, shot.EncodeToPNG());
 
         canvas.renderMode = previousMode;

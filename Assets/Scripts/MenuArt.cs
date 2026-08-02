@@ -264,36 +264,58 @@ public class MenuCard : MonoBehaviour,
 }
 
 /// <summary>
-/// A slow zoom-and-drift on the key art so the title screen breathes instead
-/// of sitting there as a flat JPEG.
+/// Holds the key art still against the UI, and breathes.
 ///
-/// <see cref="baseScale"/> is above 1 deliberately: the art is sized to
-/// envelope the screen exactly, so any drift at 1.0 would swing a bare edge
-/// into view. The overscan is the drift budget.
+/// The PIN is the important half. The art is sized to envelope the canvas, so
+/// on a window taller than 16:9 it grows — and everything painted into it,
+/// the hero line-up included, slides away from the centre with it while the
+/// menu's own layout stays put. That is what made the robots overlap the card
+/// deck at one window shape and float clear of it at another.
+///
+/// So instead of letting the art sit centred, this offsets it until the
+/// fraction <see cref="focus"/> down the image lands on canvas row
+/// <see cref="focusY"/>. Composition then reads identically at every aspect,
+/// and the offset is always small next to the envelope's own overscan, so no
+/// bare edge can swing into view.
+///
+/// <see cref="baseScale"/> is above 1 for the same reason: the drift needs
+/// slack to move within.
 /// </summary>
-public class MenuKenBurns : MonoBehaviour
+public class MenuBackdrop : MonoBehaviour
 {
     public float period = 44f;
     public float baseScale = 1.06f;
     public float zoom = 0.05f;
     public float drift = 22f;
 
+    [Tooltip("Fraction DOWN the art that must land on focusY. 0 = its top edge.")]
+    public RectTransform art;
+    public float focus = 0.47f;
+    public float focusY;
+
     RectTransform _rect;
     float _time;
 
     void Awake() => _rect = (RectTransform)transform;
 
-    void Update()
+    void LateUpdate()
     {
         _time += Time.unscaledDeltaTime;
         float a = _time / period * Mathf.PI * 2f;
 
         float scale = baseScale + zoom * (0.5f + 0.5f * Mathf.Sin(a));
         _rect.localScale = new Vector3(scale, scale, 1f);
+
+        // The art is centred inside this transform, so putting its focus row on
+        // focusY is just a matter of where this transform sits.
+        float pin = 0f;
+        if (art != null)
+            pin = focusY - art.rect.height * scale * (0.5f - focus);
+
         // Incommensurate rates on the two axes: the path never repeats tightly
         // enough for the eye to catch the loop.
         _rect.anchoredPosition = new Vector2(
             Mathf.Sin(a * 0.5f) * drift,
-            Mathf.Sin(a * 0.37f) * drift * 0.45f);
+            pin + Mathf.Sin(a * 0.37f) * drift * 0.45f);
     }
 }

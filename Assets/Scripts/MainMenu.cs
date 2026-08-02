@@ -32,6 +32,16 @@ public static class MainMenu
     const float PitchX = 238f, PitchY = 140f;
     const float HeaderY = -58f, Row0Y = -155f, Row1Y = Row0Y - PitchY;
 
+    // Every row below is a fixed canvas coordinate, never an offset from an
+    // edge, so the whole composition is rigid whatever shape the window is.
+    // The design spans +484 to -468: 952 of the 1080 reference rows, which
+    // leaves it intact down to a canvas barely 2:1.
+    const float EmblemRow = 418f, JusticeRow = 340f, TitleRow = 272f, TagRow = 204f;
+    const float TrayTop = 10f;
+    const float HeroRow = 18f;                   // middle of the hero line-up
+    const float FooterRule = -400f, FooterRow = -455f;
+    const float DeckEdge = 868f;                 // outer edge of the card decks
+
     const string DesktopHint =
         "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope";
 
@@ -79,7 +89,13 @@ public static class MainMenu
         var scaler = canvasGo.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
+        // Match WIDTH, not a blend. At 0.5 the canvas's reference height moves
+        // with the window's shape, so a wide window shrank it until the footer
+        // fell off the bottom — and every element measured against that height
+        // shifted with it. Pinned to width, the canvas is always exactly 1920
+        // units across (the deck spans 1736, so it can never crowd) and only
+        // the amount of sky above and below changes.
+        scaler.matchWidthOrHeight = 0f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
         EnsureEventSystem();
@@ -147,7 +163,7 @@ public static class MainMenu
         // the fitted object itself is silently reset each frame.
         var drifter = MakeRect(viewport, "KeyArtDrift");
         Stretch(drifter);
-        drifter.gameObject.AddComponent<MenuKenBurns>();
+        var backdrop = drifter.gameObject.AddComponent<MenuBackdrop>();
 
         var art = new GameObject("KeyArt").AddComponent<RawImage>();
         art.rectTransform.SetParent(drifter, false);
@@ -158,6 +174,18 @@ public static class MainMenu
         var fitter = art.gameObject.AddComponent<AspectRatioFitter>();
         fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
         fitter.aspectRatio = 16f / 9f;
+
+        // The hero line-up occupies 0.34..0.60 down the key art (see
+        // HERO_FEET/HERO_HEIGHT in Tools/menucomposite.py). Pinning its middle
+        // to a fixed canvas row is what stops the robots drifting into the
+        // card deck on one window shape and away from it on another.
+        backdrop.art = art.rectTransform;
+        backdrop.focus = 0.47f;
+        backdrop.focusY = HeroRow;
+        // Overscan has to cover the pin offset AND the drift, or a pinned art
+        // swings its own edge into frame at the tightest aspect.
+        backdrop.baseScale = 1.12f;
+        backdrop.drift = 18f;
 
         // Before the scrims, not after: a vignette laid over the tray modulates
         // the tray itself, so its clear centre brightened a band straight
@@ -177,10 +205,14 @@ public static class MainMenu
         // a feathered lip to get down off the key art, then a constant slab.
         var lip = MakeImage(parent, "TrayLip", new Color(Ink.r, Ink.g, Ink.b, 0.72f));
         lip.sprite = MenuArt.FadeUp();
-        Strip(lip.rectTransform, centreY: 70f, height: 120f);
+        Strip(lip.rectTransform, centreY: TrayTop + 60f, height: 120f);
 
+        // Stretched from the bottom EDGE up to a fixed canvas row, rather than
+        // given a fixed height from the bottom. A fixed height put the tray's
+        // top wherever the reference height happened to land, which is what
+        // opened and closed the gap under the robots as the window changed.
         var tray = MakeImage(parent, "Tray", new Color(Ink.r, Ink.g, Ink.b, 0.72f));
-        Band(tray.rectTransform, top: false, height: 550f);
+        RiseTo(tray.rectTransform, TrayTop);
 
         // A last touch of weight along the very bottom edge, so the tray reads
         // as depth rather than as a flat rectangle laid over the picture.
@@ -208,25 +240,25 @@ public static class MainMenu
         crest.rectTransform.SetParent(parent, false);
         crest.texture = Resources.Load<Texture2D>("Menu/emblem");
         crest.raycastTarget = false;
-        Place(crest.rectTransform, new Vector2(0f, 448f), new Vector2(160f, 160f));
+        Place(crest.rectTransform, new Vector2(0f, EmblemRow), new Vector2(132f, 132f));
 
-        var justice = MakeText(parent, "Justice", "J U S T I C E", 48, Color.white,
-            FontStyle.Bold, new Vector2(0f, 352f), new Vector2(1400f, 70f));
+        var justice = MakeText(parent, "Justice", "J U S T I C E", 46, Color.white,
+            FontStyle.Bold, new Vector2(0f, JusticeRow), new Vector2(1400f, 70f));
         Gild(justice, keyline: 3f);
 
-        var heroes = MakeText(parent, "ArmoredHeroes", "ARMORED  HEROES", 92, Color.white,
-            FontStyle.Bold, new Vector2(0f, 282f), new Vector2(1600f, 120f));
+        var heroes = MakeText(parent, "ArmoredHeroes", "ARMORED  HEROES", 88, Color.white,
+            FontStyle.Bold, new Vector2(0f, TitleRow), new Vector2(1600f, 120f));
         Gild(heroes, keyline: 5f);
 
         // A ruled subtitle: two hairlines with the tagline between them.
         var tag = MakeText(parent, "Tagline", "THE  TRANSFORMING  ROBOT  BATTLE  LEAGUE", 20,
-            new Color(1f, 1f, 1f, 0.72f), FontStyle.Normal, new Vector2(0f, 212f),
+            new Color(1f, 1f, 1f, 0.72f), FontStyle.Normal, new Vector2(0f, TagRow),
             new Vector2(900f, 30f));
 
         foreach (int side in new[] { -1, 1 })
         {
             var rule = MakeImage(parent, "TagRule", new Color(1f, 0.82f, 0.45f, 0.45f));
-            Place(rule.rectTransform, new Vector2(side * 350f, 212f), new Vector2(160f, 1f));
+            Place(rule.rectTransform, new Vector2(side * 350f, TagRow), new Vector2(160f, 1f));
         }
     }
 
@@ -353,20 +385,20 @@ public static class MainMenu
     static void BuildFooter(Transform parent, GameModeController controller)
     {
         var rule = MakeImage(parent, "FooterRule", new Color(1f, 1f, 1f, 0.10f));
-        Place(rule.rectTransform, new Vector2(0f, -392f), new Vector2(1736f, 1f));
+        Place(rule.rectTransform, new Vector2(0f, FooterRule), new Vector2(DeckEdge * 2f, 1f));
 
         // Counted, not typed: a roster or a deck can change without leaving a
         // stale boast on the title screen.
         var roster = controller.GetComponent<RobotRoster>();
         int heroes = roster != null && roster.robots != null ? roster.robots.Length : 0;
         var tally = MakeText(parent, "Tally", $"{_modeCount}  BATTLE  MODES   ·   {heroes}  HEROES", 17,
-            new Color(1f, 1f, 1f, 0.38f), FontStyle.Bold, Vector2.zero, new Vector2(420f, 26f));
-        Corner(tally.rectTransform, new Vector2(0f, 0f), new Vector2(92f, 40f));
+            new Color(1f, 1f, 1f, 0.38f), FontStyle.Bold,
+            new Vector2(-DeckEdge, FooterRow), new Vector2(420f, 26f));
+        tally.rectTransform.pivot = new Vector2(0f, 0.5f);
         tally.alignment = TextAnchor.MiddleLeft;
 
         _hint = MakeText(parent, "Hint", DesktopHint, 19, new Color(1f, 1f, 1f, 0.42f),
-            FontStyle.Normal, Vector2.zero, new Vector2(1300f, 28f));
-        Corner(_hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 39f));
+            FontStyle.Normal, new Vector2(0f, FooterRow), new Vector2(1300f, 28f));
 
         BuildSeedBox(parent);
     }
@@ -378,19 +410,19 @@ public static class MainMenu
     /// </summary>
     static void BuildSeedBox(Transform parent)
     {
-        // Caption beside the box, both centred on the footer row's baseline —
-        // stacked above it they crossed the footer rule.
+        // Caption beside the box, both on the footer row, and the box's right
+        // edge flush with the decks above it.
         var caption = MakeText(parent, "SeedLabel", "MAP  CODE", 15,
-            new Color(1f, 1f, 1f, 0.42f), FontStyle.Bold, Vector2.zero, new Vector2(160f, 22f));
-        Corner(caption.rectTransform, new Vector2(1f, 0f), new Vector2(-330f, 42f));
+            new Color(1f, 1f, 1f, 0.42f), FontStyle.Bold,
+            new Vector2(DeckEdge - 292f, FooterRow), new Vector2(160f, 22f));
         caption.alignment = TextAnchor.MiddleRight;
 
         var box = MakeImage(parent, "SeedBox", new Color(0.04f, 0.09f, 0.15f, 0.92f));
         box.sprite = MenuArt.RoundedRect(6f);
         box.type = Image.Type.Sliced;
         box.raycastTarget = true;           // this is the text field
-        Corner(box.rectTransform, new Vector2(1f, 0f), new Vector2(-118f, 34f));
-        box.rectTransform.sizeDelta = new Vector2(200f, 38f);
+        Place(box.rectTransform, new Vector2(DeckEdge - 100f, FooterRow),
+            new Vector2(200f, 38f));
 
         var underline = MakeImage(box.transform, "Underline", new Color(0.25f, 0.84f, 1f, 0.55f));
         Band(underline.rectTransform, top: false, height: 2f, inset: 6f);
@@ -477,19 +509,22 @@ public static class MainMenu
         rect.sizeDelta = size;
     }
 
-    /// <summary>Pinned to one corner or edge of the parent instead.</summary>
-    static void Corner(RectTransform rect, Vector2 anchor, Vector2 position)
-    {
-        rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
-        rect.anchoredPosition = position;
-    }
-
     static void Stretch(RectTransform rect, float inset = 0f)
     {
         rect.anchorMin = Vector2.zero;
         rect.anchorMax = Vector2.one;
         rect.offsetMin = new Vector2(inset, inset);
         rect.offsetMax = new Vector2(-inset, -inset);
+    }
+
+    /// <summary>Full width, from the bottom edge up to a fixed canvas row.</summary>
+    static void RiseTo(RectTransform rect, float topY)
+    {
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = new Vector2(0f, topY);
     }
 
     /// <summary>A full-width strip floating at a given height on the canvas.</summary>
