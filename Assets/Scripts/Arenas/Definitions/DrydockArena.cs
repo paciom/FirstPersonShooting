@@ -90,12 +90,144 @@ public class DrydockArena : ArenaDefinition
 
         kit.Box("Deck", new Vector3(0f, -0.5f, 0f), new Vector3(40f, 1f, 40f), deck);
 
+        BuildFloorSeams(kit, dark);
         BuildWalls(kit, hull, dark, coolStrip, strip);
+        BuildPortals(kit, dark, coolStrip);
+        BuildWallClutter(kit, dark, crate, strip);
         BuildPits(kit, dark, hazard);
         BuildMezzanine(kit, deck, dark, hazard, strip);
         BuildGantry(kit, deck, dark, hazard);
         BuildCargo(kit, crate, hazard);
+        BuildRoof(kit, dark, strip);
         BuildLights(kit);
+    }
+
+    // ------------------------------------------------------------ floor art
+
+    /// <summary>
+    /// Tile seams. A 40 m deck with no seams has no sense of scale — the
+    /// eye has nothing to measure a robot against. Thin dark strips on a
+    /// 6 m grid, no colliders, and the floor suddenly reads as a floor.
+    /// </summary>
+    static void BuildFloorSeams(ArenaKit kit, Material dark)
+    {
+        for (int i = -3; i <= 3; i++)
+        {
+            kit.Decor($"SeamX{i}", new Vector3(i * 6f, 0.012f, 0f), new Vector3(0.14f, 0.02f, 38f), dark);
+            kit.Decor($"SeamZ{i}", new Vector3(0f, 0.012f, i * 6f), new Vector3(38f, 0.02f, 0.14f), dark);
+        }
+    }
+
+    /// <summary>
+    /// Lit doorways. Every one is a promise that the space continues past
+    /// the wall — the cheapest way to stop an arena feeling like a box
+    /// with the lid off, and the reference is full of them.
+    /// </summary>
+    static void BuildPortals(ArenaKit kit, Material dark, Material coolStrip)
+    {
+        foreach (var (x, z, yaw) in new[]
+        {
+            (-18.6f, -7f, 90f), (-18.6f, 8f, 90f),
+            (18.6f, 6f, 90f), (18.6f, -9f, 90f),
+            (-6f, 18.6f, 0f), (7.5f, 18.6f, 0f),
+            (5f, -18.6f, 0f), (-8.5f, -18.6f, 0f),
+        })
+        {
+            // The recess itself glows: whatever room is through there is
+            // lit, and we never have to build it.
+            kit.Decor("PortalGlow", new Vector3(x, 1.9f, z), new Vector3(3.2f, 3.8f, 0.3f), coolStrip, yaw);
+            // Frame around it, proud of the wall.
+            kit.Box("PortalFrameL", new Vector3(x, 2f, z), new Vector3(4.2f, 4.4f, 0.7f), dark, yaw);
+            kit.Decor("PortalMouth", new Vector3(x, 1.9f, z), new Vector3(3.0f, 3.6f, 0.9f), coolStrip, yaw);
+        }
+    }
+
+    /// <summary>
+    /// The machinery that makes a wall look worked on: junction boxes,
+    /// vents, and ladders up to the catwalks. All decor — no colliders,
+    /// nothing to snag a robot or confuse a terrain probe.
+    /// </summary>
+    static void BuildWallClutter(ArenaKit kit, Material dark, Material crate, Material strip)
+    {
+        var rng = new System.Random(7714);
+        float Next(float min, float max) => Mathf.Lerp(min, max, (float)rng.NextDouble());
+
+        foreach (float side in new[] { -1f, 1f })
+            for (int i = -2; i <= 2; i++)
+            {
+                float along = i * 7f + Next(-1.5f, 1.5f);
+                // Boxes bolted to the wall, at head height and above.
+                kit.Decor("Junction", new Vector3(side * 18.2f, Next(2.2f, 5.5f), along),
+                    new Vector3(0.8f, Next(0.7f, 1.4f), Next(1f, 2.2f)), crate);
+                kit.Decor("Junction", new Vector3(along, Next(2.2f, 5.5f), side * 18.2f),
+                    new Vector3(Next(1f, 2.2f), Next(0.7f, 1.4f), 0.8f), crate);
+                // A lit gauge on some of them.
+                if (i % 2 == 0)
+                    kit.Decor("Gauge", new Vector3(side * 17.7f, 3.4f, along),
+                        new Vector3(0.1f, 0.22f, 0.5f), strip);
+            }
+
+        // Ladders from the deck up to each mezzanine: two rails and rungs.
+        foreach (float side in new[] { -1f, 1f })
+        {
+            float x = side * 17.4f;
+            foreach (float z in new[] { -12f, 12f })
+            {
+                kit.Decor("LadderRail", new Vector3(x, 1.7f, z - 0.3f), new Vector3(0.1f, 3.4f, 0.1f), dark);
+                kit.Decor("LadderRail", new Vector3(x, 1.7f, z + 0.3f), new Vector3(0.1f, 3.4f, 0.1f), dark);
+                for (int r = 0; r < 9; r++)
+                    kit.Decor("Rung", new Vector3(x, 0.35f + r * 0.36f, z),
+                        new Vector3(0.08f, 0.06f, 0.7f), dark);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------- roof
+
+    /// <summary>
+    /// The lid. The reference is an INTERIOR, and an open sky is what was
+    /// making this read as an outdoor pad with tall walls.
+    ///
+    /// Nothing up here may carry a collider. The terrain probe drops from
+    /// 30 m to find the floor, so a solid ceiling would be the first thing
+    /// it hits — and every spawn, respawn and referee reset would put a
+    /// robot on the roof. That bug has been paid for twice already.
+    /// </summary>
+    static void BuildRoof(ArenaKit kit, Material dark, Material strip)
+    {
+        const float roof = 17f;
+
+        // Nothing overhead casts shadows either. A 40 m lid between the key
+        // light and the deck puts the entire hall in the dark — the
+        // reference is gloomy, but it is gloomy with light raking across
+        // the floor, and a kid needs to see the robot they are fighting.
+        void Overhead(GameObject piece)
+        {
+            var renderer = piece != null ? piece.GetComponent<MeshRenderer>() : null;
+            if (renderer != null)
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        Overhead(kit.Decor("Ceiling", new Vector3(0f, roof + 0.6f, 0f), new Vector3(40f, 1.2f, 40f), dark));
+
+        // Trusses across, and the hanging lamps that light the hall.
+        for (int i = -3; i <= 3; i++)
+        {
+            Overhead(kit.Decor($"RoofBeam{i}", new Vector3(i * 5.5f, roof - 0.5f, 0f),
+                new Vector3(0.9f, 0.9f, 38f), dark));
+            Overhead(kit.Decor($"RoofTie{i}", new Vector3(0f, roof - 1.2f, i * 5.5f),
+                new Vector3(38f, 0.5f, 0.5f), dark));
+        }
+
+        foreach (var (x, z) in new[] { (-9f, -9f), (9f, -9f), (-9f, 9f), (9f, 9f), (0f, 0f) })
+        {
+            // Lamp housings on short drops. The glow is emissive, not a
+            // light: five more real lights in here would not survive the
+            // frame budget, and bloom makes them read the same.
+            Overhead(kit.Decor("LampDrop", new Vector3(x, roof - 2.2f, z), new Vector3(0.16f, 2.6f, 0.16f), dark));
+            Overhead(kit.Decor("LampBody", new Vector3(x, roof - 3.6f, z), new Vector3(2.2f, 0.5f, 2.2f), dark));
+            Overhead(kit.Decor("LampGlow", new Vector3(x, roof - 3.95f, z), new Vector3(1.9f, 0.16f, 1.9f), strip));
+        }
     }
 
     // ---------------------------------------------------------------- walls
