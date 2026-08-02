@@ -37,6 +37,12 @@ public static class ArenaRock
         Shard,
         /// <summary>Eroded strata — stepped, wide-footed.</summary>
         Buttress,
+        /// <summary>
+        /// A cargo container: chamfered box with a lid collar. Built
+        /// arenas need BUILT cover — a weathered boulder in a ship's hold
+        /// looks like it wandered in from another game.
+        /// </summary>
+        Crate,
     }
 
     static readonly Dictionary<int, Mesh> Cache = new Dictionary<int, Mesh>();
@@ -68,6 +74,9 @@ public static class ArenaRock
 
     static Mesh Build(Form form, int seed)
     {
+        if (form == Form.Crate)
+            return BuildCrate(seed);
+
         var rng = new System.Random(seed);
         float Next(float min, float max) => Mathf.Lerp(min, max, (float)rng.NextDouble());
 
@@ -157,6 +166,82 @@ public static class ArenaRock
         return mesh;
     }
 
+    /// <summary>
+    /// A cargo container: square in plan, chamfered top and bottom, with a
+    /// lid collar stepped out near the top.
+    ///
+    /// A bare cube read as childish, and rightly — but the answer in a
+    /// cargo bay is not to make the crates lumpy, it is to CUT THE EDGES.
+    /// A chamfer catches a highlight along every edge where a raw cube
+    /// shows a hard black line, and the collar gives the silhouette a
+    /// step. Those two details are the whole difference between "box" and
+    /// "container", for forty triangles.
+    /// </summary>
+    static Mesh BuildCrate(int seed)
+    {
+        var rng = new System.Random(seed);
+
+        // Height, half-width. The waist is dead straight: cargo is made in
+        // a factory, not weathered out of a cliff.
+        var rings = new[]
+        {
+            (t: 0.00f, r: 0.86f), (t: 0.045f, r: 1.00f),
+            (t: 0.76f, r: 1.00f), (t: 0.82f, r: 1.06f),   // lid collar
+            (t: 0.88f, r: 1.00f), (t: 0.955f, r: 1.00f),
+            (t: 1.00f, r: 0.86f),
+        };
+        // A little variety between containers, still perfectly square.
+        float squash = Mathf.Lerp(0.88f, 1.12f, (float)rng.NextDouble());
+
+        var verts = new List<Vector3>();
+        var tris = new List<int>();
+        void Tri(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 centroid = (a + b + c) / 3f;
+            if (Vector3.Dot(Vector3.Cross(b - a, c - a), centroid) < 0f)
+                (b, c) = (c, b);
+            int i = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c);
+            tris.Add(i); tris.Add(i + 1); tris.Add(i + 2);
+        }
+
+        // Four corners, axis aligned — the 45° offset is what keeps the
+        // faces flat to the world instead of standing on a diagonal.
+        Vector3 Corner(int ring, int side)
+        {
+            float angle = (side / 4f) * Mathf.PI * 2f + Mathf.PI * 0.25f;
+            float r = rings[ring].r * 0.5f * Mathf.Sqrt(2f);
+            return new Vector3(Mathf.Cos(angle) * r,
+                               -0.5f + rings[ring].t,
+                               Mathf.Sin(angle) * r * squash);
+        }
+
+        for (int ring = 0; ring < rings.Length - 1; ring++)
+            for (int side = 0; side < 4; side++)
+            {
+                Vector3 a = Corner(ring, side), b = Corner(ring, side + 1);
+                Vector3 c = Corner(ring + 1, side), d = Corner(ring + 1, side + 1);
+                Tri(a, b, d);
+                Tri(a, d, c);
+            }
+
+        var top = new Vector3(0f, 0.5f, 0f);
+        var bottom = new Vector3(0f, -0.5f, 0f);
+        for (int side = 0; side < 4; side++)
+        {
+            Tri(Corner(rings.Length - 1, side), Corner(rings.Length - 1, side + 1), top);
+            Tri(Corner(0, side), Corner(0, side + 1), bottom);
+        }
+
+        var mesh = new Mesh { name = $"Crate_{seed}" };
+        mesh.SetVertices(verts);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        FitToUnit(mesh);
+        return mesh;
+    }
+
     /// <summary>Half-width at height t — the silhouette, in one line each.</summary>
     static float Profile(Form form, float t)
     {
@@ -219,8 +304,11 @@ public static class ArenaRock
             case ArenaMaterials.SurfaceStyle.Strata:
                 return index % 3 == 0 ? Form.Buttress : Form.Boulder;
             default:
-                // Built surfaces — plating, brick, tread — want built shapes.
-                return index % 3 == 0 ? Form.Buttress : Form.Monolith;
+                // Built surfaces — plating, brick, tread — want BUILT cover.
+                // Rocks in a cargo bay look like they wandered in from
+                // another game; here it is containers, with the odd squared
+                // pillar among them.
+                return index % 5 == 0 ? Form.Monolith : Form.Crate;
         }
     }
 }

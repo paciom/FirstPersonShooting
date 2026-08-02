@@ -62,6 +62,14 @@ public abstract class ArenaDefinition
     public virtual int Levels => 1;
 
     /// <summary>
+    /// Whether to ring the arena with distant ridgelines. True for anywhere
+    /// standing on a planet; FALSE for interiors, where a mountain range
+    /// rising past the walls of a sealed hall is the giveaway that the
+    /// scenery was bolted on rather than designed.
+    /// </summary>
+    public virtual bool HasHorizon => true;
+
+    /// <summary>
     /// True only for HANGAR, which is authored into the scene by ArenaBuilder
     /// rather than generated. Loading it re-activates the scene geometry instead
     /// of running Build().

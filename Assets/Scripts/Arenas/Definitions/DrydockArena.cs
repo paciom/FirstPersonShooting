@@ -31,6 +31,9 @@ public class DrydockArena : ArenaDefinition
     public override string Tagline => "Cargo, catwalks and gantries. Cover in every direction.";
     public override int Levels => 3;
 
+    /// <summary>Sealed hall: no ridgelines outside, there is no outside.</summary>
+    public override bool HasHorizon => false;
+
     public override ArenaPalette Palette => new ArenaPalette
     {
         floor = new Color(0.15f, 0.17f, 0.19f),
