@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3b62b7f6cf83b444a9efcdf896d83ffe
+timeCreated: 1474234677
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71890
+  packageName: Mobile Missiles Pack
+  packageVersion: 1.0
+  assetPath: Assets/Missiles_Pack/Models/Materials/Missiles_Pack.mat
+  uploadId: 137987

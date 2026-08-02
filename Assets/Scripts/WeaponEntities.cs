@@ -1015,6 +1015,32 @@ public class IceWallEntity : MonoBehaviour
 }
 
 /// <summary>
+/// Points an imported missile mesh (see MissileModels) along its bolt's actual
+/// flight. Its own rotation, not the bolt's: a homing missile bends, and the
+/// body has to bend with it — and GenericBolt aims its capsule with a 90° pitch
+/// that means nothing to a mesh that already points down +Z.
+///
+/// LateUpdate, so it reads the velocity the bolt settled on this frame.
+/// </summary>
+public class MissileBodyEntity : MonoBehaviour
+{
+    public GenericBolt bolt;
+
+    void LateUpdate()
+    {
+        // A recompile mid-Play strips the bolt's spec and it destroys itself;
+        // the body would otherwise be left steering by a null.
+        if (bolt == null)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        if (bolt.Velocity.sqrMagnitude > 0.01f)
+            transform.rotation = Quaternion.LookRotation(bolt.Velocity.normalized);
+    }
+}
+
+/// <summary>
 /// Flapping flame wings for the Phoenix Dart: keeps a wing rig aligned to the
 /// bolt's flight direction (independent of the capsule's spin-twist) and
 /// pitch-flaps both wings — the cartoon flap that makes it read "bird".

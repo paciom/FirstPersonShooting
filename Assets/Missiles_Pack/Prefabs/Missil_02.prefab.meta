@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 85f575819f3601e428a17e076612676f
+timeCreated: 1474234730
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 71890
+  packageName: Mobile Missiles Pack
+  packageVersion: 1.0
+  assetPath: Assets/Missiles_Pack/Prefabs/Missil_02.prefab
+  uploadId: 137987
