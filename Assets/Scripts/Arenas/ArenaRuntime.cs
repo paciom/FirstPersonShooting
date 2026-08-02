@@ -65,6 +65,9 @@ public static class ArenaRuntime
             _built = new GameObject($"Arena_{def.DisplayName}");
             _built.transform.SetParent(env, false);
             def.Build(_built.transform, new ArenaKit(_built.transform, def.DisplayName));
+            // The world past the walls. Built before the navmesh bake but
+            // carrying no colliders, so it can never become terrain.
+            ArenaHorizon.Build(_built.transform, def);
         }
 
         ArenaContext.Current = def;

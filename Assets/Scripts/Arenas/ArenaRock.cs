@@ -99,6 +99,9 @@ public static class ArenaRock
 
         var verts = new List<Vector3>();
         var tris = new List<int>();
+        // The axis midpoint: every form here is star-shaped about it, so
+        // "outward" is unambiguous for any facet.
+        Vector3 shapeCentre = new Vector3(drift.x * 0.5f, 0f, drift.z * 0.5f);
 
         Vector3 At(int r, int s)
         {
@@ -108,8 +111,16 @@ public static class ArenaRock
         }
 
         // Every triangle carries its own vertices — that is the flat shading.
+        // Each one also ORIENTS ITSELF: a hand-derived winding rule is one
+        // sign error away from a mesh that renders inside-out (which is
+        // exactly what shipped), while "the normal must point away from the
+        // axis" cannot be got backwards.
         void Tri(Vector3 a, Vector3 b, Vector3 c)
         {
+            Vector3 centroid = (a + b + c) / 3f;
+            if (Vector3.Dot(Vector3.Cross(b - a, c - a), centroid - shapeCentre) < 0f)
+                (b, c) = (c, b);
+
             int i = verts.Count;
             verts.Add(a); verts.Add(b); verts.Add(c);
             tris.Add(i); tris.Add(i + 1); tris.Add(i + 2);
