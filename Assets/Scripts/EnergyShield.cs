@@ -216,7 +216,10 @@ public class EnergyShield : MonoBehaviour
         if (HasOvershield && Time.time >= _overshieldUntil)
             DropOvershield();
 
-        if (!IsDown && Current < maxShield && Time.time - _lastHitTime > regenDelay)
+        // A remote player's mirror never regenerates on its own: their client
+        // owns that value in both directions, and local regen would creep the
+        // enemy's bar back up between broadcasts.
+        if (!remoteProxy && !IsDown && Current < maxShield && Time.time - _lastHitTime > regenDelay)
             Current = Mathf.Min(maxShield, Current + regenPerSecond * Time.deltaTime);
     }
 }

@@ -33,6 +33,12 @@ public class PlayerBrain : MonoBehaviour
         (weapons != null && weapons.Length > 0 && weapons[_activeWeapon] != null)
             ? weapons[_activeWeapon].weaponName : "";
 
+    /// <summary>
+    /// Which slot of <see cref="weapons"/> is in hand. Read by the on-screen
+    /// weapon panel, which has to mark the one you are already holding.
+    /// </summary>
+    public int ActiveSlot => _activeWeapon;
+
     /// <summary>"2/3" style slot readout for the HUD.</summary>
     public string WeaponSlotLabel =>
         (weapons != null && weapons.Length > 0) ? $"{_activeWeapon + 1}/{weapons.Length}" : "";
@@ -154,8 +160,11 @@ public class PlayerBrain : MonoBehaviour
                     + "transform does nothing. Run Photon Arena → Forge Robot Transform Clips.");
             }
             _vehicle.Toggle();
+            // Read the form back rather than assuming the toggle took: a fold
+            // already in progress ignores it, and telling the other client we
+            // transformed when we didn't puts the two arenas out of step.
             if (_vehicle.CanTransform)
-                NetMatch.NotifyLocalTransform();
+                NetMatch.NotifyLocalTransform(_vehicle.IsVehicle);
         }
 
         // Z zooms the sniper scope in and back out; it stacks with the X-Ray
@@ -221,6 +230,18 @@ public class PlayerBrain : MonoBehaviour
             for (int i = 0; i < weapons.Length && i < 9; i++)
                 if (Input.GetKeyDown(KeyCode.Alpha1 + i))
                     SetActiveWeapon(i);
+        }
+
+        // A slot tapped in the on-screen weapon panel is an absolute choice,
+        // so it wins over any cycling in the same frame.
+        if (touch != null)
+        {
+            int picked = touch.ConsumeWeaponPick();
+            if (picked >= 0)
+            {
+                SetActiveWeapon(picked);
+                return;
+            }
         }
 
         int cycle = 0;

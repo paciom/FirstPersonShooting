@@ -344,6 +344,17 @@ public class NetSession : MonoBehaviour
             Fail(Status == NetStatus.Connected ? "connection lost" : "couldn't reach the other player");
             return;
         }
+        else if (Status == NetStatus.Connected && rtc != NetBridge.RtcDegraded)
+        {
+            // A peer that closes its tab takes the DataChannels with it, but
+            // the browser can leave connectionState at "connected" for a long
+            // time — so the bridge reports Connecting/None, not Failed, and
+            // without this the match plays on against a frozen statue.
+            // Degraded (ICE "disconnected") is excluded: browsers routinely
+            // recover from it within seconds.
+            Fail("your friend's game closed");
+            return;
+        }
 
         if (Status != NetStatus.Connected)
             return;

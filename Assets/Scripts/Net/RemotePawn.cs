@@ -17,8 +17,13 @@ public class RemotePawn : MonoBehaviour
     /// <summary>Render this far behind the newest snapshot so there is almost
     /// always a pair to interpolate between at 20 Hz.</summary>
     const float InterpolationDelay = 0.12f;
-    /// <summary>Beyond this, a gap is a teleport (respawn), not movement.</summary>
-    const float SnapDistance = 4f;
+    /// <summary>Faster than any robot can run, slower than a respawn jump:
+    /// above this implied speed, a gap is a teleport, not movement.</summary>
+    const float TeleportSpeed = 25f;
+    /// <summary>How long a fire intent keeps the trigger held on the mirror.
+    /// Longer than the 0.05 s send interval so one lost packet doesn't stutter
+    /// a beam, short enough that a released trigger stops promptly.</summary>
+    const float FireHold = 0.15f;
 
     struct Snapshot
     {
@@ -33,6 +38,10 @@ public class RemotePawn : MonoBehaviour
     WeaponLoadout _loadout;
     TransformMode _vehicle;
     EnergyShield _shield;
+    int _lastSeq = -1;
+    int _holdSlot = -1;
+    Vector3 _holdDirection;
+    float _holdUntil;
 
     void Awake()
     {
@@ -43,8 +52,16 @@ public class RemotePawn : MonoBehaviour
         _shield = GetComponent<EnergyShield>();
     }
 
-    public void PushSnapshot(Vector3 position, float yaw, float pitch)
+    /// <summary>
+    /// A snapshot off the unreliable channel. Sequence numbers are what make
+    /// that channel usable: it may reorder, and a late arrival appended after
+    /// a newer one would drag the mirror backwards through space.
+    /// </summary>
+    public void PushSnapshot(int sequence, Vector3 position, float yaw, float pitch)
     {
+        if (sequence <= _lastSeq)
+            return;
+        _lastSeq = sequence;
         _buffer.Add(new Snapshot
         {
             time = Time.unscaledTime,
@@ -83,43 +100,67 @@ public class RemotePawn : MonoBehaviour
         float span = to.time - from.time;
         float k = span > 0.0001f ? Mathf.Clamp01((renderTime - from.time) / span) : 1f;
 
-        // Respawn teleports must not become a screaming slide across the map:
-        // when two adjacent snapshots are impossibly far apart, jump.
-        Vector3 target =
-            (to.position - from.position).sqrMagnitude > SnapDistance * SnapDistance
-                ? to.position
-                : Vector3.Lerp(from.position, to.position, k);
-        transform.position = target;
+        // Respawn teleports must not become a screaming slide across the map.
+        // Judged by implied SPEED, not raw distance: after packet loss a
+        // legitimately-moving robot covers a lot of ground between two
+        // snapshots, and jumping it there would stutter ordinary running.
+        bool teleported = span > 0.0001f
+            && (to.position - from.position).magnitude / span > TeleportSpeed;
+        transform.position = teleported ? to.position : Vector3.Lerp(from.position, to.position, k);
 
         float yaw = Mathf.LerpAngle(from.yaw, to.yaw, k);
         float pitch = Mathf.LerpAngle(from.pitch, to.pitch, k);
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         if (_head != null)
             _head.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+
+        // Held-trigger weapons (beams, charge rails) expect TryFire EVERY
+        // frame the trigger is down; 20 Hz intents alone would make a beam
+        // flicker and a rail never finish charging. Each intent extends the
+        // hold, and silence lets it lapse.
+        if (Time.unscaledTime < _holdUntil)
+            FireHeld();
     }
 
-    /// <summary>Replay the owner's fire intent on this mirror's own weapons.
-    /// Slot indexes the same WeaponLoadout.Available both clients share
-    /// (no airdrops in online v1, so the lists match).</summary>
-    public void RemoteFire(int slot, Vector3 direction)
+    void FireHeld()
     {
         var weapons = _loadout != null ? _loadout.Available : null;
-        if (weapons == null || slot < 0 || slot >= weapons.Length || weapons[slot] == null)
+        if (weapons == null || _holdSlot < 0 || _holdSlot >= weapons.Length
+            || weapons[_holdSlot] == null)
             return;
         if (_shield != null && _shield.IsDown)
             return;
         // Point the mirror's turret where its owner is shooting. Only fire
         // intent crosses the wire, so this is the one moment the mirror learns
-        // where the other player's gun is aimed.
-        if (_vehicle != null && _vehicle.IsVehicle)
-            _vehicle.Turret.AimAlong(direction);
-        weapons[slot].TryFire(direction.normalized);
+        // where the other player's gun is aimed — and a held beam has to keep
+        // re-aiming as they track, not freeze at the first frame's direction.
+        if (_vehicle != null && _vehicle.IsVehicle && _vehicle.Turret != null)
+            _vehicle.Turret.AimAlong(_holdDirection);
+        weapons[_holdSlot].TryFire(_holdDirection);
     }
 
-    public void RemoteTransformToggle()
+    /// <summary>Replay the owner's fire intent on this mirror's own weapons.
+    /// Slot indexes the same WeaponLoadout.Available both clients share
+    /// (no airdrops in online v1, so the lists match). The intent also HOLDS
+    /// the trigger briefly — see FireHold — so continuous weapons work.</summary>
+    public void RemoteFire(int slot, Vector3 direction)
+    {
+        _holdSlot = slot;
+        _holdDirection = direction.normalized;
+        _holdUntil = Time.unscaledTime + FireHold;
+        FireHeld();
+    }
+
+    /// <summary>
+    /// Absolute form, not a toggle: one dropped or duplicated message would
+    /// otherwise leave the clients disagreeing about whether the enemy is a
+    /// robot or a tank — which changes its hitbox, its armour, and which
+    /// weapons the fire slot indexes into.
+    /// </summary>
+    public void RemoteSetVehicle(bool vehicle)
     {
         if (_vehicle != null && _vehicle.CanTransform)
-            _vehicle.Toggle();
+            _vehicle.SetVehicle(vehicle);
     }
 
     /// <summary>The owner's authoritative shield broadcast.</summary>

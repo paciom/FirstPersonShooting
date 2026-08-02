@@ -94,7 +94,8 @@ public class MatchAnnouncer : MonoBehaviour
         // The overlay belongs to a running match, not the menus.
         bool inMatch = GameModeController.Instance != null
             && (GameModeController.Instance.Mode == GameMode.PlayerVsAI
-                || GameModeController.Instance.Mode == GameMode.AIvAI);
+                || GameModeController.Instance.Mode == GameMode.AIvAI
+                || GameModeController.Instance.Mode == GameMode.OnlinePvP);
         if (_canvasGo.activeSelf != inMatch)
         {
             _canvasGo.SetActive(inMatch);

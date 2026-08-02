@@ -38,6 +38,7 @@ public class GameModeController : MonoBehaviour
     string _hintDesktop = "";
     string _hintTouch = "";
     bool _hintWasTouch;
+    bool _hintWasUnlocked;
     GameObject _player;
     PlayerBrain _playerBrain;
     CharacterMotor _playerMotor;
@@ -197,6 +198,18 @@ public class GameModeController : MonoBehaviour
         if (Mode != GameMode.Menu && _hintWasTouch != TouchControls.Active)
             ApplyOverlay();
 
+        // Browsers only grant pointer lock inside a user gesture, and an online
+        // match starts from a network message — so both players land in the
+        // arena with a free cursor and no idea why looking doesn't work. Say so
+        // until their first click takes the mouse.
+        bool needsClick = IsFirstPersonMatch(Mode) && !TouchControls.Active
+            && Cursor.lockState != CursorLockMode.Locked;
+        if (needsClick != _hintWasUnlocked)
+        {
+            _hintWasUnlocked = needsClick;
+            ApplyOverlay();
+        }
+
         // Re-assert menu stillness: a DeRezEffect re-materialize can re-enable
         // brains that were disabled when the menu opened mid-respawn.
         if (Mode == GameMode.Menu)
@@ -268,10 +281,14 @@ public class GameModeController : MonoBehaviour
         // Leaving an online match tells the other player before anything is
         // torn down; a no-op in every other mode (and when the match already
         // ended itself — NetMatch guards on its own state).
-        if (Mode == GameMode.OnlinePvP)
-            NetMatch.OnLocalLeftMatch();
-
+        //
+        // Mode flips FIRST: NetMatch.EndMatch calls back into EnterMenu for
+        // the peer-initiated paths, and its `Mode == OnlinePvP` test is what
+        // stops this teardown running twice.
+        bool wasOnline = Mode == GameMode.OnlinePvP;
         Mode = GameMode.Menu;
+        if (wasOnline)
+            NetMatch.OnLocalLeftMatch();
         DestroySpectatorRig();
         // Torn down before anything touches the characters: Teardown is what
         // brings the hidden FPS cast back and swaps the arena world back in.
@@ -334,8 +351,11 @@ public class GameModeController : MonoBehaviour
         SetBotsActive(false);
 
         // Bring hidden bots back — online matches hide their bodies, and the
-        // menu's arena backdrop expects the full cast standing in it.
+        // menu's arena backdrop expects the full cast standing in it. Cover
+        // churn resumes with them.
         SetBotsHidden(false);
+        if (_blockManager != null)
+            _blockManager.enabled = true;
 
         CloseRobotSelect();
         // Also closed here, or backing out of a match mid-arena-select leaves an
@@ -496,6 +516,15 @@ public class GameModeController : MonoBehaviour
     /// </summary>
     public RobotRoster.Entry PlayerRobot =>
         (_roster != null && _roster.HasRobots) ? _roster.Get(_cyanRobot) : default;
+
+    /// <summary>
+    /// The modes where the player IS a robot fighting in the arena, first
+    /// person. Everything that belongs to fighting — HUD, touch controls,
+    /// the transformation replay — asks this rather than keeping its own
+    /// list of modes to fall out of date.
+    /// </summary>
+    public static bool IsFirstPersonMatch(GameMode mode) =>
+        mode == GameMode.PlayerVsAI || mode == GameMode.OnlinePvP;
 
     // Online PvP reads these to describe the local setup to the other client
     // and to dress their mirror pawn in the robot they actually picked.
@@ -702,8 +731,25 @@ public class GameModeController : MonoBehaviour
         SetBotsActive(false);
         SetBotsHidden(true);
 
+        // A treasure gun carried in from an offline match would shift the
+        // weapon list this client sends slot indices against — the other side
+        // would replay the wrong gun entirely.
+        if (_player != null)
+        {
+            var loadout = _player.GetComponent<WeaponLoadout>();
+            if (loadout != null)
+                loadout.ClearSpecial();
+        }
+
+        // Cover churn rolls unseeded randomness on each machine — left running
+        // it would walk the two arenas apart within seconds, and players would
+        // be shot through cover that isn't there on the other screen.
+        if (_blockManager != null)
+            _blockManager.enabled = false;
+
         _menuCanvas.SetActive(false);
-        ShowOverlay("ONLINE MATCH   ·   T — Transform   ·   Z — Scope   ·   ESC — Leave",
+        ShowOverlay("ONLINE MATCH   ·   T — Transform   ·   Z — Sniper   ·   RMB — X-Ray   ·   "
+                    + "1/2 — Weapons   ·   ESC — Leave",
                     "ONLINE MATCH   ·   tap MENU to leave");
         LockCursor(true);
     }
@@ -1083,6 +1129,8 @@ public class GameModeController : MonoBehaviour
     {
         _hintWasTouch = TouchControls.Active;
         string message = _hintWasTouch ? _hintTouch : _hintDesktop;
+        if (!_hintWasTouch && _hintWasUnlocked)
+            message = "CLICK  TO  LOOK   ·   " + message;
         _overlayText.text = message;
         _overlayCanvas.SetActive(!string.IsNullOrEmpty(message));
     }

@@ -50,6 +50,15 @@ public class TouchControls : MonoBehaviour
     const int RoleLook = -1;
     const int RoleStick = -2;
     const int RoleAim = -3;
+    /// <summary>A finger that has been swallowed — the tap that dismissed the weapon panel.</summary>
+    const int RoleNone = -4;
+
+    /// <summary>
+    /// Rows the weapon panel can show. The usable set is two basics plus an
+    /// airdropped weapon today; the pool is deep enough that growing it doesn't
+    /// mean rebuilding this.
+    /// </summary>
+    const int WeaponRows = 10;
 
     public Availability availability = Availability.Auto;
 
@@ -141,6 +150,12 @@ public class TouchControls : MonoBehaviour
 
     readonly List<Button> _buttons = new List<Button>();
     Button _fireLeft, _fireRight, _jump, _scope, _snipe, _morph, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
+    Button _weapons, _weaponClose;
+
+    RectTransform _weaponPanel;
+    readonly List<Button> _weaponRows = new List<Button>();
+    bool _weaponPanelOpen;
+    int _weaponPick = -1;
 
     readonly Dictionary<int, int> _roles = new Dictionary<int, int>();
     readonly Dictionary<int, Vector2> _positions = new Dictionary<int, Vector2>();
@@ -194,6 +209,9 @@ public class TouchControls : MonoBehaviour
     {
         if (Instance == null || !Active)
             return false;
+        // The open weapon panel owns the whole screen, not just its rows.
+        if (Instance._weaponPanelOpen)
+            return true;
         foreach (var button in Instance._buttons)
             if (button.Visible &&
                 RectTransformUtility.RectangleContainsScreenPoint(button.rect, screenPoint, null))
@@ -241,6 +259,20 @@ public class TouchControls : MonoBehaviour
         return cycle;
     }
 
+    /// <summary>
+    /// Slot tapped in the weapon panel, or -1. An absolute choice rather than a
+    /// step, so the reader applies it instead of cycling.
+    /// </summary>
+    public int ConsumeWeaponPick()
+    {
+        int picked = _weaponPick;
+        _weaponPick = -1;
+        return picked;
+    }
+
+    /// <summary>True while the weapon panel is covering the screen.</summary>
+    public static bool WeaponPanelOpen => Instance != null && Instance._weaponPanelOpen;
+
     public bool ConsumeMorph()
     {
         bool pressed = _morphPressed;
@@ -282,6 +314,8 @@ public class TouchControls : MonoBehaviour
 
         GatherPointers();
         ProcessPointers();
+        if (_weaponPanelOpen)
+            RefreshWeaponPanel();
         UpdateVisuals();
     }
 
@@ -355,6 +389,8 @@ public class TouchControls : MonoBehaviour
         _morphPressed = false;
         _snipePressed = false;
         _weaponCycle = 0;
+        _weaponPick = -1;
+        ToggleWeaponPanel(false);
         if (!_mouseWasSimulated)
         {
             Input.simulateMouseWithTouches = true;
@@ -368,7 +404,7 @@ public class TouchControls : MonoBehaviour
         GameMode mode = GameModeController.Instance != null
             ? GameModeController.Instance.Mode : GameMode.PlayerVsAI;
 
-        bool playing = mode == GameMode.PlayerVsAI;
+        bool playing = GameModeController.IsFirstPersonMatch(mode);
         bool flying = mode == GameMode.ArenaPreview;
         bool inMenu = mode == GameMode.Menu;
 
@@ -399,6 +435,7 @@ public class TouchControls : MonoBehaviour
         SetVisible(_snipe, playing);
         SetVisible(_prevWeapon, playing);
         SetVisible(_nextWeapon, playing);
+        SetVisible(_weapons, playing);
         SetVisible(_rise, flying);
         SetVisible(_sink, flying);
         SetVisible(_shuffle, flying);
@@ -410,6 +447,10 @@ public class TouchControls : MonoBehaviour
             _morphPressed = false;
             _snipePressed = false;
             _weaponCycle = 0;
+            // Nothing to pick from outside a match, and a panel left open would
+            // cover the fly-cam with a modal nobody can dismiss into anything.
+            ToggleWeaponPanel(false);
+            _weaponPick = -1;
         }
         // A jump tapped in the instant before the fold started has nowhere to
         // land now; letting it sit would pop the robot the moment it unfolds.
@@ -556,6 +597,29 @@ public class TouchControls : MonoBehaviour
 
     void Assign(Pointer pointer)
     {
+        // The weapon panel is modal: while it is up it is the only thing on
+        // screen that can be pressed. Without this a tap meant for a row that
+        // missed it would walk the camera, or worse, land on FIRE underneath.
+        if (_weaponPanelOpen)
+        {
+            for (int i = 0; i < _buttons.Count; i++)
+            {
+                var candidate = _buttons[i];
+                if (!IsWeaponPanelButton(candidate) || !candidate.Visible)
+                    continue;
+                if (!RectTransformUtility.RectangleContainsScreenPoint(candidate.rect, pointer.position, null))
+                    continue;
+                _roles[pointer.id] = i;
+                OnButtonDown(candidate);
+                return;
+            }
+            // Tap anywhere else backs out. The finger is swallowed rather than
+            // released into the world, so the dismissing tap can't also shoot.
+            ToggleWeaponPanel(false);
+            _roles[pointer.id] = RoleNone;
+            return;
+        }
+
         for (int i = 0; i < _buttons.Count; i++)
         {
             var button = _buttons[i];
@@ -611,9 +675,27 @@ public class TouchControls : MonoBehaviour
         }
     }
 
+    bool IsWeaponPanelButton(Button button) =>
+        button != null && (button == _weaponClose || _weaponRows.Contains(button));
+
     void OnButtonDown(Button button)
     {
-        if (button == _jump) _jumpPressed = true;
+        int row = _weaponRows.IndexOf(button);
+        if (row >= 0)
+        {
+            // The row's position IS the slot: RefreshWeaponPanel fills them
+            // straight down the usable set.
+            _weaponPick = row;
+            ToggleWeaponPanel(false);
+            return;
+        }
+
+        // Only ever opens: while the panel is up it swallows every tap outside
+        // itself, ARMS included, so backing out goes through CLOSE or the
+        // backdrop rather than through this button a second time.
+        if (button == _weapons) ToggleWeaponPanel(true);
+        else if (button == _weaponClose) ToggleWeaponPanel(false);
+        else if (button == _jump) _jumpPressed = true;
         else if (button == _morph) _morphPressed = true;
         else if (button == _snipe) _snipePressed = true;
         else if (button == _prevWeapon) _weaponCycle = -1;
@@ -701,6 +783,10 @@ public class TouchControls : MonoBehaviour
         {
             if (button.image == null)
                 continue;
+            // Weapon rows paint themselves in their gun's own colour; the
+            // standard idle/held wash would just erase that every frame.
+            if (_weaponRows.Contains(button))
+                continue;
             Color target = button.dimmed ? ButtonDim : (button.held ? ButtonHeld : ButtonIdle);
             button.image.color = Color.Lerp(button.image.color, target, blend);
 
@@ -743,6 +829,9 @@ public class TouchControls : MonoBehaviour
         _morph = MakeRoundButton("Morph", "MORPH", new Vector2(1, 0), new Vector2(-620, 480), 140);
         _prevWeapon = MakeRoundButton("PrevWeapon", "<", new Vector2(1, 0), new Vector2(-700, 150), 110);
         _nextWeapon = MakeRoundButton("NextWeapon", ">", new Vector2(1, 0), new Vector2(-570, 150), 110);
+        // Sits directly above the two arrows it supersedes: they step one slot
+        // blind, this shows the whole rack and lets a thumb land on a name.
+        _weapons = MakeRoundButton("Weapons", "ARMS", new Vector2(1, 0), new Vector2(-635, 290), 140);
 
         // Arena Builder fly-cam extras.
         _rise = MakeRoundButton("Rise", "UP", new Vector2(1, 0), new Vector2(-170, 330), 150);
@@ -753,6 +842,177 @@ public class TouchControls : MonoBehaviour
         // Top-LEFT, where Roblox puts it, which also leaves the opposite corner
         // free for the transformation replay (TransformCast).
         _menu = MakeRoundButton("Menu", "MENU", new Vector2(0, 1), new Vector2(130, -110), 150);
+
+        BuildWeaponPanel();
+    }
+
+    /// <summary>
+    /// The weapon rack: what this robot can shoot right now, one tap per gun.
+    ///
+    /// Built once and hidden, never built on demand — the rows are registered in
+    /// <see cref="_buttons"/> and fingers hold an INDEX into that list, so a
+    /// panel that added and removed rows would renumber the buttons under a
+    /// thumb that was already down on one.
+    /// </summary>
+    void BuildWeaponPanel()
+    {
+        var panel = new GameObject("WeaponPanel");
+        panel.transform.SetParent(_root.transform, false);
+        _weaponPanel = panel.AddComponent<RectTransform>();
+        _weaponPanel.anchorMin = Vector2.zero;
+        _weaponPanel.anchorMax = Vector2.one;
+        _weaponPanel.offsetMin = Vector2.zero;
+        _weaponPanel.offsetMax = Vector2.zero;
+
+        // Dims the fight behind the rack, and gives the "tap anywhere to back
+        // out" gesture something to look like.
+        var backdrop = new GameObject("Backdrop");
+        backdrop.transform.SetParent(_weaponPanel, false);
+        var backdropImage = backdrop.AddComponent<Image>();
+        backdropImage.color = new Color(0.02f, 0.05f, 0.09f, 0.82f);
+        backdropImage.raycastTarget = false;
+        var backdropRect = backdropImage.rectTransform;
+        backdropRect.anchorMin = Vector2.zero;
+        backdropRect.anchorMax = Vector2.one;
+        backdropRect.offsetMin = Vector2.zero;
+        backdropRect.offsetMax = Vector2.zero;
+
+        MakeLabel(_weaponPanel, "Title", "WEAPONS", 52, new Vector2(0f, 330f), new Vector2(900f, 70f));
+
+        for (int i = 0; i < WeaponRows; i++)
+            _weaponRows.Add(MakeBarButton($"WeaponRow{i}", _weaponPanel));
+
+        _weaponClose = MakeRoundButton("WeaponClose", "CLOSE", new Vector2(0.5f, 0.5f),
+            new Vector2(0f, -420f), 150);
+        // Round buttons parent themselves to the canvas; this one belongs to the
+        // panel, so it hides and shows with it.
+        _weaponClose.rect.SetParent(_weaponPanel, false);
+
+        _weaponPanel.gameObject.SetActive(false);
+    }
+
+    /// <summary>A full-width row in the weapon rack: name on the left, slot number in the corner.</summary>
+    Button MakeBarButton(string name, RectTransform parent)
+    {
+        var go = new GameObject($"Touch_{name}");
+        go.transform.SetParent(parent, false);
+        var image = go.AddComponent<Image>();
+        image.color = ButtonIdle;
+        image.raycastTarget = false;
+
+        var rect = image.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(900f, 96f);
+
+        var rim = new GameObject("Rim");
+        rim.transform.SetParent(rect, false);
+        var rimImage = rim.AddComponent<Image>();
+        rimImage.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.5f);
+        rimImage.raycastTarget = false;
+        var rimRect = rimImage.rectTransform;
+        // A four-pixel underline rather than a border: the project has no
+        // nine-sliced frame sprite, and a stretched ring reads as an ellipse.
+        rimRect.anchorMin = new Vector2(0f, 0f);
+        rimRect.anchorMax = new Vector2(1f, 0f);
+        rimRect.offsetMin = Vector2.zero;
+        rimRect.offsetMax = new Vector2(0f, 4f);
+
+        var text = MakeLabel(rect, "Label", "", 38, Vector2.zero, Vector2.zero);
+        text.alignment = TextAnchor.MiddleLeft;
+        var textRect = text.rectTransform;
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(40f, 0f);
+        textRect.offsetMax = new Vector2(-40f, 0f);
+
+        var button = new Button { rect = rect, image = image, rim = rimImage, label = text };
+        _buttons.Add(button);
+        return button;
+    }
+
+    Text MakeLabel(RectTransform parent, string name, string content, int fontSize,
+                   Vector2 position, Vector2 size)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var text = go.AddComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = content;
+        text.fontSize = fontSize;
+        text.fontStyle = FontStyle.Bold;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = Color.white;
+        text.raycastTarget = false;
+        var rect = text.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+        return text;
+    }
+
+    void ToggleWeaponPanel(bool open)
+    {
+        if (_weaponPanelOpen == open)
+            return;
+        _weaponPanelOpen = open;
+        if (_weaponPanel != null)
+            _weaponPanel.gameObject.SetActive(open);
+        if (open)
+            RefreshWeaponPanel();
+    }
+
+    /// <summary>
+    /// Re-read the usable set into the rows. Runs every frame the panel is up,
+    /// not just on open: an airdropped weapon is on a countdown, and it can
+    /// expire out of the rack while the player is looking straight at it.
+    /// </summary>
+    void RefreshWeaponPanel()
+    {
+        var player = PlayerBrain.Local;
+        var carried = player != null ? player.weapons : null;
+        int count = carried != null ? Mathf.Min(carried.Length, _weaponRows.Count) : 0;
+        if (count == 0)
+        {
+            ToggleWeaponPanel(false);
+            return;
+        }
+
+        var loadout = player.GetComponent<WeaponLoadout>();
+        int active = player.ActiveSlot;
+        float spacing = 112f;
+        float top = (count - 1) * 0.5f * spacing;
+
+        for (int i = 0; i < _weaponRows.Count; i++)
+        {
+            var row = _weaponRows[i];
+            SetVisible(row.rect, i < count);
+            if (i >= count)
+                continue;
+
+            row.rect.anchoredPosition = new Vector2(0f, top - i * spacing);
+
+            var weapon = carried[i];
+            string name = weapon != null ? weapon.weaponName.ToUpperInvariant() : "EMPTY";
+            // The airdropped slot is the only one that can vanish, so it is the
+            // only one that says how long it has left.
+            string tail = "";
+            if (loadout != null && loadout.Special != null && weapon == loadout.Special)
+                tail = $"   ·   {Mathf.CeilToInt(loadout.SpecialSecondsLeft)}s";
+            row.label.text = $"{i + 1}    {name}{tail}";
+
+            // The held weapon reads as held: its own colour on the bar, rather
+            // than a tick somewhere that a thumb would cover.
+            row.dimmed = false;
+            Color tint = weapon != null ? weapon.color : HoloCyan;
+            row.image.color = row.held
+                ? new Color(tint.r, tint.g, tint.b, 0.85f)
+                : i == active
+                    ? new Color(tint.r, tint.g, tint.b, 0.55f)
+                    : ButtonIdle;
+            row.rim.color = new Color(tint.r, tint.g, tint.b, i == active ? 0.9f : 0.5f);
+            row.label.color = Color.white;
+        }
     }
 
     void BuildStick()

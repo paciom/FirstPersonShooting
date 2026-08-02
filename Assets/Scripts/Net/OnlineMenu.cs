@@ -31,6 +31,13 @@ public static class OnlineMenu
         if (NetSession.Instance != null && NetSession.Instance.Status == NetStatus.Failed)
             NetSession.Instance.Disconnect();
 
+        // Before the link can possibly exist, so no match message can arrive
+        // unsubscribed. NetSession drains the reliable channel in the same
+        // call that flips it to Connected — a NetMatch created on noticing
+        // "Connected" is already too late, and the host's proposal would be
+        // dropped into the void with no retry on either side.
+        NetMatch.Ensure();
+
         var ui = canvasGo.AddComponent<OnlineMenuUi>();
         ui.Init(mainMenuCanvas);
     }
@@ -48,6 +55,7 @@ public class OnlineMenuUi : MonoBehaviour
     Text _statusText;
     InputField _joinField;
     GameObject _startButton;
+    string _notice = "";
     readonly System.Collections.Generic.List<GameObject> _preLinkUi =
         new System.Collections.Generic.List<GameObject>();
 
@@ -82,8 +90,6 @@ public class OnlineMenuUi : MonoBehaviour
             return;
 
         bool linked = session.Status == NetStatus.Connected;
-        if (linked)
-            NetMatch.Ensure();
         var match = NetMatch.Instance;
 
         // Host/join controls give way to the start step once the link is up.
@@ -105,6 +111,22 @@ public class OnlineMenuUi : MonoBehaviour
                 : "LINKED  —  READY  WHEN  YOU  ARE";
         else
             _codeText.text = "LINKED  —  WAITING  FOR  THE  HOST  TO  START…";
+
+        // A match that ended (peer left, link dropped, handshake timed out)
+        // says why, and keeps saying it until something else happens — landing
+        // silently back on this screen reads as a crash.
+        if (match != null)
+        {
+            string notice = match.ConsumeNotice();
+            if (!string.IsNullOrEmpty(notice))
+                _notice = notice;
+        }
+        if (!string.IsNullOrEmpty(_notice) && session.Status != NetStatus.Connected)
+        {
+            _statusText.text = _notice;
+            _statusText.color = new Color(1f, 0.8f, 0.35f);
+            return;
+        }
 
         _statusText.text = session.StatusLine;
         _statusText.color = session.Status == NetStatus.Failed

@@ -168,7 +168,7 @@ public class TransformCast : MonoBehaviour
             ? GameModeController.Instance.Mode : GameMode.Menu;
 
         TransformMode subject = null;
-        if (mode == GameMode.PlayerVsAI && PlayerBrain.Local != null)
+        if (GameModeController.IsFirstPersonMatch(mode) && PlayerBrain.Local != null)
             subject = PlayerBrain.Local.GetComponent<TransformMode>();
 
         // A robot with no vehicle clips can never morph, so a panel describing

@@ -61,11 +61,11 @@ public class HudController : MonoBehaviour
 
     void Update()
     {
-        // The combat HUD only belongs in Player v AI (it bleeds through the
-        // translucent menu backdrop otherwise).
+        // The combat HUD belongs to the first-person fighting modes (it bleeds
+        // through the translucent menu backdrop otherwise).
         if (_canvasGo != null && GameModeController.Instance != null)
         {
-            bool show = GameModeController.Instance.Mode == GameMode.PlayerVsAI;
+            bool show = GameModeController.IsFirstPersonMatch(GameModeController.Instance.Mode);
             if (_canvasGo.activeSelf != show)
                 _canvasGo.SetActive(show);
         }
