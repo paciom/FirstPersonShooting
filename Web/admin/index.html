@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>JAH Metrics — Admin</title>
+<link rel="icon" href="../assets/favicon.png" type="image/png">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* Series colors are validated steps of the brand hues (dataviz six checks,
+     dark surface #071b26) — the raw brand values are too bright for marks. */
+  :root{ --s1:#1aa5be; --s2:#c1882a; --s3:#f04a9c; --bed:#071b26; }
+  .adm{width:min(100% - 44px,1200px);margin-inline:auto;padding:28px 0 64px}
+  .adm-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;margin-bottom:6px}
+  .adm-top h1{font-size:clamp(24px,4vw,34px);color:var(--gold);letter-spacing:.05em}
+  .adm-top .who{color:var(--muted);font-size:.85em;margin-left:auto}
+  .adm-top a{color:var(--cyan);font-size:.85em}
+  .envrow{display:flex;gap:8px;align-items:center;margin:10px 0 22px;color:var(--muted);font-size:.85em}
+  .envrow button{font:600 13px var(--font-body);color:var(--text);background:var(--bed);
+    border:1px solid var(--line);padding:5px 14px;cursor:pointer;border-radius:4px}
+  .envrow button[aria-pressed="true"]{background:var(--cyan);color:#001;border-color:var(--cyan)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .tile{background:var(--bed);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+  .tile b{display:block;font:700 30px/1.1 var(--font-display);color:var(--text);
+    font-variant-numeric:tabular-nums}
+  .tile span{color:var(--muted);font-size:.78em}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+  .panel{background:var(--bed);border:1px solid var(--line);border-radius:6px;padding:16px}
+  .panel h2{font-size:15px;color:var(--cyan);letter-spacing:.04em;margin-bottom:12px}
+  .panel .empty{color:var(--muted);font-size:.85em;padding:18px 0}
+  .legend{display:flex;gap:14px;margin-bottom:8px;color:var(--muted);font-size:.75em}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .hbar{display:grid;grid-template-columns:92px 1fr 52px;gap:8px;align-items:center;margin-bottom:6px}
+  .hbar .lb{color:var(--muted);font-size:.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+  .hbar .track{background:rgba(52,230,255,.07);border-radius:4px;height:16px}
+  .hbar .fill{display:block;height:16px;background:var(--s1);border-radius:0 4px 4px 0;min-width:2px}
+  .hbar .vl{color:var(--text);font-size:.78em;font-variant-numeric:tabular-nums}
+  svg text{font:11px var(--font-body);fill:var(--muted)}
+  svg .grid-ln{stroke:rgba(220,234,242,.08)}
+  table.err{width:100%;border-collapse:collapse;font-size:.78em}
+  table.err th{color:var(--muted);text-align:left;font-weight:600;padding:4px 8px;border-bottom:1px solid var(--line)}
+  table.err td{color:var(--text);padding:4px 8px;border-bottom:1px solid rgba(52,230,255,.06);word-break:break-word}
+  table.err td.num{font-variant-numeric:tabular-nums;text-align:right}
+</style>
+</head>
+<body>
+<main class="adm">
+  <div class="adm-top">
+    <h1>JAH METRICS</h1>
+    <span class="who" id="who"></span>
+    <a href="/.auth/logout?post_logout_redirect_uri=/">Sign out</a>
+  </div>
+  <div class="envrow">
+    <button id="env-prod" aria-pressed="true">Live players</button>
+    <button id="env-dev" aria-pressed="false">Dev traffic</button>
+    <span>dev = editor and development builds · events delete after 90 days</span>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid" id="panels"></div>
+</main>
+<script>
+'use strict';
+let ENV = 'prod';
+
+const fmtDay = iso => { const d = new Date(iso); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); };
+const fmtN = v => Number(v).toLocaleString('en-US');
+/* Everything interpolated into markup goes through esc() — error messages in
+   particular originate from clients posting to a public endpoint, so an
+   unescaped dashboard would be stored XSS against the one signed-in admin. */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function q(name) {
+  const r = await fetch('/api/metrics/' + name + '?env=' + ENV, { credentials: 'same-origin' });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function empty(el, msg) { el.innerHTML = '<div class="empty">' + (msg || 'No data yet.') + '</div>'; }
+
+function hbars(el, rows) {
+  if (!rows.length || !rows.some(r => +r[1] > 0)) return empty(el);
+  const max = Math.max(...rows.map(r => +r[1]));
+  el.innerHTML = rows.map(r =>
+    '<div class="hbar" title="' + esc(r[0]) + ': ' + fmtN(r[1]) + '">' +
+      '<span class="lb">' + esc(r[0]) + '</span>' +
+      '<span class="track"><span class="fill" style="width:' + (100 * r[1] / max).toFixed(1) + '%"></span></span>' +
+      '<span class="vl">' + fmtN(r[1]) + '</span>' +
+    '</div>').join('');
+}
+
+/* One shared line renderer: rows = [[dayIso, v1, v2?]], series = [{name,color}].
+   2px strokes, recessive gridlines, point tooltips, end labels for identity. */
+function lines(el, rows, series) {
+  if (!rows.length) return empty(el);
+  const W = 560, H = 180, L = 34, R = 74, T = 12, B = 22;
+  const vals = rows.flatMap(r => series.map((s, i) => +r[i + 1] || 0));
+  const max = Math.max(1, ...vals);
+  const x = i => L + (rows.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (rows.length - 1));
+  const y = v => T + (H - T - B) * (1 - v / max);
+  let g = '';
+  for (let k = 0; k <= 2; k++) {
+    const gy = T + k * (H - T - B) / 2;
+    g += '<line class="grid-ln" x1="' + L + '" y1="' + gy + '" x2="' + (W - R) + '" y2="' + gy + '"/>' +
+         '<text x="' + (L - 5) + '" y="' + (gy + 4) + '" text-anchor="end">' + Math.round(max * (1 - k / 2)) + '</text>';
+  }
+  let marks = '';
+  series.forEach((s, si) => {
+    const pts = rows.map((r, i) => x(i).toFixed(1) + ',' + y(+r[si + 1] || 0).toFixed(1));
+    marks += '<polyline fill="none" stroke="' + s.color + '" stroke-width="2" points="' + pts.join(' ') + '"/>';
+    rows.forEach((r, i) => {
+      marks += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(+r[si + 1] || 0).toFixed(1) +
+        '" r="3" fill="' + s.color + '" stroke="var(--bed)" stroke-width="2">' +
+        '<title>' + esc(fmtDay(r[0])) + ' · ' + esc(s.name) + ': ' + fmtN(+r[si + 1] || 0) + '</title></circle>';
+    });
+    const last = rows[rows.length - 1];
+    marks += '<text x="' + (W - R + 6) + '" y="' + (y(+last[si + 1] || 0) + 4) + '" fill="' + s.color + '">' +
+      s.name + '</text>';
+  });
+  const xl = '<text x="' + L + '" y="' + (H - 4) + '">' + fmtDay(rows[0][0]) + '</text>' +
+    '<text x="' + (W - R) + '" y="' + (H - 4) + '" text-anchor="end">' + fmtDay(rows[rows.length - 1][0]) + '</text>';
+  const legend = series.length > 1
+    ? '<div class="legend">' + series.map(s => '<span><i style="background:' + s.color + '"></i>' + s.name + '</span>').join('') + '</div>'
+    : '';
+  el.innerHTML = legend + '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">' + g + marks + xl + '</svg>';
+}
+
+function errTable(el, cols, rows) {
+  if (!rows.length) return empty(el, 'No errors. Excellent.');
+  el.innerHTML = '<table class="err"><tr><th>Message</th><th>Where</th><th>Hits</th><th>Players</th></tr>' +
+    rows.map(r => '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td>' +
+      '<td class="num">' + fmtN(r[2]) + '</td><td class="num">' + fmtN(r[3]) + '</td></tr>').join('') +
+    '</table>';
+}
+
+const PANELS = [
+  { t: 'Daily players (14d)', n: 'dau', r: (el, d) => lines(el, d.rows, [{ name: 'Players', color: 'var(--s1)' }]) },
+  { t: 'Website — views & play clicks (14d)', n: 'site', r: (el, d) => lines(el, d.rows, [{ name: 'Views', color: 'var(--s1)' }, { name: 'Play clicks', color: 'var(--s2)' }]) },
+  { t: 'Mode popularity (14d)', n: 'modes', r: (el, d) => hbars(el, d.rows) },
+  { t: 'Robot picks (14d)', n: 'robots', r: (el, d) => hbars(el, d.rows) },
+  { t: 'Funnel (7d)', n: 'funnel', r: (el, d) => hbars(el, d.rows) },
+  { t: 'Median match length, minutes (14d)', n: 'duration', r: (el, d) => hbars(el, d.rows) },
+  { t: 'Boot time to menu, ms (14d)', n: 'boot', r: (el, d) => lines(el, d.rows, [{ name: 'p50', color: 'var(--s1)' }, { name: 'p90', color: 'var(--s3)' }]) },
+  { t: 'Top exceptions (7d)', n: 'errors', r: (el, d) => errTable(el, d.columns, d.rows) }
+];
+
+const TILE_LABELS = ['Players today', 'Players (7d)', 'Sessions (7d)', 'Matches (7d)', 'Site views (7d)'];
+
+async function loadTiles() {
+  const host = document.getElementById('tiles');
+  try {
+    const d = await q('summary');
+    const row = d.rows[0] || [];
+    host.innerHTML = TILE_LABELS.map((lb, i) =>
+      '<div class="tile"><b>' + fmtN(row[i] || 0) + '</b><span>' + lb + '</span></div>').join('');
+  } catch (e) { host.innerHTML = '<div class="tile"><b>—</b><span>summary failed</span></div>'; }
+}
+
+function loadPanels() {
+  const host = document.getElementById('panels');
+  host.innerHTML = PANELS.map((p, i) =>
+    '<section class="panel"><h2>' + p.t + '</h2><div id="p' + i + '"><div class="empty">Loading…</div></div></section>').join('');
+  PANELS.forEach(async (p, i) => {
+    const el = document.getElementById('p' + i);
+    try { p.r(el, await q(p.n)); }
+    catch (e) { empty(el, 'Query failed (' + e.message + ').'); }
+  });
+}
+
+function refresh() { loadTiles(); loadPanels(); }
+
+for (const id of ['prod', 'dev']) {
+  document.getElementById('env-' + id).addEventListener('click', () => {
+    ENV = id;
+    document.getElementById('env-prod').setAttribute('aria-pressed', String(id === 'prod'));
+    document.getElementById('env-dev').setAttribute('aria-pressed', String(id === 'dev'));
+    refresh();
+  });
+}
+
+fetch('/.auth/me', { credentials: 'same-origin' }).then(r => r.json()).then(d => {
+  const p = d && d.clientPrincipal;
+  if (p) document.getElementById('who').textContent = p.userDetails;
+}).catch(() => {});
+
+refresh();
+</script>
+</body>
+</html>

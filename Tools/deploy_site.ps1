@@ -24,6 +24,7 @@ param(
     [string]$Location = 'eastus2',           # SWA free tier is not in every region
     [string[]]$Domains = @('www.jah.cc', 'jah.cc'),
     [string]$SiteDir  = (Join-Path $PSScriptRoot '..\Web'),
+    [string]$ApiDir   = (Join-Path $PSScriptRoot '..\WebApi'),  # SWA managed functions (admin dashboard)
     [switch]$BuildAssets,                    # re-derive Web/assets from the game art
     [switch]$BindDomain                      # attach $Domains after DNS is in place
 )
@@ -62,9 +63,15 @@ $secrets = az staticwebapp secrets list --name $Name --resource-group $Group | C
 $token = $secrets.properties.apiKey
 if (-not $token) { throw 'no deployment token returned' }
 
-Step "Uploading $SiteDir"
+Step "Uploading $SiteDir (+ managed functions from $ApiDir)"
 # --env production is what puts it on the real hostname rather than a preview one.
-npx -y @azure/static-web-apps-cli deploy $SiteDir --deployment-token $token --env production
+$ApiDir = (Resolve-Path $ApiDir).Path
+# Without explicit flags the CLI assumes node 16 (EOL) for the API and the
+# deployment binary dies with a blank exit 1 — keep these in step with
+# platform.apiRuntime in Web/staticwebapp.config.json.
+npx -y @azure/static-web-apps-cli deploy $SiteDir --api-location $ApiDir `
+    --api-language node --api-version 20 `
+    --deployment-token $token --env production
 if ($LASTEXITCODE -ne 0) { throw 'swa deploy failed' }
 
 if ($BindDomain) {

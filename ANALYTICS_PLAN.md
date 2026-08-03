@@ -155,6 +155,27 @@ to `env=="prod"`); Chinese Quest learning events are a Phase-6+ taxonomy of thei
 > is never shared or used for advertising, and every event is automatically deleted
 > after 90 days.
 
+## Admin dashboard (www.jah.cc/admin, added 2026-08-04)
+
+- **Page**: `Web/admin/index.html` — tiles + hand-rolled SVG/CSS charts (DAU, site
+  views/clicks, mode & robot popularity, funnel, match length, boot p50/p90, top
+  errors), Live/Dev toggle. Series colors are darkened brand steps that pass the
+  dataviz six-checks on the panel surface. All interpolated strings escaped —
+  error messages arrive from a public endpoint, so an unescaped admin page would
+  be stored XSS.
+- **API**: `WebApi/metrics` (SWA *managed* function, free tier) — named-KQL map
+  only, client never sends KQL; queries App Insights REST API with a read-only
+  API key held in SWA app settings (`Tools/setup_admin_api.ps1` creates/rotates,
+  never prints it). Defense in depth: SWA route rule *and* an in-function
+  `x-ms-client-principal` role check.
+- **Auth**: SWA built-in auth, `staticwebapp.config.json` — `/admin*` and
+  `/api/*` require role `admin`; anonymous hits 302 to the Microsoft (AAD) login;
+  GitHub/Twitter login routes are 404'd. Free tier = built-in providers only
+  (Google sign-in would need Standard, ~$9/mo). Grant access with
+  `Tools/invite_admin.ps1 -Email <who>` (invitation link IS the grant, max 7-day
+  expiry, ≤25 role users on free tier). Invitees sign in with a Microsoft
+  account on that email. `/admin` + `/api` are robots-disallowed and noindexed.
+
 ## Gotchas already accounted for
 
 - `session_end` is unreliable everywhere (tab close, app kill) — dashboards derive session

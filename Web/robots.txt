@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /api
 
 Sitemap: https://www.jah.cc/sitemap.xml
