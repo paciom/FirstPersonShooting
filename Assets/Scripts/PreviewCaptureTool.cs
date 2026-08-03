@@ -41,6 +41,36 @@ public static class PreviewCaptureTool
             return int.TryParse(raw, out int parsed) && parsed >= 64 ? parsed : 560;
         }
     }
+    // The hero angle is the one that seeds image-to-video runs, and each run
+    // wants its own framing (the jet transformation asked for a flat 45).
+    // Overridable so picking a new angle does not mean editing this file again.
+    static float HeroYaw
+    {
+        get
+        {
+            var raw = System.Environment.GetEnvironmentVariable("PREVIEW_CAPTURE_HERO_YAW");
+            return float.TryParse(raw, out float parsed) ? parsed : 35f;
+        }
+    }
+    // The select screen's backdrop has changed over time, so a capture meant to
+    // match an OLD frame cannot just inherit today's. Rendering the same pose
+    // on black and on white recovers true coverage (W - K is the inverse
+    // alpha), which then composites onto whatever backdrop is wanted.
+    // "r,g,b" in 0-1, e.g. PREVIEW_CAPTURE_BG=0,0,0.
+    static Color? BackdropOverride
+    {
+        get
+        {
+            var raw = System.Environment.GetEnvironmentVariable("PREVIEW_CAPTURE_BG");
+            if (string.IsNullOrEmpty(raw))
+                return null;
+            var parts = raw.Split(',');
+            if (parts.Length != 3)
+                return null;
+            return new Color(float.Parse(parts[0]), float.Parse(parts[1]),
+                             float.Parse(parts[2]), 1f);
+        }
+    }
     const string ScenePath = "Assets/Scenes/GreyboxArena.unity";
 
     [MenuItem("Photon Arena/Capture Robot Previews")]
@@ -244,7 +274,7 @@ public static class PreviewCaptureTool
             cam.clearFlags = CameraClearFlags.SolidColor;
             // Must track the select screen's own backdrop — the point of this
             // tool is that the capture and the card are the same picture.
-            cam.backgroundColor = RobotSelectMenu.PreviewBackdrop;
+            cam.backgroundColor = BackdropOverride ?? RobotSelectMenu.PreviewBackdrop;
             camGo.AddComponent<UniversalAdditionalCameraData>().renderPostProcessing = false;
 
             // Front and back, because the reported screenshots were of the back
@@ -253,7 +283,7 @@ public static class PreviewCaptureTool
             Shoot(cam, holder.transform, 180f, $"{OutDir}/{entry.displayName}_back.png");
             // Three-quarter hero angle: reads the silhouette better than a flat
             // front-on shot, which matters when the frame is seeding a video.
-            Shoot(cam, holder.transform, 35f, $"{OutDir}/{entry.displayName}_hero.png");
+            Shoot(cam, holder.transform, HeroYaw, $"{OutDir}/{entry.displayName}_hero.png");
 
             Describe(model, entry.displayName, report);
             DescribeVehicle(entry, report);
