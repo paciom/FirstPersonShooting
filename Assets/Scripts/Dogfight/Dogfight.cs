@@ -136,8 +136,13 @@ public class Dogfight : MonoBehaviour
         var magentaAt = new Vector3(PadSpacing * 0.5f, DogfightSky.PadY, 0f);
         _cyan = SpawnPawn(_cyanRobot, 0, cyanAt, 90f);
         _magenta = SpawnPawn(_magentaRobot, 1, magentaAt, -90f);
-        _cyanPad = _sky.BuildPad(cyanAt, MatchAnnouncer.TeamColor(0));
-        _magentaPad = _sky.BuildPad(magentaAt, MatchAnnouncer.TeamColor(1));
+        // The pawn's origin is its flight CENTRE, so the standing robot's feet
+        // hang half a fit below it — the pad top meets them there. After the
+        // fold the low-slung jet is left hovering a body above the pad, which
+        // is exactly the shot the clips end on.
+        Vector3 underFeet = Vector3.down * (JetPawn.JetSize * 0.5f);
+        _cyanPad = _sky.BuildPad(cyanAt + underFeet, MatchAnnouncer.TeamColor(0));
+        _magentaPad = _sky.BuildPad(magentaAt + underFeet, MatchAnnouncer.TeamColor(1));
 
         _cameraRig = BuildCameraRig();
         _camera = _cameraRig.GetComponent<Camera>();
