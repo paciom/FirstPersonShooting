@@ -1071,6 +1071,12 @@ public static class ArenaBuilder
                 transformStages = LoadTransformStages(robot),
                 transformVideo = AssetDatabase.LoadAssetAtPath<UnityEngine.Video.VideoClip>(
                     $"Assets/Video/{robot}-transform.mp4"),
+                // The jet run lands beside the tank run under the same tooling
+                // — the <robot>-jet key IS the directory, so the tank scanner
+                // reads it unchanged.
+                jetStages = LoadTransformStages($"{robot}-jet"),
+                jetVideo = AssetDatabase.LoadAssetAtPath<UnityEngine.Video.VideoClip>(
+                    $"Assets/Video/{robot}-jet-transform.mp4"),
                 paintAnchorHue = DominantHue(prefab),
             };
             if (file == $"{DefaultRobot}-robot")

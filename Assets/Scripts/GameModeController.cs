@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, Dogfight, DogfightWar }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -59,6 +59,7 @@ public class GameModeController : MonoBehaviour
     ChineseQuest _chineseQuest;
     ChineseRun _chineseRun;
     TankRaid _tankRaid;
+    Dogfight _dogfight;
     GameObject _chineseDeckSelect;
     DeRezEffect[] _deRezEffects;
 
@@ -338,6 +339,13 @@ public class GameModeController : MonoBehaviour
             _tankRaid.Teardown();
             _tankRaid = null;
         }
+        // And once more for the sky: the jets are scene-root shootables the
+        // same way the tanks are, swept by the same kind of Teardown.
+        if (_dogfight != null)
+        {
+            _dogfight.Teardown();
+            _dogfight = null;
+        }
         ResetMatchState();
         RestoreAllDeRez();
 
@@ -382,6 +390,8 @@ public class GameModeController : MonoBehaviour
             else if (mode == GameMode.BrawlWar) StartBrawlWar();
             else if (mode == GameMode.BrawlShow) StartBrawlShow();
             else if (mode == GameMode.TankRaid) StartTankRaid();
+            else if (mode == GameMode.Dogfight) StartDogfight();
+            else if (mode == GameMode.DogfightWar) StartDogfightWar();
             else StartPlayerVsAI();
             return;
         }
@@ -430,6 +440,18 @@ public class GameModeController : MonoBehaviour
         if (_pendingMode == GameMode.TankRaid)
         {
             StartTankRaid();
+            return;
+        }
+        // Dogfight spawns both jets fresh from the roster picks, and its sky
+        // is its own set — same shape as Tank Raid, twice over.
+        if (_pendingMode == GameMode.Dogfight)
+        {
+            StartDogfight();
+            return;
+        }
+        if (_pendingMode == GameMode.DogfightWar)
+        {
+            StartDogfightWar();
             return;
         }
         ApplyRobotSelection();
@@ -962,6 +984,42 @@ public class GameModeController : MonoBehaviour
         ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
                     "grab the pods   ·   = — Thumb sticks   ·   ESC — Menu",
                     "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    // ---------- Dogfight ----------
+
+    /// <summary>
+    /// DOGFIGHT: the sky duel. Both picked robots land on pads, fold into
+    /// their jet forms by stop motion, and race to five wrecks over a navy
+    /// void. Its own set, so no arena select comes in front of it — the Tank
+    /// Raid shape with a player in the cyan cockpit.
+    /// </summary>
+    public void StartDogfight() => StartDogfightMode(playerControls: true);
+
+    /// <summary>Dogfight's exhibition: two CPU pilots, the couch gets a
+    /// broadcast camera that answers C and SPACE.</summary>
+    public void StartDogfightWar() => StartDogfightMode(playerControls: false);
+
+    void StartDogfightMode(bool playerControls)
+    {
+        Mode = playerControls ? GameMode.Dogfight : GameMode.DogfightWar;
+        CloseRobotSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        // Before the characters are hidden — same order every mode uses.
+        RestoreAllDeRez();
+
+        _dogfight = Dogfight.Begin(this, _roster, _cyanRobot, _magentaRobot, playerControls);
+
+        _menuCanvas.SetActive(false);
+        if (playerControls)
+            ShowOverlay("Mouse — Steer   ·   Hold Click — Fire   ·   W — Boost   ·   " +
+                        "S — Brake   ·   C — Cockpit   ·   ESC — Menu",
+                        "DOGFIGHT   ·   tap MENU to go back");
+        else
+            ShowOverlay("DOGFIGHT: AI v AI   ·   C — Cockpit   ·   SPACE — Next jet   ·   ESC — Menu",
+                        "DOGFIGHT: AI v AI   ·   tap MENU to go back");
         LockCursor(false);
     }
 

@@ -26,10 +26,13 @@ public static class MainMenu
     static readonly Color GoldLow = new Color(0.97f, 0.58f, 0.11f);
 
     // -- layout, on the 1920x1080 reference canvas ------------------------
-    // Three decks side by side: 3 columns, then 2, then 2. The widths below
-    // total 1736, which centres inside 1920 with a 92px margin either side.
-    const float CardW = 224f, CardH = 126f;      // exactly 16:9, like the art
-    const float PitchX = 238f, PitchY = 140f;
+    // Three decks side by side: 3 columns, then 3, then 2. Eight card columns
+    // across the band where there used to be seven — DOGFIGHT's two cards made
+    // WAR ROOM a six-deck, so the pitch came down from 238 to 208 and every
+    // card with it. The widths below total 1734, which centres inside 1920
+    // with a 93px margin either side.
+    const float CardW = 194f, CardH = 109f;      // near-exactly 16:9, like the art
+    const float PitchX = 208f, PitchY = 140f;
     const float HeaderY = -58f, Row0Y = -155f, Row1Y = Row0Y - PitchY;
 
     // Every row below is a fixed canvas coordinate, never an offset from an
@@ -119,14 +122,16 @@ public static class MainMenu
             new Mode("BRAWL:  AI  WAR", "brawlwar", () => controller.OpenRobotSelect(GameMode.BrawlWar)),
             new Mode("MARTIAL  ARTS  SHOW", "brawlshow", () => controller.OpenRobotSelect(GameMode.BrawlShow)),
         });
-        BuildDeck(decks, "WAR  ROOM", Command, -112f, 2, new[]
+        BuildDeck(decks, "WAR  ROOM", Command, -202f, 3, new[]
         {
             new Mode("COMMANDER", "commander", controller.StartCommander),
             new Mode("COMMANDER:  AI  WAR", "commanderwar", controller.StartCommanderWar),
             new Mode("TOWER  DEFENSE", "towerdefense", controller.StartTowerDefense),
             new Mode("TANK  RAID", "tankraid", () => controller.OpenRobotSelect(GameMode.TankRaid)),
+            new Mode("DOGFIGHT", "dogfight", () => controller.OpenRobotSelect(GameMode.Dogfight)),
+            new Mode("DOGFIGHT:  AI  WAR", "dogfightwar", () => controller.OpenRobotSelect(GameMode.DogfightWar)),
         });
-        BuildDeck(decks, "ACADEMY  ·  WORKSHOP", Academy, 406f, 2, new[]
+        BuildDeck(decks, "ACADEMY  ·  WORKSHOP", Academy, 464f, 2, new[]
         {
             new Mode("CHINESE  QUEST", "chinesequest", controller.OpenChineseDeckSelect),
             new Mode("CHINESE  RUN", "chineserun", controller.OpenChineseRunDeckSelect),

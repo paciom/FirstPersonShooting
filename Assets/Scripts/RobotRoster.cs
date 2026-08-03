@@ -45,6 +45,19 @@ public class RobotRoster : MonoBehaviour
         public UnityEngine.Video.VideoClip transformVideo;
 
         /// <summary>
+        /// The SECOND terminal form: jet stages for DOGFIGHT, robot first and
+        /// jet last (Assets/Models/Stages/&lt;robot&gt;-jet/stage*.glb), built
+        /// by the same pipeline against the &lt;Robot&gt;_Jet_Transformation
+        /// clips. Empty for robots whose jet run has not happened yet — they
+        /// borrow the ranger airframe in their own team paint (see Dogfight).
+        /// </summary>
+        public GameObject[] jetStages;
+
+        /// <summary>The jet clip itself (Assets/Video/&lt;robot&gt;-jet-transform.mp4),
+        /// for the same inspector duty transformVideo does.</summary>
+        public UnityEngine.Video.VideoClip jetVideo;
+
+        /// <summary>
         /// This robot's dominant hue (0–1), measured off its albedo at build
         /// time. It is the colour that comes out exactly the away team's colour;
         /// everything else fans away from it. See TeamPaint.
@@ -61,6 +74,8 @@ public class RobotRoster : MonoBehaviour
         public float paintAnchorHue;
 
         public bool HasStages => transformStages != null && transformStages.Length > 1;
+
+        public bool HasJetStages => jetStages != null && jetStages.Length > 1;
     }
 
     public Entry[] robots = new Entry[0];

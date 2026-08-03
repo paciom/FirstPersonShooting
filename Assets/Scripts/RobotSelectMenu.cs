@@ -115,6 +115,8 @@ public static class RobotSelectMenu
                 : pendingMode == GameMode.BrawlWar ? "BRAWL  —  AI  v  AI"
                 : pendingMode == GameMode.BrawlShow ? "MARTIAL  ARTS  SHOW  —  CYAN  PERFORMS"
                 : pendingMode == GameMode.TankRaid ? "TANK  RAID  —  CYAN  DRIVES"
+                : pendingMode == GameMode.Dogfight ? "DOGFIGHT  —  CYAN  FLIES"
+                : pendingMode == GameMode.DogfightWar ? "DOGFIGHT  —  AI  v  AI"
                 : "PLAYER  v  AI", 26,
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Normal,
             new Vector2(0.5f, 1f), new Vector2(0, -145), new Vector2(800, 40));
