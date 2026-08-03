@@ -280,13 +280,19 @@ public class VehicleSkin : MonoBehaviour
         // Both applied in ONE rotation before anything is measured: rotating
         // after the fit would move the mesh off the centring and grounding
         // solved for its old orientation.
+        //
+        // The long-axis test is taken with the model turned to face the WORLD,
+        // not the character. Renderer bounds are a world box: a character that
+        // happened to be facing sideways when its tank was built — a bought
+        // reinforcement, a robot swapped between matches — measured the tank's
+        // LENGTH across world X, concluded it was already pointing down Z, and
+        // got a tank that drove sideways for the rest of the match with its gun
+        // across its own line of fire.
+        instance.transform.rotation = Quaternion.identity;
         Bounds raw = Combine(renderers);
         float yaw = (raw.size.x > raw.size.z ? 90f : 0f) + extraYaw;
-        if (!Mathf.Approximately(yaw, 0f))
-        {
-            instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-            raw = Combine(renderers);
-        }
+        instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+        raw = Combine(renderers);
 
         // Multiply, never replace — glTF roots carry their own unit scale.
         float scale = (robotBounds.size.y * heightFraction) / Mathf.Max(0.01f, raw.size.y);

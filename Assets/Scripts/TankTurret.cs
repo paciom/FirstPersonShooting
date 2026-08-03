@@ -65,6 +65,7 @@ public class TankTurret : MonoBehaviour
     Transform _pivot, _tip, _anchor;
     Vector3 _aimPoint;
     bool _hasAim;
+    bool _warnedNoTip;
     float _offTarget;
     float _nextSearch;
 
@@ -115,7 +116,7 @@ public class TankTurret : MonoBehaviour
         if (pivot == null)
             return;
 
-        Vector3 barrel = Flat(BarrelDirection(pivot));
+        Vector3 barrel = Flat(RawBarrel(pivot));
         // With no target this frame the turret walks back to dead ahead, which
         // is where a tank carries its gun when nothing is worth pointing it at.
         Vector3 wanted = Flat(aiming ? _aimPoint - pivot.position : transform.forward);
@@ -134,12 +135,24 @@ public class TankTurret : MonoBehaviour
     static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
 
     /// <summary>
-    /// Which way the gun points, measured from the pivot to the barrel tip.
-    /// Falls back to the pivot's own forward for a model that was rigged without
-    /// a tip marker.
+    /// Which way the gun is actually pointing right now, flat and normalized —
+    /// what the vehicle's weapons fire along, so the shots and the barrel can
+    /// never disagree. Zero when there is no turret to read.
+    ///
+    /// Read from the two live transforms rather than from the pivot's forward:
+    /// the pivot inherits the quarter turn VehicleSkin puts on the model to
+    /// bring its long axis onto +Z, so its forward is 90 degrees off the gun.
     /// </summary>
-    Vector3 BarrelDirection(Transform pivot) =>
-        _tip != null ? _tip.position - pivot.position : pivot.forward;
+    public Vector3 BarrelDirection
+    {
+        get
+        {
+            var pivot = ResolvePivot();
+            return pivot == null ? Vector3.zero : Flat(_tip.position - pivot.position).normalized;
+        }
+    }
+
+    Vector3 RawBarrel(Transform pivot) => _tip.position - pivot.position;
 
     /// <summary>
     /// Park the stable muzzle on the barrel tip. Position and aim are copied
@@ -150,8 +163,8 @@ public class TankTurret : MonoBehaviour
     void RideBarrel(Transform pivot)
     {
         EnsureAnchor();
-        Vector3 direction = BarrelDirection(pivot);
-        _anchor.position = _tip != null ? _tip.position : pivot.position;
+        Vector3 direction = RawBarrel(pivot);
+        _anchor.position = _tip.position;
         if (direction.sqrMagnitude > 1e-6f)
             _anchor.rotation = Quaternion.LookRotation(direction);
     }
@@ -175,17 +188,28 @@ public class TankTurret : MonoBehaviour
     }
 
     /// <summary>
-    /// The turret of the vehicle mesh that is showing right now.
+    /// The turret of the vehicle mesh that is showing right now, or null when
+    /// this character is not wearing a rigged tank.
     ///
     /// Re-found rather than cached for good: VehicleSkin keeps every stage of
     /// the transformation instantiated and switches between them by activating
     /// one at a time, and a robot swap throws the whole set away and builds
     /// another. Only the mesh a character is actually wearing is active, which
     /// is exactly the test used here.
+    ///
+    /// THE PIVOT AND THE TIP ARE FOUND TOGETHER OR NOT AT ALL. They used to be
+    /// separate steps, and a search that ran while the tank was hidden — which
+    /// the fold does constantly, popping through eight stages in both
+    /// directions — cleared the tip while leaving the pivot cached. The next
+    /// frame the tank came back, the cache was still good, so the tip was never
+    /// looked for again: every transformation after the first aimed the turret
+    /// by the pivot's own forward, which sits exactly 90 degrees off the barrel
+    /// (the model carries the fit's quarter turn). Hence a tank whose gun points
+    /// across its own line of fire, forever, from the second fold onward.
     /// </summary>
     Transform ResolvePivot()
     {
-        if (_pivot != null && _pivot.gameObject.activeInHierarchy)
+        if (_pivot != null && _tip != null && _pivot.gameObject.activeInHierarchy)
             return _pivot;
 
         // Throttled, because the search fails every time for a robot whose
@@ -195,7 +219,6 @@ public class TankTurret : MonoBehaviour
             return null;
         _nextSearch = Time.time + SearchInterval;
 
-        _tip = null;
         Transform found = null;
         foreach (var candidate in GetComponentsInChildren<Transform>(false))
         {
@@ -206,19 +229,34 @@ public class TankTurret : MonoBehaviour
             found = candidate;
             break;
         }
+        if (found == null)
+            return null;   // hidden, or an unrigged vehicle mesh — leave the cache alone
 
-        if (found != null)
-            foreach (var child in found.GetComponentsInChildren<Transform>(true))
-                if (child.name.StartsWith(TipName))
-                {
-                    _tip = child;
-                    break;
-                }
+        Transform tip = null;
+        foreach (var child in found.GetComponentsInChildren<Transform>(true))
+            if (child.name.StartsWith(TipName))
+            {
+                tip = child;
+                break;
+            }
 
-        // Only adopt a live turret; a null result leaves the previous one in
-        // _pivot so LateUpdate can still centre it on the way out.
-        if (found != null)
-            _pivot = found;
-        return found;
+        if (tip == null)
+        {
+            // No barrel marker means no way to know which way the gun points,
+            // and guessing is what produced the 90-degree turret. Report no
+            // turret instead: the brains then turn the whole hull to aim, which
+            // is how a tank with no rig has always fought.
+            if (!_warnedNoTip)
+            {
+                _warnedNoTip = true;
+                Debug.LogWarning($"[TankTurret] {name}: '{found.name}' has no '{TipName}' " +
+                    "child — re-run Tools/tankturret.py over the vehicle stages.");
+            }
+            return null;
+        }
+
+        _pivot = found;
+        _tip = tip;
+        return _pivot;
     }
 }

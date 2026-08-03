@@ -830,13 +830,16 @@ public class CommanderUnit : MonoBehaviour
         if (renderers.Length == 0)
             return;
 
+        // Turned to face the WORLD for the long-axis test, because renderer
+        // bounds are a world box and this unit is rebuilt mid-drive, on
+        // whatever heading it happens to be on. Measured through the unit's own
+        // facing, a tank driving north-east reads as neither X-long nor Z-long
+        // in particular, and half the army ends up crabbing sideways.
+        instance.transform.rotation = Quaternion.identity;
         var bounds = MeasureBounds(renderers);
         float yaw = (bounds.size.x > bounds.size.z ? 90f : 0f) + extraYaw;
-        if (!Mathf.Approximately(yaw, 0f))
-        {
-            instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-            bounds = MeasureBounds(renderers);
-        }
+        instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+        bounds = MeasureBounds(renderers);
 
         float scale = targetSize / Mathf.Max(0.01f,
             Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)));

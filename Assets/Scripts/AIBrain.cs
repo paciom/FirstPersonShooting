@@ -327,25 +327,27 @@ public class AIBrain : MonoBehaviour
 
         DriveMovement(_target, distance, standoff, engaged, hasLineOfSight);
 
+        // A tank turns its TURRET, not its hull: the chassis keeps facing the
+        // way it drives (the agent owns that) and the gun does the tracking,
+        // which is the whole reason to be a tank holding a standoff. A robot
+        // turns its whole body to face the target, as it always has — and so
+        // does a tank whose model has no rigged turret.
+        //
+        // Tracked whether or not there is a shot: a turret that only starts
+        // swinging once the enemy steps out of cover is a turret that is always
+        // half a second late, and it costs nothing to keep the gun on them.
+        TankTurret turret = _vehicle != null && _vehicle.IsVehicle && _vehicle.Turret.HasTurret
+            ? _vehicle.Turret : null;
+        if (turret != null)
+            turret.AimAt(targetCenter);
+
         // A mine with an enemy standing next to it beats any shot at the enemy.
         if (TryShootMine())
             return;
 
         if (hasLineOfSight)
         {
-            // A tank turns its TURRET, not its hull: the chassis keeps facing
-            // the way it drives (the agent owns that) and the gun does the
-            // tracking, which is the whole reason to be a tank holding a
-            // standoff. A robot turns its whole body to face the target, as it
-            // always has — and so does a tank whose model has no rigged turret.
-            TankTurret turret = _vehicle != null && _vehicle.IsVehicle && _vehicle.Turret.HasTurret
-                ? _vehicle.Turret : null;
-
-            if (turret != null)
-            {
-                turret.AimAt(targetCenter);
-            }
-            else
+            if (turret == null)
             {
                 Vector3 flat = _target.transform.position - transform.position;
                 flat.y = 0f;
@@ -363,7 +365,23 @@ public class AIBrain : MonoBehaviour
             if (engaged && Time.time - _sawTargetAt >= reactionDelay && _active != null
                 && (turret == null || turret.OnTarget))
             {
-                Vector3 aim = (targetCenter - _active.muzzle.position).normalized;
+                // A tank shoots where its barrel points. Firing at the target
+                // instead would be right only while the turret is exactly on
+                // it, and every frame it isn't — the swing, a target that
+                // stepped aside — the shells would leave the gun sideways.
+                //
+                // Heading from the barrel, elevation from the target: the
+                // turret only yaws, so its heading is the honest one, but a
+                // gun that could not look up would never answer anything
+                // standing on a crate.
+                Vector3 toTarget = targetCenter - _active.muzzle.position;
+                Vector3 barrel = turret != null ? turret.BarrelDirection : Vector3.zero;
+                Vector3 aim = barrel.sqrMagnitude > 0.01f
+                    ? (barrel * new Vector2(toTarget.x, toTarget.z).magnitude
+                       + Vector3.up * toTarget.y).normalized
+                    : toTarget.normalized;
+                // Bots are never aimbots: the error cone rides the shot rather
+                // than the turret, so the gun still visibly points at the enemy.
                 aim = Quaternion.Euler(
                     Random.Range(-aimErrorDegrees, aimErrorDegrees),
                     Random.Range(-aimErrorDegrees, aimErrorDegrees), 0f) * aim;
