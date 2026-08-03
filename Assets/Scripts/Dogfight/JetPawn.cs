@@ -2,34 +2,37 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// One jet in DOGFIGHT — and, for the opening seconds, the robot it unfolds
-/// from. It carries the whole transformation: every stop-motion stage is
-/// instantiated up front and shown one at a time, so the intro morph is a
-/// renderer toggle and never an Instantiate mid-ceremony.
+/// One combatant in DOGFIGHT — a jet, until it decides not to be. The pawn
+/// carries BOTH of its robot's stop-motion sets (the jet fold and the tank
+/// fold, which share the standing robot at one end), so it can play any leg
+/// of the triangle: jet unfolds to a robot under a glide chute, the robot
+/// folds on into a tank on the deck, and a tank re-folds through the robot
+/// back into the sky. Chained morphs are just the two ceremonies played
+/// back to back.
 ///
-/// EVERY PAWN LIVES AT THE SCENE ROOT. Bolts resolve their victim through
-/// <c>hit.transform.root.GetComponent&lt;EnergyShield&gt;()</c>, so a jet
-/// parented under the stage root is a jet nothing in this project can shoot.
-/// <see cref="All"/> and <see cref="DespawnAll"/> stand in for the parent the
-/// hierarchy would otherwise have given us — the TankPawn arrangement, for the
-/// TankPawn reason.
+/// THE FORMS ARE A TRIANGLE, NOT A COSTUME. A jet fights jets; a tank is
+/// slow and grounded but carries the same guns and missiles up at the sky
+/// and across the deck at the batteries; a robot under canopy falls slowly,
+/// aims freely, and is a target the whole way down. Same shield, same
+/// wrecks, same seams — <c>Steer</c>/<c>Throttle</c>/<c>Firing</c> plus
+/// <see cref="AimAt"/> — whoever is driving.
 ///
-/// FLIGHT IS ARCADE AND KINEMATIC. The jet always moves along its nose; the
-/// driver supplies <see cref="Steer"/> (yaw right, pitch up), a
-/// <see cref="Throttle"/> bias and <see cref="Firing"/>, all cleared after
-/// they are read so a driver that stops writing stops steering. Bank is
-/// cosmetic — a kid's mental model is "point where you want to go", and rudder
-/// physics would only argue with it. The fly volume steers the jet back from
-/// its edges instead of walling it: the assists act on the same steer values
-/// the drivers write, so the player and the AI obey the sky the same way.
+/// EVERY PAWN LIVES AT THE SCENE ROOT (bolts resolve their victim through
+/// <c>hit.transform.root</c>), with the plain-static registry standing in
+/// for the parent the hierarchy would have given us. Built inside an
+/// INACTIVE GameObject and switched on at the end, because EnergyShield and
+/// Weapon latch their numbers in Awake — the TankPawn birth ritual.
 ///
-/// Built inside an INACTIVE GameObject and switched on at the end, because
-/// <see cref="EnergyShield"/> latches Current from maxShield in Awake and
-/// <see cref="Weapon"/> latches its team from the shield — the TankPawn birth
-/// ritual, unchanged.
+/// Both stage sets are instantiated AT SPAWN, while the root still sits at
+/// identity: stages are fitted through world-space renderer bounds, and a
+/// root already yawed toward its enemy smears wingspan into length in every
+/// box measured under it. Lazy-building the tank set mid-fight would repeat
+/// that bug at a random rotation.
 /// </summary>
 public class JetPawn : MonoBehaviour
 {
+    public enum Form { Jet, Robot, Tank }
+
     // ------------------------------------------------------------- the registry
 
     // Plain static list, populated from OnEnable: a script recompile during
@@ -47,7 +50,8 @@ public class JetPawn : MonoBehaviour
         Live.Clear();
     }
 
-    /// <summary>Nearest live jet on another team, or null.</summary>
+    /// <summary>Nearest live pawn on another team, whatever form it is
+    /// wearing, or null.</summary>
     public static JetPawn NearestEnemy(Vector3 from, int teamId, float maxRange = float.MaxValue)
     {
         JetPawn best = null;
@@ -67,11 +71,10 @@ public class JetPawn : MonoBehaviour
 
     // ------------------------------------------------------------------ tuning
 
-    /// <summary>Metres across a jet's largest span is fitted to. Every stage is
-    /// fitted to the same number on its own largest dimension — the rule
-    /// Tools/stopmotion.py uses — because the fold passes through shapes that
-    /// are tall, then round, then wide, and any single-axis rule inflates one
-    /// of them.</summary>
+    /// <summary>Metres across a stage's largest span is fitted to — every
+    /// stage of both sets, on its own largest dimension (stopmotion.py's
+    /// rule), because the folds pass through shapes that are tall, then
+    /// round, then wide, and any single-axis rule inflates one of them.</summary>
     public const float JetSize = 3.4f;
 
     public const float SpeedMin = 16f;
@@ -81,30 +84,18 @@ public class JetPawn : MonoBehaviour
 
     const float PitchRate = 80f;
     const float YawRate = 70f;
-
-    /// <summary>Cosmetic bank at full yaw. Cosmetic only — see the class note.</summary>
     const float BankDegrees = 55f;
-
-    /// <summary>Nose can never point more than this off the horizon. A loop is
-    /// a simulator's trick; a kid chasing the cursor to the top of the screen
-    /// should climb hard, not flip over their own tail.</summary>
     const float PitchLimit = 62f;
 
     /// <summary>
-    /// Extra yaw that turns a generated stage nose-forward — the knob
-    /// VehicleSkin.stageYawOffset is for the tank stages, but MEASURED rather
-    /// than inherited. VehicleSkin's "longest horizontal axis forward" rule is
-    /// deliberately not used: this delta wing is 1.9 wide by 1.7 long, so that
-    /// rule faces it sideways by construction.
-    ///
-    /// -90 is an IN-GAME measurement, and the sign matters more than the
-    /// story: a Tools-side vertex probe put the nose on the GLB's -X, but that
-    /// probe walks node translations and ignores node ROTATIONS, so its frame
-    /// is not the frame glTFast instantiates — +90 flew the whole set visibly
-    /// tail-first (chase camera staring down the canopy). If a future jet set
-    /// comes out backwards, flip this 180 and trust the screenshot, not the
-    /// probe. One constant covers the set because every jet clip frames its
-    /// subject the same way.
+    /// Extra yaw that turns a generated JET stage nose-forward. -90 is an
+    /// IN-GAME measurement, and the sign matters more than the story: the
+    /// offline vertex probe walks node translations but ignores node
+    /// rotations, so its frame is not glTFast's — +90 flew the whole set
+    /// visibly tail-first. If a future jet set comes out backwards, flip
+    /// this 180 and trust the screenshot, not the probe. The TANK set does
+    /// not use this: its stage8 carries real barrel markers, so its yaw is
+    /// measured per robot through TankPawn.NoseYaw.
     /// </summary>
     const float StageYaw = -90f;
 
@@ -116,22 +107,32 @@ public class JetPawn : MonoBehaviour
     const float GunRange = 130f;
 
     /// <summary>Cone inside which the gun quietly aims at the target's future
-    /// position instead of dead ahead. This is how eight-year-old aim lands
-    /// hits without an aimbot: the player still has to get behind and point
-    /// roughly right, the cone forgives the last few degrees.</summary>
+    /// position instead of dead ahead — how eight-year-old aim lands hits
+    /// without an aimbot.</summary>
     public const float AssistDegrees = 6f;
     public const float AssistRange = 90f;
 
-    /// <summary>One missile in the tube at a time; the tube takes this long.
-    /// Shared by every seat — the AI's brain adds its own hesitation on top,
-    /// so the pawn's number is the FLOOR, not the AI's cadence.</summary>
     public const float MissileCooldown = 5f;
-
-    /// <summary>The countermeasure pocket: bursts carried, and the slow drip
-    /// that refills one. Respawning refills the lot — a fresh jet with an
-    /// empty pocket punishes the pilot for the death they already paid for.</summary>
     public const int FlareChargesMax = 3;
     const float FlareRechargeSeconds = 7f;
+
+    /// <summary>One leg of a fold, mid-combat. Snappier than the intro's
+    /// ceremony; a chained tank-to-jet spends two of these.</summary>
+    const float MorphSeconds = 0.8f;
+
+    /// <summary>The chute: how fast a robot under canopy falls and drifts,
+    /// and how fast it walks once the canopy is cut.</summary>
+    const float ChuteFallSpeed = 4.5f;
+    const float ChuteDriftSpeed = 8f;
+    const float WalkSpeed = 3.5f;
+
+    const float TankDriveSpeed = 9f;
+    const float TankTurnSpeed = 110f;
+    const float TankFallAcceleration = 28f;
+    const float TankFallTerminal = 40f;
+
+    /// <summary>Where the deck is. The sky's ground slab tops out at zero.</summary>
+    const float GroundY = 0f;
 
     // ------------------------------------------------------------------- state
 
@@ -139,33 +140,81 @@ public class JetPawn : MonoBehaviour
     public EnergyShield Shield { get; private set; }
     public bool IsDown => Shield == null || Shield.IsDown;
 
-    /// <summary>Yaw right / pitch up, each -1..1. Cleared after use.</summary>
+    public Form CurrentForm { get; private set; } = Form.Jet;
+
+    /// <summary>Mid-fold: controls coast, guns are cold, the silhouette is
+    /// nobody's. The commitment that makes transforming a decision.</summary>
+    public bool Morphing => _morphQueue.Count > 0;
+
+    /// <summary>Yaw right / pitch up in jet form; turn / drive in tank form;
+    /// drift in robot form. Each -1..1, cleared after use.</summary>
     public Vector2 Steer { get; set; }
 
-    /// <summary>-1 brake toward <see cref="SpeedMin"/>, 0 cruise, +1 boost.
-    /// Cleared after use.</summary>
+    /// <summary>-1 brake, 0 cruise, +1 boost. Jet form only. Cleared after use.</summary>
     public float Throttle { get; set; }
 
     public bool Firing { get; set; }
 
-    /// <summary>Metres per second along the nose, for leading this jet.</summary>
+    /// <summary>Metres per second along the nose, jet form.</summary>
     public float Speed { get; private set; } = SpeedCruise;
 
-    public Vector3 Velocity => transform.forward * Speed;
+    public Vector3 Velocity
+    {
+        get
+        {
+            switch (CurrentForm)
+            {
+                case Form.Jet: return transform.forward * Speed;
+                case Form.Robot: return _airVelocity + Vector3.up * _verticalSpeed;
+                default: return Grounded
+                    ? transform.forward * _tankDrive * TankDriveSpeed
+                    : Vector3.up * _verticalSpeed;
+            }
+        }
+    }
 
-    /// <summary>Aim height — the middle of the airframe.</summary>
+    /// <summary>What the speed readout shows for this form.</summary>
+    public float ReadoutSpeed => Velocity.magnitude;
+
     public Vector3 Center => transform.position;
 
-    /// <summary>Where the chase camera's cockpit view sits.</summary>
-    public Vector3 CockpitAnchor =>
-        transform.position + transform.forward * (_halfLength * 0.35f) + transform.up * 0.5f;
+    public Vector3 CockpitAnchor
+    {
+        get
+        {
+            switch (CurrentForm)
+            {
+                case Form.Robot:
+                    return transform.position + transform.up * 1.1f + transform.forward * 0.3f;
+                case Form.Tank:
+                    return transform.position + Vector3.up * 1.2f + transform.forward * 0.4f;
+                default:
+                    return transform.position + transform.forward * (_halfLength * 0.35f)
+                           + transform.up * 0.5f;
+            }
+        }
+    }
 
-    /// <summary>The enemy the aim assist is holding this frame, for the HUD.</summary>
+    /// <summary>Where this pawn's nose — or its aim — points. What the lock
+    /// cone and the brains measure against, form-agnostic.</summary>
+    public Vector3 AimDirection
+    {
+        get
+        {
+            if (CurrentForm == Form.Jet || !_hasAim)
+                return transform.forward;
+            Vector3 to = _aimPoint - Center;
+            return to.sqrMagnitude > 1e-4f ? to.normalized : transform.forward;
+        }
+    }
+
+    /// <summary>On the deck (or near enough that flares should eject upward).</summary>
+    public bool Grounded { get; private set; }
+
     public JetPawn AssistTarget { get; private set; }
 
     public bool MissileReady => Time.time >= _missileReadyAt;
 
-    /// <summary>0 just fired → 1 ready, for the HUD's tube bar.</summary>
     public float MissileReadyFraction =>
         Mathf.Clamp01(1f - (_missileReadyAt - Time.time) / MissileCooldown);
 
@@ -177,6 +226,22 @@ public class JetPawn : MonoBehaviour
 
     public System.Action<JetPawn> OnWrecked;
 
+    /// <summary>One stop-motion set, fitted and parked under the model.</summary>
+    struct StageSet
+    {
+        public GameObject[] holders;
+        public Renderer[][] renderers;
+        public bool Exists => holders != null && holders.Length > 0;
+        public int Last => holders.Length - 1;
+    }
+
+    /// <summary>One leg of a morph: which set plays, and which way.</summary>
+    struct MorphLeg
+    {
+        public bool tankSet;
+        public bool reverse;
+    }
+
     float _yaw;
     float _pitch;
     float _roll;
@@ -187,14 +252,30 @@ public class JetPawn : MonoBehaviour
     float _downSince;
     bool _visible = true;
     Transform _model;
-    GameObject[] _stages;
-    Renderer[][] _stageRenderers;
+    StageSet _jetSet;
+    StageSet _tankSet;
+    bool _shownIsTank;
     int _shownStage = -1;
     float _halfLength = JetSize * 0.5f;
+    float _jetCapsuleRadius = 1f;
+    float _jetCapsuleHeight = 3.6f;
+    CapsuleCollider _capsule;
     LaserBlaster _gun;
     Transform _muzzle;
+    TankTurret _turret;
     TrailRenderer[] _trails;
+    GameObject _chute;
     bool _morphBurst;
+
+    readonly List<MorphLeg> _morphQueue = new List<MorphLeg>();
+    float _morphStart;
+    Form _morphTarget;
+
+    Vector3 _aimPoint;
+    bool _hasAim;
+    Vector3 _airVelocity;
+    float _verticalSpeed;
+    float _tankDrive;
 
     void OnEnable()
     {
@@ -210,54 +291,47 @@ public class JetPawn : MonoBehaviour
     // -------------------------------------------------------------------- birth
 
     /// <summary>
-    /// Build a jet and stand its robot form at <paramref name="position"/>.
+    /// Build a pawn and stand its robot form at <paramref name="position"/>.
     ///
-    /// <paramref name="stages"/> is the stop-motion set this pawn plays —
-    /// resolved by the mode rather than read off the entry, because a robot
-    /// that has not been through the jet pipeline yet borrows the ranger's
-    /// airframe in its own team paint. A null or one-stage set skips the
-    /// ceremony and is born already a jet (or, with no models at all, a lit
-    /// block with wings — a missing model must never blank a fighter).
+    /// <paramref name="jetStages"/> is resolved by the mode (a robot that has
+    /// not been through the jet pipeline borrows the ranger's airframe); the
+    /// TANK set comes off the entry itself, because every robot in the fleet
+    /// has been through the tank pipeline in its own body.
     /// </summary>
-    public static JetPawn Spawn(RobotRoster.Entry entry, GameObject[] stages, int teamId,
+    public static JetPawn Spawn(RobotRoster.Entry entry, GameObject[] jetStages, int teamId,
         Vector3 position, float yaw, float maxShield)
     {
         // Born at IDENTITY rotation and turned onto its spawn yaw only after
-        // the body is built: the stages are measured through world-space
-        // renderer bounds, and a root already yawed to face its enemy would
-        // smear wingspan into length in every box measured under it.
+        // the bodies are built — see the class note on world-space fitting.
         var go = new GameObject($"JetPawn_{teamId}");
         go.transform.position = position;
 
-        // Built while the object is live: fitting a generated model means
-        // measuring it, and renderer bounds on a deactivated hierarchy are not
-        // numbers to bet an airframe's scale on.
         Color tint = MatchAnnouncer.TeamColor(teamId);
-        BuildStages(go.transform, stages, tint, entry.paintAnchorHue,
-            out var model, out var stageInstances, out var box);
+        var jet = go.AddComponent<JetPawn>();
+        jet._model = new GameObject("Model").transform;
+        jet._model.SetParent(go.transform, false);
+
+        jet._jetSet = BuildSet(jet._model, jetStages, tint, entry.paintAnchorHue,
+            _ => StageYaw, out var jetBox);
+        if (!jet._jetSet.Exists)
+            jet._jetSet = BlockJetSet(jet._model, tint, out jetBox);
+        // The tank set's yaw is measured off its own stage8 barrel markers —
+        // TankPawn's answer, for TankPawn's reason: nothing generated agrees
+        // about forward, but a tank at rest points its gun over its nose.
+        jet._tankSet = BuildSet(jet._model, entry.HasStages ? entry.transformStages : null,
+            tint, entry.paintAnchorHue,
+            instance => TankPawn.NoseYaw(jet._model, instance, 90f), out _);
+
+        jet.Team = teamId;
+        jet._yaw = yaw;
+        jet._halfLength = Mathf.Max(1f, jetBox.extents.z);
+        jet._jetCapsuleRadius = Mathf.Clamp(jetBox.extents.x * 0.55f, 0.8f, 1.4f);
+        jet._jetCapsuleHeight = Mathf.Max(jetBox.size.z * 1.1f, jet._jetCapsuleRadius * 2.2f);
 
         go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         go.SetActive(false);
 
-        var jet = go.AddComponent<JetPawn>();
-        jet.Team = teamId;
-        jet._yaw = yaw;
-        jet._model = model;
-        jet._stages = stageInstances;
-        jet._stageRenderers = new Renderer[stageInstances.Length][];
-        for (int i = 0; i < stageInstances.Length; i++)
-            jet._stageRenderers[i] = stageInstances[i].GetComponentsInChildren<Renderer>(true);
-        jet._halfLength = Mathf.Max(1f, box.extents.z);
-
-        // What bullets hit: a capsule along the fuselage, radius just over half
-        // the wingspan's middle — sized so shots that visibly pass a wingtip
-        // miss, on the Default layer and non-trigger because that is what every
-        // bolt in this project raycasts against.
-        var capsule = go.AddComponent<CapsuleCollider>();
-        capsule.direction = 2;
-        capsule.radius = Mathf.Clamp(box.extents.x * 0.55f, 0.8f, 1.4f);
-        capsule.height = Mathf.Max(box.size.z * 1.1f, capsule.radius * 2.2f);
-        capsule.center = Vector3.zero;
+        jet._capsule = go.AddComponent<CapsuleCollider>();
 
         jet.Shield = go.AddComponent<EnergyShield>();
         jet.Shield.maxShield = maxShield;
@@ -265,12 +339,9 @@ public class JetPawn : MonoBehaviour
         jet.Shield.regenDelay = 4f;
         jet.Shield.regenPerSecond = 8f;
 
-        // The muzzle rides the nose; the gun is TankArsenal's cannon idea wound
-        // up to a fighter's cadence, set before Awake ever runs (the host is
-        // inactive) so the weapon latches team and muzzle correctly.
         jet._muzzle = new GameObject("JetMuzzle").transform;
         jet._muzzle.SetParent(go.transform, false);
-        jet._muzzle.localPosition = new Vector3(0f, 0f, box.extents.z + 0.25f);
+        jet._muzzle.localPosition = new Vector3(0f, 0f, jetBox.extents.z + 0.25f);
         jet._gun = go.AddComponent<LaserBlaster>();
         jet._gun.weaponName = "Photon Cannon";
         jet._gun.muzzle = jet._muzzle;
@@ -281,11 +352,19 @@ public class JetPawn : MonoBehaviour
         jet._gun.boltSpeed = GunBoltSpeed;
         jet._gun.range = GunRange;
 
-        jet._trails = BuildTrails(go.transform, box, tint);
+        // The turret servo waits, disabled, for the tank fold to land —
+        // TankTurret's own contract ("runs only while its character is
+        // actually a tank").
+        jet._turret = go.AddComponent<TankTurret>();
+        jet._turret.enabled = false;
+
+        jet._trails = BuildTrails(go.transform, jetBox, tint);
+        jet.BuildChute(tint);
 
         go.SetActive(true);
         jet.Shield.OnDeRezzed += jet.HandleDeRez;
-        jet.ShowStage(0);
+        jet.ApplyFormFit(Form.Jet);
+        jet.ShowStage(false, 0);
         return jet;
     }
 
@@ -296,36 +375,31 @@ public class JetPawn : MonoBehaviour
     }
 
     /// <summary>
-    /// Instantiate and fit every stage under one Model holder.
-    ///
-    /// Each stage is fitted to <see cref="JetSize"/> on its own largest
-    /// dimension and centred on its bounds — the flight pivot — with one
-    /// <see cref="StageYaw"/> turn applied BEFORE anything is measured, because
-    /// a rotation after the fit moves the mesh off the centring solved for it.
-    /// Returns the JET stage's bounds (the last one): the collider, muzzle and
-    /// trails all describe the jet, not the robot it starts as.
+    /// Instantiate and fit one stop-motion set. Each stage is fitted to
+    /// <see cref="JetSize"/> on its own largest dimension and centred on its
+    /// bounds — the flight pivot — with its yaw applied BEFORE anything is
+    /// measured, because a rotation after the fit moves the mesh off the
+    /// centring solved for it. Returns the LAST stage's bounds through
+    /// <paramref name="finalBox"/> (the jet or the tank — the fighting shape).
     /// </summary>
-    static void BuildStages(Transform root, GameObject[] stages, Color tint, float anchorHue,
-        out Transform model, out GameObject[] instances, out Bounds jetBox)
+    static StageSet BuildSet(Transform model, GameObject[] stages, Color tint, float anchorHue,
+        System.Func<Transform, float> yawFor, out Bounds finalBox)
     {
-        model = new GameObject("Model").transform;
-        model.SetParent(root, false);
-
+        finalBox = new Bounds(Vector3.zero, Vector3.one * JetSize);
         if (stages == null || stages.Length == 0)
-        {
-            instances = new[] { BuildBlockJet(model, tint) };
-            jetBox = new Bounds(Vector3.zero, new Vector3(JetSize, 1f, JetSize * 0.9f));
-            return;
-        }
+            return default;
 
-        instances = new GameObject[stages.Length];
-        jetBox = new Bounds(Vector3.zero, Vector3.one * JetSize);
+        var set = new StageSet
+        {
+            holders = new GameObject[stages.Length],
+            renderers = new Renderer[stages.Length][],
+        };
         for (int i = 0; i < stages.Length; i++)
         {
             var holder = new GameObject($"Stage{i + 1}").transform;
             holder.SetParent(model, false);
             var instance = Object.Instantiate(stages[i], holder);
-            instance.transform.localRotation = Quaternion.Euler(0f, StageYaw, 0f);
+            instance.transform.localRotation = Quaternion.Euler(0f, yawFor(instance.transform), 0f);
 
             var renderers = instance.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length > 0)
@@ -338,18 +412,21 @@ public class JetPawn : MonoBehaviour
                 instance.transform.position += holder.position - fitted.center;
 
                 TeamPaint.Apply(renderers, tint, 0, false, anchorHue);
-                // World box == local box here: the root is still at identity
-                // while bodies are built (see Spawn).
                 if (i == stages.Length - 1)
-                    jetBox = new Bounds(Vector3.zero, fitted.size);
+                    finalBox = new Bounds(Vector3.zero, fitted.size);
             }
-            instances[i] = holder.gameObject;
+            set.holders[i] = holder.gameObject;
+            set.renderers[i] = renderers;
+            // Start dark; ShowStage lights exactly one.
+            foreach (var renderer in renderers)
+                renderer.enabled = false;
         }
+        return set;
     }
 
-    /// <summary>Last resort: a lit slab with wings, so a roster with no jet
-    /// models anywhere still dogfights.</summary>
-    static GameObject BuildBlockJet(Transform model, Color tint)
+    /// <summary>Last resort: a one-stage set holding a lit slab with wings,
+    /// so a roster with no jet models anywhere still dogfights.</summary>
+    static StageSet BlockJetSet(Transform model, Color tint, out Bounds box)
     {
         var holder = new GameObject("Stage1").transform;
         holder.SetParent(model, false);
@@ -370,12 +447,15 @@ public class JetPawn : MonoBehaviour
         wing.transform.localScale = new Vector3(JetSize, 0.12f, 1.1f);
         wing.transform.localPosition = new Vector3(0f, 0f, -0.3f);
         wing.GetComponent<MeshRenderer>().sharedMaterial = material;
-        return holder.gameObject;
+
+        box = new Bounds(Vector3.zero, new Vector3(JetSize, 0.6f, JetSize * 0.9f));
+        return new StageSet
+        {
+            holders = new[] { holder.gameObject },
+            renderers = new[] { holder.GetComponentsInChildren<Renderer>(true) },
+        };
     }
 
-    /// <summary>Wingtip contrails in the team's colour. What makes a turning
-    /// fight readable from the broadcast camera — and from the cockpit mirror
-    /// of whoever is being chased.</summary>
     static TrailRenderer[] BuildTrails(Transform root, Bounds box, Color tint)
     {
         var trails = new TrailRenderer[2];
@@ -397,17 +477,201 @@ public class JetPawn : MonoBehaviour
         return trails;
     }
 
+    /// <summary>The glide canopy: a squashed dome on four cords, in team
+    /// colour, hidden until a robot is actually hanging from it.</summary>
+    void BuildChute(Color tint)
+    {
+        _chute = new GameObject("Chute");
+        _chute.transform.SetParent(transform, false);
+        _chute.transform.localPosition = new Vector3(0f, 2.6f, 0f);
+
+        var canopy = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Destroy(canopy.GetComponent<Collider>());
+        canopy.name = "Canopy";
+        canopy.transform.SetParent(_chute.transform, false);
+        canopy.transform.localScale = new Vector3(3.6f, 1.2f, 3.6f);
+        canopy.GetComponent<MeshRenderer>().sharedMaterial = ArenaMaterials.Lit(
+            $"dogfight-chute-{ColorUtility.ToHtmlStringRGB(tint)}",
+            Color.Lerp(tint, Color.white, 0.35f), 0.3f);
+
+        var cordMaterial = ArenaMaterials.Lit("dogfight-chute-cord",
+            new Color(0.85f, 0.88f, 0.92f), 0.2f);
+        for (int i = 0; i < 4; i++)
+        {
+            var cord = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(cord.GetComponent<Collider>());
+            cord.name = "Cord";
+            cord.transform.SetParent(_chute.transform, false);
+            float x = (i % 2 == 0 ? -1f : 1f) * 1.1f;
+            float z = (i < 2 ? -1f : 1f) * 1.1f;
+            cord.transform.localScale = new Vector3(0.03f, 1.3f, 0.03f);
+            cord.transform.localPosition = new Vector3(x * 0.55f, -1.3f, z * 0.55f);
+            cord.transform.localRotation = Quaternion.FromToRotation(
+                Vector3.up, new Vector3(x * 0.4f, 2.4f, z * 0.4f).normalized);
+            cord.GetComponent<MeshRenderer>().sharedMaterial = cordMaterial;
+        }
+        _chute.SetActive(false);
+    }
+
+    // ---------------------------------------------------------------- the forms
+
+    /// <summary>The player's T: the triangle in one direction. Jet unfolds to
+    /// the chute; the robot folds down into the tank; the tank re-folds all
+    /// the way back into the sky.</summary>
+    public void RequestNextForm()
+    {
+        switch (CurrentForm)
+        {
+            case Form.Jet: RequestForm(Form.Robot); break;
+            case Form.Robot: RequestForm(Form.Tank); break;
+            default: RequestForm(Form.Jet); break;
+        }
+    }
+
+    /// <summary>Queue the fold(s) to <paramref name="target"/>. Refused while
+    /// down, already folding, or before launch; a target with no stage set to
+    /// express it (a roster entry with no tank fold) is refused the same way.</summary>
+    public bool RequestForm(Form target)
+    {
+        if (_down || !FlightOn || Morphing || target == CurrentForm)
+            return false;
+        if ((target == Form.Tank || CurrentForm == Form.Tank) && !_tankSet.Exists)
+            return false;
+        if ((target == Form.Jet || CurrentForm == Form.Jet) && !_jetSet.Exists)
+            return false;
+
+        _morphQueue.Clear();
+        switch (CurrentForm)
+        {
+            case Form.Jet:
+                _morphQueue.Add(new MorphLeg { tankSet = false, reverse = true });
+                if (target == Form.Tank)
+                    _morphQueue.Add(new MorphLeg { tankSet = true, reverse = false });
+                break;
+            case Form.Robot:
+                _morphQueue.Add(target == Form.Tank
+                    ? new MorphLeg { tankSet = true, reverse = false }
+                    : new MorphLeg { tankSet = false, reverse = false });
+                break;
+            default:
+                _morphQueue.Add(new MorphLeg { tankSet = true, reverse = true });
+                if (target == Form.Jet)
+                    _morphQueue.Add(new MorphLeg { tankSet = false, reverse = false });
+                break;
+        }
+        _morphTarget = target;
+        _morphStart = Time.time;
+        _morphBurst = false;
+
+        // Leaving a form puts its furniture away before the fold plays.
+        _turret.enabled = false;
+        _gun.muzzle = _muzzle;
+        SetChuteVisible(false);
+        foreach (var trail in _trails)
+            trail.emitting = false;
+        // The fold coasts on whatever motion it had; seed the fall state from
+        // the form being left so a jet that folds mid-air starts dropping.
+        if (CurrentForm == Form.Jet)
+        {
+            _airVelocity = new Vector3(Velocity.x, 0f, Velocity.z) * 0.5f;
+            _verticalSpeed = Mathf.Min(0f, Velocity.y);
+        }
+        return true;
+    }
+
+    void AdvanceMorph(float dt)
+    {
+        var leg = _morphQueue[0];
+        var set = leg.tankSet ? _tankSet : _jetSet;
+        float progress = Mathf.Clamp01((Time.time - _morphStart) / MorphSeconds);
+        float shown = leg.reverse ? 1f - progress : progress;
+        ShowStage(leg.tankSet,
+            Mathf.Clamp(Mathf.FloorToInt(shown * (set.Last + 1)), 0, set.Last));
+
+        if (!_morphBurst && progress >= 0.42f)
+        {
+            _morphBurst = true;
+            VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.1f);
+        }
+
+        if (progress < 1f)
+            return;
+
+        _morphQueue.RemoveAt(0);
+        _morphStart = Time.time;
+        _morphBurst = false;
+        if (_morphQueue.Count > 0)
+            return;
+
+        ArriveIn(_morphTarget);
+    }
+
+    /// <summary>The fold has landed: dress the new form and hand it its
+    /// physics state.</summary>
+    void ArriveIn(Form form)
+    {
+        CurrentForm = form;
+        ApplyFormFit(form);
+        switch (form)
+        {
+            case Form.Jet:
+                ShowStage(false, _jetSet.Last);
+                Speed = Grounded ? SpeedMin : Mathf.Max(SpeedMin, _airVelocity.magnitude);
+                _pitch = 0f;
+                _roll = 0f;
+                break;
+            case Form.Robot:
+                ShowStage(_tankSet.Exists, 0);
+                SetChuteVisible(!Grounded);
+                break;
+            default:
+                ShowStage(true, _tankSet.Last);
+                _turret.enabled = true;
+                _gun.muzzle = _turret.Muzzle;
+                break;
+        }
+    }
+
+    /// <summary>Collider per form: a fuselage, a standing figure, a hull.</summary>
+    void ApplyFormFit(Form form)
+    {
+        switch (form)
+        {
+            case Form.Robot:
+                _capsule.direction = 1;
+                _capsule.radius = 0.8f;
+                _capsule.height = 3.2f;
+                break;
+            case Form.Tank:
+                _capsule.direction = 2;
+                _capsule.radius = 1.1f;
+                _capsule.height = 3.2f;
+                break;
+            default:
+                _capsule.direction = 2;
+                _capsule.radius = _jetCapsuleRadius;
+                _capsule.height = _jetCapsuleHeight;
+                break;
+        }
+        _capsule.center = Vector3.zero;
+    }
+
+    void SetChuteVisible(bool visible)
+    {
+        if (_chute == null || _chute.activeSelf == visible)
+            return;
+        if (!visible && _chute.activeSelf)
+            VfxUtil.SpawnBurst(_chute.transform.position, new Color(0.8f, 0.9f, 1f), 8, 3f, 0.1f);
+        _chute.SetActive(visible);
+    }
+
     // ------------------------------------------------------------ the ceremony
 
-    /// <summary>
-    /// Drive the stop-motion fold: 0 shows the standing robot, 1 the jet, with
-    /// the swap burst at TransformMode's 42% — the shared vocabulary every
-    /// morph in this project speaks.
-    /// </summary>
+    /// <summary>The intro fold (jet set, forward), driven by the mode.</summary>
     public void ShowMorph(float progress)
     {
-        int last = _stages.Length - 1;
-        ShowStage(Mathf.Clamp(Mathf.FloorToInt(progress * (last + 1)), 0, last));
+        int last = _jetSet.Last;
+        ShowStage(false, Mathf.Clamp(Mathf.FloorToInt(progress * (last + 1)), 0, last));
         if (!_morphBurst && progress >= 0.42f)
         {
             _morphBurst = true;
@@ -415,46 +679,62 @@ public class JetPawn : MonoBehaviour
         }
     }
 
-    public void ShowStage(int index)
+    void ShowStage(bool tankSet, int index)
     {
-        index = Mathf.Clamp(index, 0, _stages.Length - 1);
-        if (index == _shownStage)
+        var set = tankSet ? _tankSet : _jetSet;
+        if (!set.Exists)
             return;
-        _shownStage = index;
-        for (int i = 0; i < _stageRenderers.Length; i++)
-        {
-            bool on = i == index && _visible;
-            foreach (var renderer in _stageRenderers[i])
+        index = Mathf.Clamp(index, 0, set.Last);
+        if (index == _shownStage && tankSet == _shownIsTank)
+            return;
+
+        var old = _shownIsTank ? _tankSet : _jetSet;
+        if (old.Exists && _shownStage >= 0)
+            foreach (var renderer in old.renderers[_shownStage])
                 if (renderer != null)
-                    renderer.enabled = on;
-        }
+                    renderer.enabled = false;
+
+        _shownIsTank = tankSet;
+        _shownStage = index;
+        foreach (var renderer in set.renderers[index])
+            if (renderer != null)
+                renderer.enabled = _visible;
     }
 
-    /// <summary>Jump straight to jet form — pawns whose robot never got a jet
-    /// pipeline run, and every respawn.</summary>
-    public void ShowJet() => ShowStage(_stages.Length - 1);
+    /// <summary>Jump straight to jet form — the intro's skip for stage-less
+    /// pawns, and every respawn.</summary>
+    public void ShowJet() => ShowStage(false, _jetSet.Exists ? _jetSet.Last : 0);
 
-    public bool HasMorph => _stages != null && _stages.Length > 1;
+    public bool HasMorph => _jetSet.Exists && _jetSet.holders.Length > 1;
 
-    /// <summary>Hidden in the cockpit view (a canopy over the camera is a
-    /// windscreen made of your own head) and blinked by the spawn grace.</summary>
     public void SetVisible(bool visible)
     {
         if (_visible == visible)
             return;
         _visible = visible;
-        int shown = _shownStage;
-        _shownStage = -1;
-        ShowStage(shown);
+        var set = _shownIsTank ? _tankSet : _jetSet;
+        if (set.Exists && _shownStage >= 0)
+            foreach (var renderer in set.renderers[_shownStage])
+                if (renderer != null)
+                    renderer.enabled = visible;
     }
 
     // -------------------------------------------------------------- every frame
+
+    /// <summary>Track a world point — the free aim of the robot and tank
+    /// forms, TankPawn's own contract. Jets ignore it; their gun is their nose.</summary>
+    public void AimAt(Vector3 worldPoint)
+    {
+        _aimPoint = worldPoint;
+        _hasAim = true;
+    }
 
     void Update()
     {
         if (_down)
         {
-            Tumble();
+            if (!Grounded)
+                Tumble();
             return;
         }
         if (!FlightOn)
@@ -466,17 +746,59 @@ public class JetPawn : MonoBehaviour
         }
 
         float dt = Time.deltaTime;
+
+        if (_flareCharges < FlareChargesMax && Time.time >= _flareRechargeAt)
+        {
+            _flareCharges++;
+            _flareRechargeAt = Time.time + FlareRechargeSeconds;
+        }
+
+        if (Morphing)
+        {
+            Steer = Vector2.zero;
+            Throttle = 0f;
+            Firing = false;
+            AdvanceMorph(dt);
+            CoastFall(dt);
+            return;
+        }
+
+        switch (CurrentForm)
+        {
+            case Form.Jet: FlyJet(dt); break;
+            case Form.Robot: MoveRobot(dt); break;
+            default: MoveTank(dt); break;
+        }
+
+        PullTrigger();
+        Firing = false;
+        _hasAim = false;
+    }
+
+    /// <summary>Mid-fold physics: fall, gently, and land if the deck arrives
+    /// before the new shape does.</summary>
+    void CoastFall(float dt)
+    {
+        if (Grounded)
+            return;
+        _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, -9f, 16f * dt);
+        _airVelocity = Vector3.MoveTowards(_airVelocity, Vector3.zero, 6f * dt);
+        transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
+        TouchDownCheck(1.2f);
+    }
+
+    void FlyJet(float dt)
+    {
+        Grounded = false;
         Vector2 steer = Vector2.ClampMagnitude(Steer, 1.4f);
         float throttle = Mathf.Clamp(Throttle, -1f, 1f);
-        Steer = Vector2.zero;                       // see the property docs
+        Steer = Vector2.zero;
         Throttle = 0f;
 
         steer = DogfightSky.SteerAssist(transform.position, transform.forward, steer);
 
         _yaw += steer.x * YawRate * dt;
         _pitch = Mathf.Clamp(_pitch + steer.y * PitchRate * dt, -PitchLimit, PitchLimit);
-        // With the stick centred the nose eases back toward the horizon — the
-        // auto-level that makes "let go to fly straight" true.
         if (Mathf.Abs(steer.y) < 0.05f)
             _pitch = Mathf.MoveTowards(_pitch, 0f, 14f * dt);
         _roll = Mathf.Lerp(_roll, -steer.x * BankDegrees, 1f - Mathf.Exp(-6f * dt));
@@ -489,38 +811,200 @@ public class JetPawn : MonoBehaviour
         Speed = Mathf.MoveTowards(Speed, wanted, Acceleration * dt);
         transform.position += transform.forward * (Speed * dt);
         transform.position = DogfightSky.KeepOffProps(transform.position, 1.2f);
+        // The floor assist steers a jet up long before this matters; the
+        // clamp is the net under the net (a jet re-folding off the deck
+        // starts far below the assist's whole band).
+        if (transform.position.y < 1f)
+            transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
 
         foreach (var trail in _trails)
             trail.emitting = true;
+    }
 
-        // The pocket refills one burst at a time, only in flight.
-        if (_flareCharges < FlareChargesMax && Time.time >= _flareRechargeAt)
+    /// <summary>The robot: under canopy it drifts where it is steered and
+    /// falls at a walk; on the deck it walks. Either way it faces its aim —
+    /// the whole point of being the fragile form is the free gun.</summary>
+    void MoveRobot(float dt)
+    {
+        Vector2 steer = Vector2.ClampMagnitude(Steer, 1f);
+        Steer = Vector2.zero;
+        Throttle = 0f;
+
+        // Face the aim, not the walk — a gunner backpedals.
+        Vector3 face = AimDirection;
+        face.y = 0f;
+        if (face.sqrMagnitude > 1e-4f)
         {
-            _flareCharges++;
-            _flareRechargeAt = Time.time + FlareRechargeSeconds;
+            float wantYaw = Quaternion.LookRotation(face.normalized, Vector3.up).eulerAngles.y;
+            _yaw = Mathf.MoveTowardsAngle(_yaw, wantYaw, 220f * dt);
+        }
+        _pitch = Mathf.MoveTowards(_pitch, 0f, 90f * dt);
+        _roll = Mathf.MoveTowards(_roll, 0f, 120f * dt);
+        transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
+
+        Vector3 drift = Quaternion.Euler(0f, _yaw, 0f) * new Vector3(steer.x, 0f, steer.y);
+        if (!Grounded)
+        {
+            _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, -ChuteFallSpeed, 8f * dt);
+            _airVelocity = Vector3.MoveTowards(_airVelocity, drift * ChuteDriftSpeed, 10f * dt);
+            transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
+            SwayChute(dt);
+            if (TouchDownCheck(1.7f))
+                SetChuteVisible(false);
+        }
+        else
+        {
+            transform.position += drift * (WalkSpeed * dt);
+            transform.position = new Vector3(transform.position.x, GroundY + 1.7f,
+                transform.position.z);
+        }
+        transform.position = DogfightSky.KeepOffProps(transform.position, 0.9f);
+    }
+
+    /// <summary>The tank: ballistic until the deck, then a hull that turns
+    /// and drives while the turret argues with the sky on its own.</summary>
+    void MoveTank(float dt)
+    {
+        Vector2 steer = Vector2.ClampMagnitude(Steer, 1f);
+        Steer = Vector2.zero;
+        Throttle = 0f;
+        _tankDrive = steer.y;
+
+        _pitch = Mathf.MoveTowards(_pitch, 0f, 120f * dt);
+        _roll = Mathf.MoveTowards(_roll, 0f, 120f * dt);
+
+        if (!Grounded)
+        {
+            // A falling tank is a promise, not a vehicle.
+            _verticalSpeed = Mathf.Max(-TankFallTerminal,
+                _verticalSpeed - TankFallAcceleration * dt);
+            transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
+            _airVelocity = Vector3.MoveTowards(_airVelocity, Vector3.zero, 4f * dt);
+            transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
+            if (TouchDownCheck(1.1f))
+            {
+                VfxUtil.SpawnBurst(transform.position + Vector3.down * 0.6f,
+                    new Color(0.7f, 0.65f, 0.55f), 18, 5f, 0.16f);
+            }
+            return;
         }
 
-        PullTrigger();
-        Firing = false;
+        _yaw += steer.x * TankTurnSpeed * dt;
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        transform.position += transform.forward * (_tankDrive * TankDriveSpeed * dt);
+        transform.position = new Vector3(transform.position.x, GroundY + 1.1f,
+            transform.position.z);
+        transform.position = DogfightSky.KeepOffProps(transform.position, 1.4f);
+
+        // Hold the deck: the fence is for jets; a tank just runs out of road.
+        Vector3 flat = new Vector3(transform.position.x, 0f, transform.position.z);
+        float reach = DogfightSky.Radius - 6f;
+        if (flat.magnitude > reach)
+        {
+            flat = flat.normalized * reach;
+            transform.position = new Vector3(flat.x, transform.position.y, flat.z);
+        }
+
+        if (_hasAim)
+            _turret.AimAt(_aimPoint);
+    }
+
+    /// <summary>Common landing test. True on the frame the deck arrives.</summary>
+    bool TouchDownCheck(float rideHeight)
+    {
+        if (transform.position.y > GroundY + rideHeight)
+            return false;
+        transform.position = new Vector3(transform.position.x, GroundY + rideHeight,
+            transform.position.z);
+        _verticalSpeed = 0f;
+        _airVelocity = Vector3.zero;
+        Grounded = true;
+        return true;
+    }
+
+    void SwayChute(float dt)
+    {
+        if (_chute == null || !_chute.activeSelf)
+            return;
+        Vector3 lean = transform.InverseTransformVector(_airVelocity);
+        _chute.transform.localRotation = Quaternion.Slerp(_chute.transform.localRotation,
+            Quaternion.Euler(lean.z * 3.5f + Mathf.Sin(Time.time * 1.7f) * 4f, 0f,
+                -lean.x * 3.5f + Mathf.Cos(Time.time * 1.3f) * 4f),
+            1f - Mathf.Exp(-4f * dt));
+    }
+
+    // ------------------------------------------------------------------ the gun
+
+    /// <summary>
+    /// Fire this form's gun. Jets shoot along the nose through the assist
+    /// cone; robots and tanks shoot at their aim point, with the same lead
+    /// assist when an enemy sits near that line — and a tank's shot waits for
+    /// its turret to actually arrive, because a hull firing across its own
+    /// barrel reads as a bug (TankTurret's gate, TankTurret's reason).
+    /// </summary>
+    void PullTrigger()
+    {
+        AssistTarget = null;
+        Vector3 origin = _gun.muzzle != null ? _gun.muzzle.position : Center;
+        Vector3 direction;
+        if (CurrentForm == Form.Jet)
+        {
+            direction = transform.forward;
+        }
+        else if (_hasAim)
+        {
+            direction = (_aimPoint - origin).normalized;
+        }
+        else
+        {
+            return;
+        }
+
+        var target = NearestEnemy(transform.position, Team, AssistRange);
+        if (target != null)
+        {
+            Vector3 gap = target.Center - origin;
+            float seconds = gap.magnitude / GunBoltSpeed;
+            Vector3 predicted = target.Center + target.Velocity * seconds - origin;
+            if (Vector3.Angle(direction, predicted) <= AssistDegrees)
+            {
+                direction = predicted.normalized;
+                AssistTarget = target;
+            }
+        }
+
+        if (!Firing)
+            return;
+        if (CurrentForm == Form.Tank && _turret.HasTurret && !_turret.OnTarget)
+            return;
+        _gun.TryFire(direction);
     }
 
     // ---------------------------------------------------------------- ordnance
 
-    /// <summary>Put a locked missile in the air. False when the tube is
-    /// cold, the jet is down, or there is nothing locked to give it.</summary>
+    /// <summary>Put a locked missile in the air — from any form; the tank's
+    /// rise off the turret is the whole anti-air promise. Aimed at the lock
+    /// itself so the homing only has to finish the job.</summary>
     public bool TryFireMissile(Transform lockRoot)
     {
-        if (!MissileReady || IsDown || !FlightOn || lockRoot == null)
+        if (!MissileReady || IsDown || !FlightOn || Morphing || lockRoot == null)
             return false;
         _missileReadyAt = Time.time + MissileCooldown;
-        Vector3 from = Center - transform.up * 0.45f + transform.forward * 1.0f;
-        DogfightMissile.Launch(from, transform.forward, Team, transform, lockRoot,
+        Vector3 from = CurrentForm == Form.Jet
+            ? Center - transform.up * 0.45f + transform.forward * 1.0f
+            : Center + Vector3.up * 1.4f;
+        var shield = lockRoot.GetComponent<EnergyShield>();
+        Vector3 at = shield != null ? WeaponUtil.Center(shield) : lockRoot.position;
+        Vector3 direction = (at - from).sqrMagnitude > 1e-4f
+            ? (at - from).normalized
+            : AimDirection;
+        DogfightMissile.Launch(from, direction, Team, transform, lockRoot,
             DogfightMissile.Flavor.Jet);
         return true;
     }
 
-    /// <summary>Spend one burst of flares. The recharge clock starts on the
-    /// spend that leaves the pocket short, and keeps its place otherwise.</summary>
+    /// <summary>Spend one burst of flares. Grounded forms eject upward —
+    /// magnesium into the deck helps nobody.</summary>
     public bool TryPopFlares()
     {
         if (IsDown || !FlightOn || _flareCharges <= 0)
@@ -530,32 +1014,6 @@ public class JetPawn : MonoBehaviour
         _flareCharges--;
         DogfightFlare.Pop(this);
         return true;
-    }
-
-    /// <summary>
-    /// Fire along the nose — through the assist when an enemy sits inside its
-    /// cone. The assist aims at the target's LED future position, so landing
-    /// hits still means being behind someone, pointed the right way.
-    /// </summary>
-    void PullTrigger()
-    {
-        AssistTarget = null;
-        var target = NearestEnemy(transform.position, Team, AssistRange);
-        Vector3 direction = transform.forward;
-        if (target != null)
-        {
-            Vector3 gap = target.Center - _muzzle.position;
-            float seconds = gap.magnitude / GunBoltSpeed;
-            Vector3 predicted = target.Center + target.Velocity * seconds - _muzzle.position;
-            if (Vector3.Angle(transform.forward, predicted) <= AssistDegrees)
-            {
-                direction = predicted.normalized;
-                AssistTarget = target;
-            }
-        }
-
-        if (Firing)
-            _gun.TryFire(direction);
     }
 
     // ------------------------------------------------------------------- death
@@ -569,12 +1027,15 @@ public class JetPawn : MonoBehaviour
         Firing = false;
         foreach (var trail in _trails)
             trail.emitting = false;
+        SetChuteVisible(false);
+        _turret.enabled = false;
         VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.6f);
         OnWrecked?.Invoke(this);
     }
 
-    /// <summary>A dying jet falls out of the fight rather than blinking away —
-    /// the spiral is the broadcast shot, and the beat the respawn clock buys.</summary>
+    /// <summary>A dying flier falls out of the fight; a dying tank or
+    /// grounded robot just burns where it stands. Either way the respawn
+    /// clock is already running.</summary>
     void Tumble()
     {
         float dt = Time.deltaTime;
@@ -589,8 +1050,8 @@ public class JetPawn : MonoBehaviour
             VfxUtil.SpawnBurst(Center, new Color(1f, 0.6f, 0.25f), 4, 3f, 0.14f);
     }
 
-    /// <summary>Back on the spawn ring: airframe whole, gun live, nose level,
-    /// pocket full, tube warming.</summary>
+    /// <summary>Back on the spawn ring, always as a jet: airframe whole, gun
+    /// live, nose level, pocket full, tube warming.</summary>
     public void Respawn(Vector3 position, float yaw)
     {
         _down = false;
@@ -599,6 +1060,15 @@ public class JetPawn : MonoBehaviour
         _roll = 0f;
         _flareCharges = FlareChargesMax;
         _missileReadyAt = Time.time + 1.5f;
+        _morphQueue.Clear();
+        CurrentForm = Form.Jet;
+        Grounded = false;
+        _verticalSpeed = 0f;
+        _airVelocity = Vector3.zero;
+        _turret.enabled = false;
+        _gun.muzzle = _muzzle;
+        SetChuteVisible(false);
+        ApplyFormFit(Form.Jet);
         Speed = SpeedCruise;
         transform.position = position;
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);

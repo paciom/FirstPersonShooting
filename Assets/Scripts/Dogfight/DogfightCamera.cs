@@ -107,7 +107,8 @@ public class DogfightCamera : MonoBehaviour
             : Vector3.zero;
 
         var jet = Subject.transform;
-        float speedNorm = Mathf.InverseLerp(JetPawn.SpeedMin, JetPawn.SpeedBoost, Subject.Speed);
+        float speedNorm = Mathf.InverseLerp(JetPawn.SpeedMin, JetPawn.SpeedBoost,
+            Subject.ReadoutSpeed);
         _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView,
             Mathf.Lerp(BaseFov, BoostFov, speedNorm), 1f - Mathf.Exp(-4f * dt));
 

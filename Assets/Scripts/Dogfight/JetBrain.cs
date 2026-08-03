@@ -79,6 +79,7 @@ public class JetBrain : MonoBehaviour
     float _jitterDegrees;   // honest aim smear
     float _helixPhase;      // where this pilot is in its climb-dive weave
     float _flareDelay;      // hand-to-button time under threat
+    float _groundAffinity;  // how much this pilot likes fighting off the deck
 
     // ------------------------------------------------------------------- state
 
@@ -100,6 +101,9 @@ public class JetBrain : MonoBehaviour
     float _coneHeldSince = -1f;
     float _missileAt;
 
+    float _phaseCheckAt;
+    float _phaseUntil;
+
     void Awake()
     {
         // The personality roll. Ranges chosen so the worst draw is still a
@@ -109,13 +113,15 @@ public class JetBrain : MonoBehaviour
         _jitterDegrees = Random.Range(2f, 3.2f);
         _helixPhase = Random.Range(0f, Mathf.PI * 2f);
         _flareDelay = Random.Range(0.25f, 0.45f);
+        _groundAffinity = Random.Range(0.4f, 1f);
         _missileAt = Time.time + Random.Range(4f, 9f);
         _cutCooldownUntil = Time.time + Random.Range(3f, 8f);
+        _phaseCheckAt = Time.time + Random.Range(8f, 16f);
     }
 
     void Update()
     {
-        if (pawn == null || pawn.IsDown || !pawn.FlightOn)
+        if (pawn == null || pawn.IsDown || !pawn.FlightOn || pawn.Morphing)
         {
             _threat = null;
             _coneHeldSince = -1f;
@@ -126,6 +132,18 @@ public class JetBrain : MonoBehaviour
             quarry = JetPawn.NearestEnemy(pawn.transform.position, pawn.Team);
 
         FindThreat();
+        ThinkForms();
+
+        if (pawn.CurrentForm == JetPawn.Form.Tank)
+        {
+            FightAsTank();
+            // Grounded, the only answer to a missile is the flare pocket —
+            // the fighting continues around it.
+            if (_threat != null)
+                TickFlares(Vector3.Distance(_threat.transform.position,
+                    pawn.transform.position));
+            return;
+        }
 
         if (Time.time >= _nextThink)
         {
@@ -137,6 +155,110 @@ public class JetBrain : MonoBehaviour
             EvadeMissile();
         else
             Fly();
+    }
+
+    // ---------------------------------------------------------------- the forms
+
+    /// <summary>
+    /// When to stop being a jet. Landing as a tank answers an enemy that has
+    /// already landed (a duel the tank's turret and armour want) and offers a
+    /// hurt pilot a steadier gun; the timer — and any real emergency — sends
+    /// it back into the sky. Checked on a slow clock so form changes read as
+    /// decisions, not twitches.
+    /// </summary>
+    void ThinkForms()
+    {
+        if (pawn.CurrentForm == JetPawn.Form.Jet)
+        {
+            if (Time.time < _phaseCheckAt)
+                return;
+            _phaseCheckAt = Time.time + 6f;
+
+            float urge = 0.12f;
+            if (quarry != null && quarry.CurrentForm == JetPawn.Form.Tank)
+                urge += 0.4f;
+            if (pawn.Shield != null && pawn.Shield.Normalized < 0.55f)
+                urge += 0.22f;
+            if (Random.value < urge * _groundAffinity
+                && pawn.RequestForm(JetPawn.Form.Tank))
+                _phaseUntil = Time.time + Random.Range(12f, 20f);
+            return;
+        }
+
+        if (pawn.CurrentForm == JetPawn.Form.Tank)
+        {
+            bool bleedingOut = pawn.Shield != null && pawn.Shield.Normalized < 0.25f;
+            if (Time.time >= _phaseUntil || bleedingOut)
+                pawn.RequestForm(JetPawn.Form.Jet);
+        }
+        // Robot is a doorway, not a destination — the chained folds pass
+        // through it on their own.
+    }
+
+    /// <summary>
+    /// Deck fighting: hull faces the work, turret and lead assist do the
+    /// aiming, missiles go up at whatever is locked, and with no jet worth
+    /// shooting the nearest battery gets the barrel instead — a tank that
+    /// clears turrets is pulling the same weight as one that guards the sky.
+    /// </summary>
+    void FightAsTank()
+    {
+        Vector3 me = pawn.transform.position;
+
+        Vector3 aimAt;
+        float distance;
+        bool aimingAtJet = false;
+        if (quarry != null)
+        {
+            Vector3 gap = quarry.Center - me;
+            distance = gap.magnitude;
+            aimAt = quarry.Center + quarry.Velocity * (distance / 90f);
+            aimingAtJet = true;
+        }
+        else
+        {
+            var battery = DogfightTurret.Nearest(me, 110f);
+            if (battery == null)
+            {
+                pawn.Steer = Vector2.zero;
+                pawn.Firing = false;
+                return;
+            }
+            aimAt = battery.Center;
+            distance = (battery.Center - me).magnitude;
+        }
+
+        pawn.AimAt(aimAt);
+
+        // The hull: face the fight, jockey a little so the silhouette never
+        // sits still. The turret does the fine aiming on its own.
+        Vector3 flat = aimAt - me;
+        flat.y = 0f;
+        float off = Vector3.SignedAngle(pawn.transform.forward,
+            flat.sqrMagnitude > 1e-4f ? flat.normalized : pawn.transform.forward, Vector3.up);
+        pawn.Steer = new Vector2(Mathf.Clamp(off / 45f, -1f, 1f),
+            Mathf.Sin(Time.time * 0.7f + _helixPhase) * 0.35f);
+
+        pawn.Firing = distance < 95f;
+
+        if (aimingAtJet && quarry != null)
+        {
+            float coneOff = Vector3.Angle(pawn.AimDirection, quarry.Center - me);
+            bool geometry = coneOff < MissileCone
+                            && distance > MissileRangeNear && distance < MissileRangeFar;
+            if (!geometry)
+                _coneHeldSince = -1f;
+            else if (_coneHeldSince < 0f)
+                _coneHeldSince = Time.time;
+            else if (Time.time - _coneHeldSince >= MissileHoldSeconds
+                     && Time.time >= _missileAt
+                     && pawn.TryFireMissile(quarry.transform))
+                _missileAt = Time.time + Random.Range(8f, 12f);
+        }
+
+        // Tails and carousels are sky problems; forget them down here.
+        _breakingUntil = 0f;
+        _rangeCount = 0;
     }
 
     // ------------------------------------------------------------- the threats
@@ -177,28 +299,34 @@ public class JetBrain : MonoBehaviour
     /// </summary>
     void EvadeMissile()
     {
-        Vector3 from = _threat.transform.position - pawn.transform.position;
-        float distance = from.magnitude;
+        float distance = Vector3.Distance(_threat.transform.position,
+            pawn.transform.position);
 
         pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 6f) * 0.8f);
         pawn.Throttle = 1f;
         pawn.Firing = false;
         _coneHeldSince = -1f;
 
-        if (distance < FlareRange && Time.time >= _nextFlareAllowed)
+        TickFlares(distance);
+    }
+
+    /// <summary>The flare hand, one rolled reaction beat late and never the
+    /// whole pocket at one threat. Shared by the break and the deck.</summary>
+    void TickFlares(float threatDistance)
+    {
+        if (threatDistance >= FlareRange || Time.time < _nextFlareAllowed)
+            return;
+        if (_flareAt < 0f)
         {
-            if (_flareAt < 0f)
-            {
-                _flareAt = Time.time + _flareDelay;
-            }
-            else if (Time.time >= _flareAt)
-            {
-                pawn.TryPopFlares();
-                _flareAt = -1f;
-                // One burst per pass: a missile that ate the flare is gone,
-                // and one that didn't will still be here in a second.
-                _nextFlareAllowed = Time.time + 1.2f;
-            }
+            _flareAt = Time.time + _flareDelay;
+        }
+        else if (Time.time >= _flareAt)
+        {
+            pawn.TryPopFlares();
+            _flareAt = -1f;
+            // One burst per pass: a missile that ate the flare is gone, and
+            // one that didn't will still be here in a second.
+            _nextFlareAllowed = Time.time + 1.2f;
         }
     }
 
@@ -223,6 +351,32 @@ public class JetBrain : MonoBehaviour
         Vector3 them = quarry.transform.position;
         Vector3 gap = them - me;
         float distance = gap.magnitude;
+
+        // A grounded enemy is not a dogfight, it is a gun run: orbit above
+        // it (the floor assist owns the deck below ~38 m, so the run stays a
+        // slant rather than a dive into the assist's argument), roll into
+        // the lead when the nose comes around, off again with the orbit.
+        if (quarry.CurrentForm != JetPawn.Form.Jet && quarry.Grounded)
+        {
+            bool onThePass = Vector3.Angle(pawn.transform.forward, gap) < 25f
+                             && distance < 80f;
+            if (onThePass)
+            {
+                Vector3 lead = quarry.Center + quarry.Velocity * (distance / 90f);
+                _goal = lead + Random.insideUnitSphere
+                        * (distance * Mathf.Tan(_jitterDegrees * Mathf.Deg2Rad));
+                _goalIsLead = true;
+            }
+            else
+            {
+                Vector3 ring = Quaternion.Euler(0f, Time.time * 24f * breakSign, 0f)
+                               * Vector3.forward * 26f;
+                _goal = them + ring + Vector3.up * 40f;
+                _goalIsLead = false;
+            }
+            _rangeCount = 0;        // no carousel bookkeeping against the deck
+            return;
+        }
 
         RememberRange(distance);
 

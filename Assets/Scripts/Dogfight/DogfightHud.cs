@@ -30,6 +30,7 @@ public class DogfightHud : MonoBehaviour
     Image[] _cyanPips;
     Image[] _magentaPips;
     Text _speed;
+    Text _form;
     RawImage _reticle;
     Image _reticleDot;
     RectTransform _arrow;
@@ -81,6 +82,8 @@ public class DogfightHud : MonoBehaviour
 
         _speed = Label("Speed", "26 m/s", 22, new Color(1f, 1f, 1f, 0.7f), FontStyle.Bold,
             new Vector2(0f, 0f), new Vector2(120f, 46f), new Vector2(200f, 30f));
+        _form = Label("Form", "JET", 18, new Color(1f, 1f, 1f, 0.75f), FontStyle.Bold,
+            new Vector2(0f, 0f), new Vector2(120f, 76f), new Vector2(200f, 26f));
 
         _caption = Label("Caption", "", 20, new Color(1f, 1f, 1f, 0.62f), FontStyle.Normal,
             new Vector2(0.5f, 0f), new Vector2(0f, 46f), new Vector2(900f, 28f));
@@ -217,6 +220,14 @@ public class DogfightHud : MonoBehaviour
     {
         _speed.text = $"{Mathf.RoundToInt(metresPerSecond)} m/s";
         _speed.color = boosting ? Warn : new Color(1f, 1f, 1f, 0.7f);
+    }
+
+    /// <summary>What the watched pawn currently is — JET, ROBOT, TANK, or
+    /// FOLDING between — in its team's colour.</summary>
+    public void SetForm(string label, Color team)
+    {
+        _form.text = label;
+        _form.color = Color.Lerp(team, Color.white, 0.35f);
     }
 
     /// <summary>Player mode shows the reticle; the broadcast hides it and

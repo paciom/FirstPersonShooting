@@ -54,15 +54,19 @@ public class DogfightFlare : MonoBehaviour
         Live.Remove(this);
     }
 
-    /// <summary>The burst: three flares ejected down and back off the jet's
-    /// tail, fanned so they separate on camera within the first half second.</summary>
+    /// <summary>The burst: three flares off the tail, fanned so they separate
+    /// on camera within the first half second. A flier ejects down and back;
+    /// a grounded form ejects up and back — magnesium into the deck decoys
+    /// nothing.</summary>
     public static void Pop(JetPawn owner)
     {
+        Vector3 away = owner.CurrentForm == JetPawn.Form.Jet && !owner.Grounded
+            ? -owner.transform.up * 0.7f - owner.transform.forward * 0.7f
+            : Vector3.up * 0.9f - owner.transform.forward * 0.5f;
         for (int i = 0; i < BurstCount; i++)
         {
             float fan = (i - (BurstCount - 1) * 0.5f) * SpreadDegrees;
-            Vector3 eject = Quaternion.AngleAxis(fan, owner.transform.forward)
-                            * (-owner.transform.up * 0.7f - owner.transform.forward * 0.7f);
+            Vector3 eject = Quaternion.AngleAxis(fan, owner.transform.forward) * away;
             Spawn(owner.Center - owner.transform.forward * 1.2f,
                 owner.Velocity * 0.35f + eject.normalized * EjectSpeed, owner.Team);
         }

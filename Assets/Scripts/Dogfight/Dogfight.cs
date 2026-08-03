@@ -321,35 +321,53 @@ public class Dogfight : MonoBehaviour
     }
 
     /// <summary>
-    /// The stick: the jet chases the cursor. Offset from the screen's centre
-    /// is the steer, with a deadzone so a parked mouse flies straight; the
-    /// arrow keys and A/D add on top (sticks add, they do not replace — the
-    /// TANK RAID rule, one control up); W boosts and S brakes; the left
-    /// button is the trigger.
+    /// The stick, per form. As a JET the airframe chases the cursor (offset
+    /// from the screen's centre is the steer, deadzoned so a parked mouse
+    /// flies straight; arrows and A/D add on top — the TANK RAID rule); W
+    /// boosts, S brakes. As a ROBOT or TANK the cursor becomes a free AIM
+    /// (the ray under it, out to gun range) and WASD moves — drift, walk or
+    /// drive, the pawn knows which. Everywhere: hold click for guns, right
+    /// click for a locked missile, F for flares, T for the next fold.
     /// </summary>
     void DrivePlayer()
     {
         if (_cyan == null || _cyan.IsDown)
             return;
 
-        Vector2 mouse = new Vector2(
-            (Input.mousePosition.x - Screen.width * 0.5f) / (Screen.height * 0.38f),
-            (Input.mousePosition.y - Screen.height * 0.5f) / (Screen.height * 0.38f));
-        if (mouse.magnitude < 0.08f)
-            mouse = Vector2.zero;
-        var steer = Vector2.ClampMagnitude(mouse, 1f);
+        if (Input.GetKeyDown(KeyCode.T))
+            _cyan.RequestNextForm();
+        if (_cyan.Morphing)
+            return;
 
-        float keyYaw = (Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
-                       - (Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f)
-                       + (Input.GetKey(KeyCode.D) ? 1f : 0f)
-                       - (Input.GetKey(KeyCode.A) ? 1f : 0f);
-        float keyPitch = (Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
-                         - (Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
-        steer += new Vector2(keyYaw, keyPitch);
+        if (_cyan.CurrentForm == JetPawn.Form.Jet)
+        {
+            Vector2 mouse = new Vector2(
+                (Input.mousePosition.x - Screen.width * 0.5f) / (Screen.height * 0.38f),
+                (Input.mousePosition.y - Screen.height * 0.5f) / (Screen.height * 0.38f));
+            if (mouse.magnitude < 0.08f)
+                mouse = Vector2.zero;
+            var steer = Vector2.ClampMagnitude(mouse, 1f);
 
-        _cyan.Steer = steer;
-        _cyan.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
-                         - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+            float keyYaw = (Input.GetKey(KeyCode.RightArrow) ? 1f : 0f)
+                           - (Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f)
+                           + (Input.GetKey(KeyCode.D) ? 1f : 0f)
+                           - (Input.GetKey(KeyCode.A) ? 1f : 0f);
+            float keyPitch = (Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
+                             - (Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
+            steer += new Vector2(keyYaw, keyPitch);
+
+            _cyan.Steer = steer;
+            _cyan.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
+                             - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+        }
+        else
+        {
+            var ray = _camera.ScreenPointToRay(Input.mousePosition);
+            _cyan.AimAt(ray.origin + ray.direction * 140f);
+            _cyan.Steer = new Vector2(Input.GetAxisRaw("Horizontal"),
+                Input.GetAxisRaw("Vertical"));
+        }
+
         _cyan.Firing = Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
 
         UpdatePlayerLock();
@@ -371,11 +389,13 @@ public class Dogfight : MonoBehaviour
         Vector3 bestCenter = Vector3.zero;
         float bestAngle = PlayerLockCone;
 
+        // Measured against the form's AIM, not the nose — a tank locks with
+        // its cursor, a jet with its flight path.
+        Vector3 seeker = _cyan.AimDirection;
         var enemy = JetPawn.NearestEnemy(_cyan.transform.position, 0, PlayerLockRange);
         if (enemy != null)
         {
-            float angle = Vector3.Angle(_cyan.transform.forward,
-                enemy.Center - _cyan.transform.position);
+            float angle = Vector3.Angle(seeker, enemy.Center - _cyan.transform.position);
             if (angle < bestAngle)
             {
                 bestAngle = angle;
@@ -387,8 +407,7 @@ public class Dogfight : MonoBehaviour
         var turret = DogfightTurret.Nearest(_cyan.transform.position, PlayerLockRange);
         if (turret != null)
         {
-            float angle = Vector3.Angle(_cyan.transform.forward,
-                turret.Center - _cyan.transform.position);
+            float angle = Vector3.Angle(seeker, turret.Center - _cyan.transform.position);
             if (angle < bestAngle)
             {
                 best = turret.transform;
@@ -527,7 +546,13 @@ public class Dogfight : MonoBehaviour
 
         var subject = _director.Subject;
         if (subject != null)
-            _hud.SetSpeed(subject.Speed, subject.Speed > JetPawn.SpeedCruise + 4f);
+        {
+            _hud.SetSpeed(subject.ReadoutSpeed,
+                subject.CurrentForm == JetPawn.Form.Jet
+                && subject.Speed > JetPawn.SpeedCruise + 4f);
+            _hud.SetForm(subject.Morphing ? "FOLDING" : FormName(subject.CurrentForm),
+                MatchAnnouncer.TeamColor(subject.Team));
+        }
 
         if (_playerControls && _stage == Stage.Fight)
         {
@@ -542,6 +567,9 @@ public class Dogfight : MonoBehaviour
             WarnOfMissiles();
         }
     }
+
+    static string FormName(JetPawn.Form form) =>
+        form == JetPawn.Form.Jet ? "JET" : form == JetPawn.Form.Robot ? "ROBOT" : "TANK";
 
     /// <summary>The cockpit's threat receiver: any missile with the player's
     /// name on it inside warning range keeps the INCOMING line lit (the HUD
