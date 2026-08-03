@@ -139,7 +139,48 @@ public static class MainMenu
         });
 
         BuildFooter(canvasGo.transform, controller);
+        BuildAccountBadge(controller, canvasGo);
         return canvasGo;
+    }
+
+    /// <summary>
+    /// The pilot badge, glued to the top-right corner (the title lockup owns
+    /// the centre): SIGN IN when signed out, the pilot's name once signed in.
+    /// Corner-anchored rather than on a canvas row, so it stays put whatever
+    /// shape the window is.
+    /// </summary>
+    static void BuildAccountBadge(GameModeController controller, GameObject canvasGo)
+    {
+        // Restores a saved session in the background; the badge re-labels
+        // itself through AccountClient.Changed when the answer lands.
+        AccountClient.Ensure().Resume();
+
+        var box = MakeImage(canvasGo.transform, "AccountBadge",
+            new Color(0.03f, 0.08f, 0.13f, 0.82f));
+        box.sprite = MenuArt.RoundedRect(10f);
+        box.type = Image.Type.Sliced;
+        box.raycastTarget = true;           // this is the button
+        var rect = box.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.anchoredPosition = new Vector2(-24f, -24f);
+        rect.sizeDelta = new Vector2(300f, 46f);
+
+        var underline = MakeImage(box.transform, "Underline", new Color(0.25f, 0.84f, 1f, 0.45f));
+        Band(underline.rectTransform, top: false, height: 2f, inset: 8f);
+
+        var label = MakeText(box.transform, "Label", "SIGN  IN", 17,
+            new Color(1f, 1f, 1f, 0.75f), FontStyle.Bold, Vector2.zero, new Vector2(280f, 30f));
+
+        var button = box.gameObject.AddComponent<Button>();
+        button.targetGraphic = box;
+        var colors = button.colors;
+        colors.highlightedColor = new Color(0.10f, 0.30f, 0.42f, 1f);
+        colors.pressedColor = new Color(0.2f, 0.9f, 1f, 0.6f);
+        button.colors = colors;
+        button.onClick.AddListener(() => AccountMenu.Open(controller, canvasGo));
+
+        box.gameObject.AddComponent<AccountBadge>().label = label;
     }
 
     // -- background ------------------------------------------------------

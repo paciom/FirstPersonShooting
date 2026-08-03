@@ -2,7 +2,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.js ./
+COPY server.js accounts.js store.js ./
 ENV PORT=8787
 EXPOSE 8787
 USER node

@@ -11,6 +11,8 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@azure/data-tables": "^13.3.0",
+    "@azure/identity": "^4.5.0",
     "ws": "^8.18.0"
   }
 }

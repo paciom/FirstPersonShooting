@@ -27,6 +27,7 @@
 const http = require("http");
 const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
+const accounts = require("./accounts");
 
 const PORT = process.env.PORT || 8787;
 const CF_TURN_KEY_ID = process.env.CF_TURN_KEY_ID || "";
@@ -209,6 +210,16 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true, rooms: rooms.size }));
     return;
   }
+  if (req.url.startsWith("/api/")) {
+    // accounts.handle answers every request itself; this catch is the seat
+    // belt that keeps one broken request from crashing the whole server.
+    accounts.handle(req, res).catch((err) => {
+      console.error("accounts handler failed:", err);
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    });
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
@@ -286,4 +297,10 @@ server.listen(PORT, () => {
       ? "TURN: Cloudflare credentials will be minted server-side"
       : "TURN: not configured (STUN-only; set CF_TURN_KEY_ID + CF_TURN_API_TOKEN)"
   );
+});
+
+// Accounts warm up after the socket is listening: signaling must come up
+// even if the store is misconfigured — /api/* answers 503 until init lands.
+accounts.init().catch((err) => {
+  console.error("accounts init failed (auth endpoints stay 503):", err.message);
 });

@@ -1,9 +1,29 @@
 # Photon Arena signaling server
 
-The one always-on backend piece of online PvP. Browsers connect here just long
-enough to pair up (match codes + WebRTC offer/answer/ICE relay); the battle
-itself then runs peer-to-peer over WebRTC DataChannels. See
-`Assets/Scripts/Net/` for the Unity side.
+The one always-on backend piece: match signaling for online PvP, plus the
+player accounts API. Browsers connect over WebSocket just long enough to pair
+up (match codes + WebRTC offer/answer/ICE relay); the battle itself then runs
+peer-to-peer over WebRTC DataChannels. See `Assets/Scripts/Net/` for the
+Unity side.
+
+## Accounts API
+
+`accounts.js` serves register / login / logout / me under `/api/` (see its
+header comment for the exact shapes). Design points: username-only identity,
+email OPTIONAL (login-by-email + future recovery), scrypt password hashes,
+opaque bearer tokens stored hashed, per-IP rate limits.
+
+Storage (`store.js`) picks a backend from the environment:
+
+- `TABLES_ENDPOINT=https://<account>.table.core.windows.net` — Azure Table
+  Storage via managed identity (production; the app's identity needs the
+  **Storage Table Data Contributor** role on the storage account, and no
+  secret is stored anywhere).
+- `TABLES_CONNECTION_STRING=...` — same table, key auth, for dev machines.
+- neither — a JSON file in `data/` (local dev; EPHEMERAL inside a container).
+
+The table (`PhotonAccounts` unless `TABLES_TABLE_NAME` says otherwise) is
+created on boot if missing.
 
 ## Run locally
 
