@@ -1014,8 +1014,8 @@ public class GameModeController : MonoBehaviour
 
         _menuCanvas.SetActive(false);
         if (playerControls)
-            ShowOverlay("Mouse — Steer   ·   Hold Click — Fire   ·   W — Boost   ·   " +
-                        "S — Brake   ·   C — Cockpit   ·   ESC — Menu",
+            ShowOverlay("Mouse — Steer   ·   Hold Click — Guns   ·   Right Click — Missile   ·   " +
+                        "F — Flares   ·   W / S — Speed   ·   C — Cockpit   ·   ESC — Menu",
                         "DOGFIGHT   ·   tap MENU to go back");
         else
             ShowOverlay("DOGFIGHT: AI v AI   ·   C — Cockpit   ·   SPACE — Next jet   ·   ESC — Menu",

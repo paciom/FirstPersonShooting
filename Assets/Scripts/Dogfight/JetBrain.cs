@@ -2,31 +2,37 @@ using UnityEngine;
 
 /// <summary>
 /// The CPU pilot. It writes exactly what a player writes — <c>Steer</c>,
-/// <c>Throttle</c>, <c>Firing</c> — and nothing else, so the pawn cannot tell
-/// who is flying it. That one property seam is what makes AI v AI and
-/// Player v AI the same mode with a different card.
+/// <c>Throttle</c>, <c>Firing</c>, and now the ordnance calls — and nothing
+/// else, so the pawn cannot tell who is flying it.
 ///
-/// One rule, TankBrain's rule, lifted into the air: GET BEHIND AND STAY THERE.
-/// Too far — chase the point behind the target's tail. In the saddle — track
-/// the lead. Someone in MY saddle — break hard the way this jet always breaks
-/// (rolled once at spawn) until the tail is clear. Head-on — step aside first;
-/// a merge that trades shield for shield teaches nothing and looks like a
-/// referee's mistake.
+/// The core is still TankBrain's rule lifted into the air — GET BEHIND AND
+/// STAY THERE — but three things keep two of these from flying the same
+/// fight forever, which is exactly what the first AI WAR did (a perfect
+/// carousel: both pilots in each other's saddle point, circling until the
+/// heat death of the battery):
 ///
-/// Deliberately fair rather than sharp: the brain re-decides at a human-ish
-/// cadence and points a few degrees wrong on purpose. This is a mode an eight
-/// year old is supposed to beat sometimes — the AI's edge is that it never
-/// panics, not that it never misses.
+/// 1. PERSONALITY. Every knob that shapes the flying — think cadence, saddle
+///    distance, aim smear, helix phase — is rolled once at wake-up, so no
+///    two pilots are the same pilot in two paint jobs.
+/// 2. THE CUT. A pilot that notices the range hasn't changed in six seconds
+///    stops following the circle and flies the CHORD — a pure-lead intercept
+///    across it at full boost. That is the move that ends a carousel in a
+///    real dogfight, and it ends this one.
+/// 3. THE SKY FIGHTS BACK. Turret missiles force breaks and flares on a
+///    clock nobody controls, and a fight that keeps getting interrupted
+///    cannot settle into a loop.
+///
+/// Missiles get the same honesty rules as the guns: the brain has to hold
+/// the cone for most of a second before it fires, waits a rolled reaction
+/// beat before its hand finds the flare button, and never dumps the whole
+/// pocket at one threat.
 /// </summary>
-/// <remarks>Runs at the drivers' order, before the pawns, exactly as the mode
-/// itself does — a driver that ran after its pawn would always be a frame
-/// stale.</remarks>
+/// <remarks>Runs at the drivers' order, before the pawns, exactly as the
+/// mode itself does.</remarks>
 [DefaultExecutionOrder(-50)]
 public class JetBrain : MonoBehaviour
 {
-    /// <summary>Metres behind the quarry the pursuit aims for. Outside guns'
-    /// best range on purpose: arriving AT the target is how you overshoot.</summary>
-    const float SaddleBehind = 11f;
+    // ------------------------------------------------------------ fixed tuning
 
     /// <summary>Inside this, track the lead instead of the saddle point.</summary>
     const float GunRange = 34f;
@@ -35,16 +41,28 @@ public class JetBrain : MonoBehaviour
     const float TailedRange = 38f;
     const float BreakSeconds = 1.6f;
 
-    /// <summary>Seconds between decisions. The reaction delay that keeps the
-    /// brain honest — AIBrain's fairness knob, at AIBrain's kind of number.</summary>
-    const float ThinkSeconds = 0.25f;
-
-    const float AimJitterDegrees = 2.5f;
-
-    /// <summary>Fire only this close to on-target. Wider than the pawn's own
-    /// assist cone: the brain squeezes early and lets the assist finish.</summary>
+    /// <summary>Fire guns only this close to on-target. Wider than the pawn's
+    /// own assist cone: the brain squeezes early and lets the assist finish.</summary>
     const float FireCone = 9f;
     const float FireRange = 85f;
+
+    /// <summary>Missile discipline: the cone must be HELD, not visited.</summary>
+    const float MissileCone = 8f;
+    const float MissileHoldSeconds = 0.8f;
+    const float MissileRangeNear = 22f;
+    const float MissileRangeFar = 75f;
+
+    /// <summary>A missile chasing me matters from here; the flare hand moves
+    /// when it closes to <see cref="FlareRange"/>.</summary>
+    const float ThreatRange = 60f;
+    const float FlareRange = 30f;
+
+    /// <summary>The carousel detector: this many think-beats of remembered
+    /// range, and the spread below which a circle is declared. Six-ish
+    /// seconds of "nothing is changing" at the rolled cadences.</summary>
+    const int RangeMemory = 24;
+    const float CarouselSpread = 5f;
+    const float CutSeconds = 2.4f;
 
     public JetPawn pawn;
     public JetPawn quarry;
@@ -54,35 +72,144 @@ public class JetBrain : MonoBehaviour
     /// one make a queue.</summary>
     public float breakSign = 1f;
 
+    // -------------------------------------------------------- rolled at wake-up
+
+    float _think;           // seconds between decisions
+    float _saddle;          // metres behind the quarry the pursuit aims for
+    float _jitterDegrees;   // honest aim smear
+    float _helixPhase;      // where this pilot is in its climb-dive weave
+    float _flareDelay;      // hand-to-button time under threat
+
+    // ------------------------------------------------------------------- state
+
     float _nextThink;
     float _breakingUntil;
     Vector3 _goal;
     bool _goalIsLead;
 
+    DogfightMissile _threat;
+    float _flareAt = -1f;
+    float _nextFlareAllowed;
+
+    readonly float[] _ranges = new float[RangeMemory];
+    int _rangeCount;
+    int _rangeHead;
+    float _cutUntil;
+    float _cutCooldownUntil;
+
+    float _coneHeldSince = -1f;
+    float _missileAt;
+
+    void Awake()
+    {
+        // The personality roll. Ranges chosen so the worst draw is still a
+        // fair fight and the best draw is still beatable.
+        _think = Random.Range(0.22f, 0.34f);
+        _saddle = Random.Range(9f, 14f);
+        _jitterDegrees = Random.Range(2f, 3.2f);
+        _helixPhase = Random.Range(0f, Mathf.PI * 2f);
+        _flareDelay = Random.Range(0.25f, 0.45f);
+        _missileAt = Time.time + Random.Range(4f, 9f);
+        _cutCooldownUntil = Time.time + Random.Range(3f, 8f);
+    }
+
     void Update()
     {
         if (pawn == null || pawn.IsDown || !pawn.FlightOn)
+        {
+            _threat = null;
+            _coneHeldSince = -1f;
             return;
+        }
 
         if (quarry == null || quarry.IsDown)
             quarry = JetPawn.NearestEnemy(pawn.transform.position, pawn.Team);
 
+        FindThreat();
+
         if (Time.time >= _nextThink)
         {
-            _nextThink = Time.time + ThinkSeconds;
+            _nextThink = Time.time + _think;
             Think();
         }
 
-        Fly();
+        if (_threat != null)
+            EvadeMissile();
+        else
+            Fly();
     }
 
-    /// <summary>Pick this beat's goal point. Runs at the reaction cadence, so a
-    /// target that reverses mid-beat enjoys a moment of being wrong about.</summary>
+    // ------------------------------------------------------------- the threats
+
+    /// <summary>Is anything chasing ME? The registry answer, every frame —
+    /// steering away can start instantly; only the flare hand is delayed.</summary>
+    void FindThreat()
+    {
+        if (_threat != null && (_threat.Quarry != pawn.transform
+                                || (_threat.transform.position - pawn.transform.position)
+                                    .sqrMagnitude > ThreatRange * ThreatRange * 1.4f))
+        {
+            _threat = null;
+            _flareAt = -1f;
+        }
+        if (_threat != null)
+            return;
+
+        foreach (var missile in DogfightMissile.All)
+        {
+            if (missile == null || missile.Quarry != pawn.transform)
+                continue;
+            if ((missile.transform.position - pawn.transform.position).sqrMagnitude
+                > ThreatRange * ThreatRange)
+                continue;
+            _threat = missile;
+            _flareAt = -1f;
+            break;
+        }
+    }
+
+    /// <summary>
+    /// The break that beats a missile: turn hard across its nose the way this
+    /// pilot always turns, weave in pitch, run the burner — and when it
+    /// closes, flares, one rolled reaction beat late, never the whole pocket.
+    /// The geometry plus the flares is the honest counter the missiles were
+    /// tuned against.
+    /// </summary>
+    void EvadeMissile()
+    {
+        Vector3 from = _threat.transform.position - pawn.transform.position;
+        float distance = from.magnitude;
+
+        pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 6f) * 0.8f);
+        pawn.Throttle = 1f;
+        pawn.Firing = false;
+        _coneHeldSince = -1f;
+
+        if (distance < FlareRange && Time.time >= _nextFlareAllowed)
+        {
+            if (_flareAt < 0f)
+            {
+                _flareAt = Time.time + _flareDelay;
+            }
+            else if (Time.time >= _flareAt)
+            {
+                pawn.TryPopFlares();
+                _flareAt = -1f;
+                // One burst per pass: a missile that ate the flare is gone,
+                // and one that didn't will still be here in a second.
+                _nextFlareAllowed = Time.time + 1.2f;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------- the pursuit
+
+    /// <summary>Pick this beat's goal point, remember the range, and declare
+    /// a carousel when six seconds of memory all say the same number.</summary>
     void Think()
     {
         if (quarry == null)
         {
-            // Nobody to fight: a wide lap of the spawn ring until there is.
             Vector3 flat = new Vector3(pawn.transform.position.x, 0f, pawn.transform.position.z);
             if (flat.sqrMagnitude < 1f)
                 flat = Vector3.forward;
@@ -97,15 +224,14 @@ public class JetBrain : MonoBehaviour
         Vector3 gap = them - me;
         float distance = gap.magnitude;
 
-        // Someone on my six: break. Hard turn my way, with a pitch weave the
-        // pursuer's assist cone has to keep re-earning.
+        RememberRange(distance);
+
         bool tailed = distance < TailedRange
                       && Vector3.Dot(quarry.transform.forward, -gap.normalized) > 0.75f
                       && Vector3.Dot(pawn.transform.forward, gap.normalized) < 0.1f;
         if (tailed && Time.time >= _breakingUntil)
             _breakingUntil = Time.time + BreakSeconds;
 
-        // Head-on merge closing fast: step aside rather than joust.
         bool headOn = distance < 26f
                       && Vector3.Dot(pawn.transform.forward, quarry.transform.forward) < -0.6f
                       && Vector3.Dot(pawn.transform.forward, gap.normalized) > 0.6f;
@@ -115,25 +241,56 @@ public class JetBrain : MonoBehaviour
             _goal = me + pawn.transform.right * (breakSign * 30f) + Vector3.up * 6f;
             _goalIsLead = false;
         }
-        else if (distance > GunRange)
+        else if (Time.time < _cutUntil || distance <= GunRange)
         {
-            // The saddle: behind the target, on its own line.
-            _goal = them - quarry.transform.forward * SaddleBehind;
-            _goalIsLead = false;
+            // In guns — or cutting the carousel's chord, which flies the same
+            // math at more boost: the lead, smeared by this pilot's honest
+            // couple of degrees.
+            Vector3 lead = them + quarry.Velocity * (distance / 90f);
+            _goal = lead + Random.insideUnitSphere
+                    * (distance * Mathf.Tan(_jitterDegrees * Mathf.Deg2Rad));
+            _goalIsLead = true;
         }
         else
         {
-            // In guns: the lead, smeared by the pilot's honest couple of
-            // degrees. Jitter scales with distance so it stays angular.
-            Vector3 lead = them + quarry.Velocity * (distance / 90f);
-            _goal = lead + Random.insideUnitSphere
-                    * (distance * Mathf.Tan(AimJitterDegrees * Mathf.Deg2Rad));
-            _goalIsLead = true;
+            // The saddle — with this pilot's own helix on it, so a long chase
+            // corkscrews instead of drawing a flat circle.
+            _goal = them - quarry.transform.forward * _saddle;
+            _goal.y += Mathf.Sin(Time.time * 0.45f + _helixPhase) * 5.5f;
+            _goalIsLead = false;
+        }
+    }
+
+    /// <summary>Six seconds of range in a ring buffer. All the same number →
+    /// this is a carousel → fly the chord for a beat (once per rolled
+    /// cooldown, so two pilots rarely cut together and the fight resolves).</summary>
+    void RememberRange(float distance)
+    {
+        if (Time.time < _cutUntil)
+            return;
+        _ranges[_rangeHead] = distance;
+        _rangeHead = (_rangeHead + 1) % RangeMemory;
+        _rangeCount = Mathf.Min(_rangeCount + 1, RangeMemory);
+        if (_rangeCount < RangeMemory || Time.time < _cutCooldownUntil)
+            return;
+
+        float min = float.MaxValue, max = float.MinValue;
+        foreach (var range in _ranges)
+        {
+            min = Mathf.Min(min, range);
+            max = Mathf.Max(max, range);
+        }
+        if (max - min < CarouselSpread)
+        {
+            _cutUntil = Time.time + CutSeconds;
+            _cutCooldownUntil = Time.time + Random.Range(6f, 10f);
+            _rangeCount = 0;
         }
     }
 
     /// <summary>Every frame: steer at the goal, set the throttle by the
-    /// geometry, squeeze when close to on-target.</summary>
+    /// geometry, squeeze guns when close, and put a missile up only after the
+    /// cone has been HELD.</summary>
     void Fly()
     {
         Vector3 me = pawn.transform.position;
@@ -141,22 +298,18 @@ public class JetBrain : MonoBehaviour
 
         if (breaking)
         {
-            // The break: full turn the rolled way, weaving in pitch.
-            pawn.Steer = new Vector2(breakSign,
-                Mathf.Sin(Time.time * 5f) * 0.6f);
+            pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 5f) * 0.6f);
             pawn.Throttle = 1f;
             pawn.Firing = false;
+            _coneHeldSince = -1f;
             return;
         }
 
         Vector3 toGoal = _goal - me;
         Vector3 local = pawn.transform.InverseTransformDirection(toGoal.normalized);
-        // Proportional steering with a full deflection by ~30 degrees off.
         var steer = new Vector2(
             Mathf.Clamp(local.x * 2.2f, -1f, 1f),
             Mathf.Clamp(local.y * 2.2f, -1f, 1f));
-        // Goal behind me: commit to the break side instead of dithering
-        // through zero, where proportional steering points nowhere.
         if (local.z < -0.2f)
             steer.x = breakSign;
         pawn.Steer = steer;
@@ -164,18 +317,41 @@ public class JetBrain : MonoBehaviour
         float distance = quarry != null
             ? Vector3.Distance(me, quarry.transform.position)
             : toGoal.magnitude;
-        pawn.Throttle = distance > 45f ? 1f : distance < 16f ? -0.5f : 0f;
+        bool cutting = Time.time < _cutUntil;
+        pawn.Throttle = cutting || distance > 45f ? 1f : distance < 16f ? -0.5f : 0f;
 
-        if (quarry != null && _goalIsLead)
-        {
-            Vector3 toQuarry = quarry.Center - me;
-            pawn.Firing = toQuarry.magnitude < FireRange
-                          && Vector3.Angle(pawn.transform.forward, _goal - me) < FireCone
-                          && Vector3.Dot(pawn.transform.forward, toQuarry.normalized) > 0f;
-        }
-        else
+        if (quarry == null || !_goalIsLead)
         {
             pawn.Firing = false;
+            _coneHeldSince = -1f;
+            return;
+        }
+
+        Vector3 toQuarry = quarry.Center - me;
+        float offCone = Vector3.Angle(pawn.transform.forward, _goal - me);
+        bool facing = Vector3.Dot(pawn.transform.forward, toQuarry.normalized) > 0f;
+
+        pawn.Firing = toQuarry.magnitude < FireRange && offCone < FireCone && facing;
+
+        // The missile: cone held for most of a second, range honest, cadence
+        // rolled — and the pawn's own tube cooldown still has the last word.
+        bool missileGeometry = facing
+                               && offCone < MissileCone
+                               && toQuarry.magnitude > MissileRangeNear
+                               && toQuarry.magnitude < MissileRangeFar;
+        if (!missileGeometry)
+        {
+            _coneHeldSince = -1f;
+        }
+        else if (_coneHeldSince < 0f)
+        {
+            _coneHeldSince = Time.time;
+        }
+        else if (Time.time - _coneHeldSince >= MissileHoldSeconds
+                 && Time.time >= _missileAt
+                 && pawn.TryFireMissile(quarry.transform))
+        {
+            _missileAt = Time.time + Random.Range(8f, 12f);
         }
     }
 }

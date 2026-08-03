@@ -62,6 +62,16 @@ public class GenericBolt : MonoBehaviour
     public int teamId;
     public Transform ownerRoot;
 
+    /// <summary>
+    /// Explicit seeker lock. Null — the default, and what all the arena
+    /// weapons use — keeps the classic behaviour: bend toward whatever enemy
+    /// shield is nearest each frame. Set (DOGFIGHT's locked missiles), the
+    /// bolt chases THIS root and no other; when it dies or disappears the
+    /// bolt falls back to the scan, which is what lets a missile that just
+    /// ate a flare go looking again.
+    /// </summary>
+    public Transform homingTarget;
+
     Vector3 _velocity;
     Vector3 _weaveBase;      // position ignoring weave, so the sine stays clean
     Vector3 _weaveAxis;
@@ -145,10 +155,21 @@ public class GenericBolt : MonoBehaviour
 
         _velocity += Vector3.up * (spec.gravity * dt);
 
-        // Homing: bend toward the nearest enemy.
+        // Homing: bend toward the locked root if one is set and still alive,
+        // the nearest enemy otherwise.
         if (spec.homingDegreesPerSecond > 0f)
         {
-            var target = WeaponUtil.NearestEnemy(transform.position, teamId, spec.homingRange, ownerRoot);
+            EnergyShield target = null;
+            if (homingTarget != null)
+            {
+                var locked = homingTarget.GetComponent<EnergyShield>();
+                if (locked != null && !locked.IsDown && locked.teamId != teamId)
+                    target = locked;
+                else
+                    homingTarget = null;            // lock died: back to the scan
+            }
+            if (target == null)
+                target = WeaponUtil.NearestEnemy(transform.position, teamId, spec.homingRange, ownerRoot);
             if (target != null)
             {
                 Vector3 want = (WeaponUtil.Center(target) - transform.position).normalized;

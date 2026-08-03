@@ -39,6 +39,13 @@ public class DogfightHud : MonoBehaviour
     GameObject _over;
     Text _overTitle;
     Text _overBody;
+    GameObject[] _ordnanceParts;
+    RectTransform _missileFill;
+    Image _missileFillImage;
+    Text _missileLabel;
+    Image[] _flarePips;
+    RawImage _lockDiamond;
+    float _nextIncomingWarn;
 
     public static DogfightHud Build(Transform parent)
     {
@@ -69,6 +76,8 @@ public class DogfightHud : MonoBehaviour
         BuildScorePips();
         BuildReticle();
         BuildArrow();
+        BuildOrdnanceRow();
+        BuildLockDiamond();
 
         _speed = Label("Speed", "26 m/s", 22, new Color(1f, 1f, 1f, 0.7f), FontStyle.Bold,
             new Vector2(0f, 0f), new Vector2(120f, 46f), new Vector2(200f, 30f));
@@ -240,6 +249,118 @@ public class DogfightHud : MonoBehaviour
     }
 
     public void SetCaption(string caption) => _caption.text = caption ?? "";
+
+    // ---------------------------------------------------------------- ordnance
+
+    /// <summary>The pilot's bottom strip: the missile tube on the left of
+    /// centre, the flare pocket on the right. Scaled-rect bar, as ever.</summary>
+    void BuildOrdnanceRow()
+    {
+        var frame = Box("OrdnanceFrame", Panel, new Vector2(0.5f, 0f),
+            new Vector2(0f, 96f), new Vector2(430f, 46f));
+
+        _missileLabel = Label("MissileLabel", "MISSILE", 16, Warn, FontStyle.Bold,
+            new Vector2(0.5f, 0f), new Vector2(-140f, 106f), new Vector2(120f, 22f));
+        var track = Box("MissileTrack", new Color(0f, 0f, 0f, 0.4f), new Vector2(0.5f, 0f),
+            new Vector2(-55f, 106f), new Vector2(120f, 10f));
+        var fill = new GameObject("MissileFill");
+        fill.transform.SetParent(track.transform, false);
+        _missileFillImage = fill.AddComponent<Image>();
+        _missileFillImage.color = Warn;
+        _missileFill = _missileFillImage.rectTransform;
+        _missileFill.anchorMin = new Vector2(0f, 0f);
+        _missileFill.anchorMax = new Vector2(0f, 1f);
+        _missileFill.pivot = new Vector2(0f, 0.5f);
+        _missileFill.anchoredPosition = Vector2.zero;
+        _missileFill.sizeDelta = new Vector2(120f, 0f);
+
+        var flareLabel = Label("FlareLabel", "FLARES", 16, new Color(1f, 0.78f, 0.35f),
+            FontStyle.Bold, new Vector2(0.5f, 0f), new Vector2(60f, 106f), new Vector2(110f, 22f));
+        _flarePips = new Image[JetPawn.FlareChargesMax];
+        for (int i = 0; i < _flarePips.Length; i++)
+        {
+            _flarePips[i] = Box($"FlarePip{i}", new Color(1f, 0.78f, 0.35f),
+                new Vector2(0.5f, 0f), new Vector2(130f + i * 26f, 106f), new Vector2(14f, 14f));
+            _flarePips[i].rectTransform.localEulerAngles = new Vector3(0f, 0f, 45f);
+        }
+
+        // Siblings toggled as a list, never re-parented into a group — a uGUI
+        // rect moved between parents keeps its world placement while its
+        // anchoring starts lying. TankRaidHud's weapon-strip arrangement.
+        _ordnanceParts = new[]
+        {
+            frame.gameObject, _missileLabel.gameObject, track.gameObject,
+            flareLabel.gameObject, _flarePips[0].gameObject,
+            _flarePips[1].gameObject, _flarePips[2].gameObject,
+        };
+    }
+
+    public void SetPilotRowVisible(bool visible)
+    {
+        if (_ordnanceParts == null)
+            return;
+        foreach (var part in _ordnanceParts)
+            if (part != null)
+                part.SetActive(visible);
+    }
+
+    public void SetOrdnance(float missileFraction, bool missileReady, int flares)
+    {
+        _missileFill.sizeDelta = new Vector2(120f * Mathf.Clamp01(missileFraction), 0f);
+        _missileFillImage.color = missileReady ? Warn : new Color(1f, 1f, 1f, 0.35f);
+        _missileLabel.color = missileReady ? Warn : new Color(1f, 1f, 1f, 0.4f);
+        for (int i = 0; i < _flarePips.Length; i++)
+            _flarePips[i].color = i < flares
+                ? new Color(1f, 0.78f, 0.35f)
+                : new Color(1f, 1f, 1f, 0.14f);
+    }
+
+    /// <summary>The seeker's diamond, parked on the candidate by viewport
+    /// anchor so it survives any window shape. 0 hidden · 1 locking (dim,
+    /// breathing) · 2 locked (warm, steady).</summary>
+    void BuildLockDiamond()
+    {
+        var go = new GameObject("LockDiamond");
+        go.transform.SetParent(transform, false);
+        _lockDiamond = go.AddComponent<RawImage>();
+        _lockDiamond.texture = VfxUtil.RingTexture;
+        _lockDiamond.raycastTarget = false;
+        _lockDiamond.rectTransform.sizeDelta = new Vector2(38f, 38f);
+        _lockDiamond.rectTransform.localEulerAngles = new Vector3(0f, 0f, 45f);
+        go.SetActive(false);
+    }
+
+    public void SetLockDiamond(Vector3 viewport, int state)
+    {
+        bool show = state > 0 && viewport.z > 0f;
+        _lockDiamond.gameObject.SetActive(show);
+        if (!show)
+            return;
+        var rect = _lockDiamond.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(viewport.x, viewport.y);
+        rect.anchoredPosition = Vector2.zero;
+        if (state >= 2)
+        {
+            _lockDiamond.color = Warn;
+            rect.sizeDelta = new Vector2(34f, 34f);
+        }
+        else
+        {
+            _lockDiamond.color = new Color(1f, 1f, 1f, 0.45f);
+            float breathe = 40f + 8f * Mathf.Sin(Time.time * 9f);
+            rect.sizeDelta = new Vector2(breathe, breathe);
+        }
+    }
+
+    /// <summary>Somebody's missile has this cockpit's name on it. Throttled
+    /// here so the caller can shout every frame and the screen still breathes.</summary>
+    public void WarnIncoming()
+    {
+        if (Time.time < _nextIncomingWarn)
+            return;
+        _nextIncomingWarn = Time.time + 1.3f;
+        Flash("INCOMING  —  F  FLARES", Danger, 0.7f);
+    }
 
     public void Flash(string message, Color color, float seconds = 1.6f)
     {

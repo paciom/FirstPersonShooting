@@ -86,6 +86,15 @@ public class Dogfight : MonoBehaviour
     float _cyanGraceUntil;
     float _magentaGraceUntil;
 
+    /// <summary>The player's seeker: what the diamond is on, and for how
+    /// long the nose has held it. Locked at <see cref="PlayerLockSeconds"/>.</summary>
+    Transform _lockCandidate;
+    Vector3 _lockCandidateCenter;
+    float _lockProgress;
+    const float PlayerLockSeconds = 0.7f;
+    const float PlayerLockCone = 12f;
+    const float PlayerLockRange = 115f;
+
     public static Dogfight Begin(GameModeController owner, RobotRoster roster,
         int cyanRobot, int magentaRobot, bool playerControls)
     {
@@ -128,6 +137,9 @@ public class Dogfight : MonoBehaviour
             _stageRoot.transform.SetParent(environment, false);
 
         _sky = DogfightSky.Build(_stageRoot.transform);
+        // The battery goes up with the set but holds fire until the fight —
+        // see the WeaponsFree assertion in Update.
+        DogfightTurret.BuildRing();
 
         // Robots first: standing on their pads, facing each other across the
         // void, cyan on the west pad. The pawns themselves live at the scene
@@ -152,6 +164,7 @@ public class Dogfight : MonoBehaviour
         _hud = DogfightHud.Build(transform);
         _hud.SetScore(0, 0);
         _hud.SetReticleVisible(false);
+        _hud.SetPilotRowVisible(false);
         _hud.SetCaption("");
 
         _stage = Stage.Intro;
@@ -241,6 +254,11 @@ public class Dogfight : MonoBehaviour
                 break;
         }
 
+        // Asserted every frame rather than set once: statics are wiped by a
+        // mid-Play recompile, and a battery that came back from the reload
+        // pacifist would be a quiet bug nobody files.
+        DogfightTurret.WeaponsFree = _stage == Stage.Fight || _stage == Stage.Over;
+
         ReadCameraKeys();
         RunGraceBlink(_cyan, _cyanGraceUntil);
         RunGraceBlink(_magenta, _magentaGraceUntil);
@@ -271,6 +289,7 @@ public class Dogfight : MonoBehaviour
     {
         _hud.Flash("FIGHT", new Color(1f, 0.75f, 0.2f));
         _hud.SetReticleVisible(_playerControls);
+        _hud.SetPilotRowVisible(_playerControls);
         if (_playerControls)
         {
             AddBrain(_magenta, _cyan, -1f);
@@ -332,6 +351,61 @@ public class Dogfight : MonoBehaviour
         _cyan.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
                          - (Input.GetKey(KeyCode.S) ? 1f : 0f);
         _cyan.Firing = Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
+
+        UpdatePlayerLock();
+        if (Input.GetMouseButtonDown(1) && _lockProgress >= PlayerLockSeconds)
+            _cyan.TryFireMissile(_lockCandidate);
+        if (Input.GetKeyDown(KeyCode.F))
+            _cyan.TryPopFlares();
+    }
+
+    /// <summary>
+    /// The seeker's eye: the enemy jet or the nearest live turret, whichever
+    /// the nose is actually on. Hold it inside the cone and the diamond
+    /// solidifies; look away and the lock starts over — a missile costs
+    /// commitment, which is the whole difference from the guns.
+    /// </summary>
+    void UpdatePlayerLock()
+    {
+        Transform best = null;
+        Vector3 bestCenter = Vector3.zero;
+        float bestAngle = PlayerLockCone;
+
+        var enemy = JetPawn.NearestEnemy(_cyan.transform.position, 0, PlayerLockRange);
+        if (enemy != null)
+        {
+            float angle = Vector3.Angle(_cyan.transform.forward,
+                enemy.Center - _cyan.transform.position);
+            if (angle < bestAngle)
+            {
+                bestAngle = angle;
+                best = enemy.transform;
+                bestCenter = enemy.Center;
+            }
+        }
+
+        var turret = DogfightTurret.Nearest(_cyan.transform.position, PlayerLockRange);
+        if (turret != null)
+        {
+            float angle = Vector3.Angle(_cyan.transform.forward,
+                turret.Center - _cyan.transform.position);
+            if (angle < bestAngle)
+            {
+                best = turret.transform;
+                bestCenter = turret.Center;
+            }
+        }
+
+        if (best != _lockCandidate)
+        {
+            _lockCandidate = best;
+            _lockProgress = 0f;
+        }
+        else if (best != null)
+        {
+            _lockProgress += Time.deltaTime;
+        }
+        _lockCandidateCenter = bestCenter;
     }
 
     /// <summary>C and SPACE work in every seat — the couch watching an AI WAR
@@ -459,6 +533,32 @@ public class Dogfight : MonoBehaviour
         {
             _hud.SetReticleHot(_cyan.AssistTarget != null);
             UpdateTargetArrow();
+            _hud.SetOrdnance(_cyan.MissileReadyFraction, _cyan.MissileReady, _cyan.FlareCharges);
+            _hud.SetLockDiamond(
+                _lockCandidate != null
+                    ? _camera.WorldToViewportPoint(_lockCandidateCenter)
+                    : Vector3.back,
+                _lockCandidate == null ? 0 : _lockProgress >= PlayerLockSeconds ? 2 : 1);
+            WarnOfMissiles();
+        }
+    }
+
+    /// <summary>The cockpit's threat receiver: any missile with the player's
+    /// name on it inside warning range keeps the INCOMING line lit (the HUD
+    /// throttles the shouting).</summary>
+    void WarnOfMissiles()
+    {
+        if (_cyan == null || _cyan.IsDown)
+            return;
+        foreach (var missile in DogfightMissile.All)
+        {
+            if (missile == null || missile.Quarry != _cyan.transform)
+                continue;
+            if ((missile.transform.position - _cyan.transform.position).sqrMagnitude < 55f * 55f)
+            {
+                _hud.WarnIncoming();
+                return;
+            }
         }
     }
 
@@ -494,8 +594,12 @@ public class Dogfight : MonoBehaviour
 
     public void Teardown()
     {
-        // Jets first: they live at the scene root (the shootable rule) and are
-        // not swept by destroying anything else.
+        // The ordnance first — a live homing missile outliving the mode would
+        // happily chase the menu's robots — then every other scene-root actor,
+        // none of which is swept by destroying anything else.
+        DogfightMissile.DespawnAll();
+        DogfightFlare.DespawnAll();
+        DogfightTurret.DespawnAll();
         JetPawn.DespawnAll();
 
         if (_cameraRig != null)

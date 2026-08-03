@@ -122,6 +122,17 @@ public class JetPawn : MonoBehaviour
     public const float AssistDegrees = 6f;
     public const float AssistRange = 90f;
 
+    /// <summary>One missile in the tube at a time; the tube takes this long.
+    /// Shared by every seat — the AI's brain adds its own hesitation on top,
+    /// so the pawn's number is the FLOOR, not the AI's cadence.</summary>
+    public const float MissileCooldown = 5f;
+
+    /// <summary>The countermeasure pocket: bursts carried, and the slow drip
+    /// that refills one. Respawning refills the lot — a fresh jet with an
+    /// empty pocket punishes the pilot for the death they already paid for.</summary>
+    public const int FlareChargesMax = 3;
+    const float FlareRechargeSeconds = 7f;
+
     // ------------------------------------------------------------------- state
 
     public int Team { get; private set; }
@@ -152,6 +163,14 @@ public class JetPawn : MonoBehaviour
     /// <summary>The enemy the aim assist is holding this frame, for the HUD.</summary>
     public JetPawn AssistTarget { get; private set; }
 
+    public bool MissileReady => Time.time >= _missileReadyAt;
+
+    /// <summary>0 just fired → 1 ready, for the HUD's tube bar.</summary>
+    public float MissileReadyFraction =>
+        Mathf.Clamp01(1f - (_missileReadyAt - Time.time) / MissileCooldown);
+
+    public int FlareCharges => _flareCharges;
+
     /// <summary>While false the pawn stands still and flies nothing — the
     /// robot-on-the-pad phase. The mode flips it at launch.</summary>
     public bool FlightOn { get; set; }
@@ -161,6 +180,9 @@ public class JetPawn : MonoBehaviour
     float _yaw;
     float _pitch;
     float _roll;
+    float _missileReadyAt;
+    int _flareCharges = FlareChargesMax;
+    float _flareRechargeAt;
     bool _down;
     float _downSince;
     bool _visible = true;
@@ -471,8 +493,43 @@ public class JetPawn : MonoBehaviour
         foreach (var trail in _trails)
             trail.emitting = true;
 
+        // The pocket refills one burst at a time, only in flight.
+        if (_flareCharges < FlareChargesMax && Time.time >= _flareRechargeAt)
+        {
+            _flareCharges++;
+            _flareRechargeAt = Time.time + FlareRechargeSeconds;
+        }
+
         PullTrigger();
         Firing = false;
+    }
+
+    // ---------------------------------------------------------------- ordnance
+
+    /// <summary>Put a locked missile in the air. False when the tube is
+    /// cold, the jet is down, or there is nothing locked to give it.</summary>
+    public bool TryFireMissile(Transform lockRoot)
+    {
+        if (!MissileReady || IsDown || !FlightOn || lockRoot == null)
+            return false;
+        _missileReadyAt = Time.time + MissileCooldown;
+        Vector3 from = Center - transform.up * 0.45f + transform.forward * 1.0f;
+        DogfightMissile.Launch(from, transform.forward, Team, transform, lockRoot,
+            DogfightMissile.Flavor.Jet);
+        return true;
+    }
+
+    /// <summary>Spend one burst of flares. The recharge clock starts on the
+    /// spend that leaves the pocket short, and keeps its place otherwise.</summary>
+    public bool TryPopFlares()
+    {
+        if (IsDown || !FlightOn || _flareCharges <= 0)
+            return false;
+        if (_flareCharges == FlareChargesMax)
+            _flareRechargeAt = Time.time + FlareRechargeSeconds;
+        _flareCharges--;
+        DogfightFlare.Pop(this);
+        return true;
     }
 
     /// <summary>
@@ -532,13 +589,16 @@ public class JetPawn : MonoBehaviour
             VfxUtil.SpawnBurst(Center, new Color(1f, 0.6f, 0.25f), 4, 3f, 0.14f);
     }
 
-    /// <summary>Back on the spawn ring: airframe whole, gun live, nose level.</summary>
+    /// <summary>Back on the spawn ring: airframe whole, gun live, nose level,
+    /// pocket full, tube warming.</summary>
     public void Respawn(Vector3 position, float yaw)
     {
         _down = false;
         _yaw = yaw;
         _pitch = 0f;
         _roll = 0f;
+        _flareCharges = FlareChargesMax;
+        _missileReadyAt = Time.time + 1.5f;
         Speed = SpeedCruise;
         transform.position = position;
         transform.rotation = Quaternion.Euler(0f, yaw, 0f);
