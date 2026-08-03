@@ -16,9 +16,12 @@ using System.Runtime.InteropServices;
 /// </summary>
 public static class Metrics
 {
-    // Filled in when the ingest Function exists (Phase 2). Empty = disabled.
-    public const string Endpoint = "";
-    public const string Env = "dev"; // flip to "prod" in release builds via MetricsPump.ResolveEnv
+    // The ingest Function (Tools/metrics_fn, provisioned by Tools/provision_metrics.ps1).
+    // Empty string = analytics disabled entirely.
+    public const string Endpoint = "https://jah-metrics-fn.azurewebsites.net/api/e";
+    // Editor and development builds report env:"dev" via MetricsPump.ResolveEnv;
+    // only real release builds tag events "prod".
+    public const string Env = "prod";
 
     const string PrefsInstallId = "metrics_install_id";
     const int MaxQueued = 500;      // oldest events drop beyond this — never grow unbounded
@@ -29,6 +32,7 @@ public static class Metrics
 
     static string _installId;
     static string _sessionId;
+    static string _uid = "";
     static int _seq;
     static readonly List<string> _queue = new List<string>();
     static readonly HashSet<int> _errorHashes = new HashSet<int>();
@@ -36,6 +40,15 @@ public static class Metrics
     static bool _inited;
 
     public static bool Enabled => _inited && (Endpoint.Length > 0 || Application.isEditor);
+
+    /// <summary>
+    /// Link events to the signed-in account. ONLY the opaque server-minted
+    /// userId may ever pass through here — never username or email (COPPA:
+    /// analytics identifiers must stay non-contactable).
+    /// </summary>
+    public static void SetUser(string userId) => _uid = Clean(userId, 64);
+
+    public static void ClearUser() => _uid = "";
 
     /// <summary>Track("match_start", ("mode","dogfight"), ("squad","2v2"), ("bots",6))</summary>
     public static void Track(string name, params (string key, object value)[] props)
@@ -148,8 +161,9 @@ public static class Metrics
         var sb = new StringBuilder(1024);
         sb.Append("{\"v\":1,\"app\":\"jah\",\"env\":\"").Append(MetricsPump.ResolveEnv())
           .Append("\",\"iid\":\"").Append(_installId)
-          .Append("\",\"sid\":\"").Append(_sessionId)
-          .Append("\",\"events\":[");
+          .Append("\",\"sid\":\"").Append(_sessionId);
+        if (_uid.Length > 0) sb.Append("\",\"uid\":\"").Append(_uid);
+        sb.Append("\",\"events\":[");
         for (int i = 0; i < _queue.Count; i++)
         {
             if (i > 0) sb.Append(',');
@@ -173,6 +187,8 @@ public class MetricsPump : MonoBehaviour
     float _timer;
     bool _sending;
 
+    static bool _wasSignedIn;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
@@ -182,6 +198,28 @@ public class MetricsPump : MonoBehaviour
         DontDestroyOnLoad(go);
         _instance = go.AddComponent<MetricsPump>();
         Metrics.Init();
+        Metrics.Track("boot_perf", ("load_ms", (int)(Time.realtimeSinceStartup * 1000f)));
+        AccountClient.Changed += OnAccountChanged;
+        OnAccountChanged();
+    }
+
+    // Analytics only ever sees the opaque userId — the account's username and
+    // email must never enter this pipeline.
+    static void OnAccountChanged()
+    {
+        var ac = AccountClient.Instance;
+        bool signed = ac != null && ac.SignedIn && !string.IsNullOrEmpty(ac.UserId);
+        if (signed)
+        {
+            Metrics.SetUser(ac.UserId);
+            if (!_wasSignedIn) Metrics.Track("sign_in");
+        }
+        else
+        {
+            Metrics.ClearUser();
+            if (_wasSignedIn) Metrics.Track("sign_out");
+        }
+        _wasSignedIn = signed;
     }
 
     public static string ResolveEnv() => Debug.isDebugBuild || Application.isEditor ? "dev" : Metrics.Env;

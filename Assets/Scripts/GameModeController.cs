@@ -14,7 +14,32 @@ public class GameModeController : MonoBehaviour
 {
     public static GameModeController Instance { get; private set; }
 
-    public GameMode Mode { get; private set; } = GameMode.Menu;
+    public GameMode Mode
+    {
+        get => _mode;
+        private set { MetricsModeSwap(_mode, value); _mode = value; }
+    }
+    GameMode _mode = GameMode.Menu;
+    float _matchT0;
+
+    // One seam sees every mode transition, so every mode — current and future —
+    // gets match_start / match_end / menu_view without per-mode wiring
+    // (ANALYTICS_PLAN.md). Metrics.Track never throws, so neither can this.
+    void MetricsModeSwap(GameMode from, GameMode to)
+    {
+        if (from != GameMode.Menu)
+            Metrics.Track("match_end", ("mode", from.ToString()),
+                ("duration_s", (int)(Time.realtimeSinceStartup - _matchT0)));
+        if (to == GameMode.Menu)
+        {
+            Metrics.Track("menu_view");
+        }
+        else
+        {
+            _matchT0 = Time.realtimeSinceStartup;
+            Metrics.Track("match_start", ("mode", to.ToString()));
+        }
+    }
 
     GameObject _menuCanvas;
     GameObject _robotSelect;
@@ -397,6 +422,7 @@ public class GameModeController : MonoBehaviour
         }
 
         _pendingMode = mode;
+        Metrics.Track("mode_select", ("mode", mode.ToString()));
         _menuCanvas.SetActive(false);
         CloseRobotSelect();
         _robotSelect = RobotSelectMenu.Build(this, _roster, mode, _cyanRobot, _magentaRobot);
@@ -404,6 +430,7 @@ public class GameModeController : MonoBehaviour
 
     public void CancelRobotSelect()
     {
+        Metrics.Track("select_cancel", ("screen", "robot"));
         CloseRobotSelect();
         _menuCanvas.SetActive(true);
     }
@@ -416,6 +443,10 @@ public class GameModeController : MonoBehaviour
     {
         _cyanRobot = cyanIndex;
         _magentaRobot = magentaIndex;
+        Metrics.Track("robot_select",
+            ("cyan", _roster.Get(cyanIndex).displayName),
+            ("magenta", _roster.Get(magentaIndex).displayName),
+            ("mode", _pendingMode.ToString()));
         CloseRobotSelect();
         // The Brawl family skips the FPS-cast reskin — its robots spawn
         // fresh from the roster. Brawl and its exhibition go through the
@@ -826,6 +857,8 @@ public class GameModeController : MonoBehaviour
     void StartCommanderMode(bool playerCommands)
     {
         Mode = GameMode.Commander;
+        // The enum collapses Commander's play/war split — this line keeps it.
+        Metrics.Track("commander_kind", ("variant", playerCommands ? "play" : "war"));
         DestroySpectatorRig();
         ResetMatchState();
         // Before the characters are hidden: deactivating a mid-cycle de-rez
@@ -1039,6 +1072,7 @@ public class GameModeController : MonoBehaviour
 
     void OpenChineseDeckSelect(GameMode mode)
     {
+        Metrics.Track("mode_select", ("mode", mode.ToString()));
         _menuCanvas.SetActive(false);
         CloseChineseDeckSelect();
         _chineseDeckSelect = ChineseDeckSelect.Build(this, mode);
@@ -1047,6 +1081,7 @@ public class GameModeController : MonoBehaviour
     /// <summary>Escape/BACK from the deck screen goes back a step, to the main menu.</summary>
     public void CancelChineseDeckSelect()
     {
+        Metrics.Track("select_cancel", ("screen", "deck"));
         CloseChineseDeckSelect();
         _menuCanvas.SetActive(true);
     }
