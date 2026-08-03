@@ -121,7 +121,10 @@ keyart so a shared link unfurls into that image.
    ```
    powershell -ExecutionPolicy Bypass -File Tools/deploy_site.ps1
    ```
-6. ⬜ DNS in the `jah.cc` zone at **Cloudflare** (owned, zone active, free plan).
+6. ✅ DNS in the `jah.cc` zone at **Cloudflare** (owned, zone active, free plan).
+   Live 2026-08-03: `https://jah.cc` and `https://www.jah.cc` both serve the
+   page on Azure-issued certificates, `http://` 301s to `https://jah.cc`, the
+   custom 404 works, and `https://play.jah.cc` serves the game.
    The site answers on **both** `jah.cc` and `www.jah.cc`; the game keeps
    `play.jah.cc`.
 
@@ -152,6 +155,15 @@ keyart so a shared link unfurls into that image.
    The Cloudflare token in `.secrets/cloudflare_token.txt` can read the zone but
    **not** its DNS records — it was scoped for the TURN work. DNS edits need a
    token with Zone → DNS → Edit on `jah.cc`, or the dashboard.
+
+   **The failure worth remembering:** `www` was created proxied and only flipped
+   to grey a few minutes before the bind. Azure had already cached the proxied
+   answer, sat in `Validating` for ~12 minutes, then went `Failed` with "An
+   unknown error has occurred… please try again later". The cure is
+   `az staticwebapp hostname delete` followed by `set` again — a second bind
+   against the same DNS went `Validating → Adding → Ready` in about four
+   minutes. The apex never had this problem, because TXT validation reads a
+   record the proxy does not touch.
 
 ### Two facts worth keeping
 
