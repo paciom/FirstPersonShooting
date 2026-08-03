@@ -1,0 +1,118 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Justice Armored Heroes — metrics\nAll tiles filter to `env == 'prod'` (editor and dev builds report `dev`). Retention, cohorts and step-by-step funnels live under **Usage** on the `jah-metrics` resource — they work off the same user/session mapping. Events auto-delete after 90 days."
+      },
+      "name": "header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where tostring(customDimensions.env) == 'prod' and cloud_RoleName == 'jah' | summarize Players = dcount(user_Id) by bin(timestamp, 1d) | render timechart",
+        "size": 1,
+        "title": "Daily players",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "dau"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where name == 'match_start' and tostring(customDimensions.env) == 'prod' and timestamp > ago(14d) | summarize Matches = count() by Mode = tostring(customDimensions.mode) | order by Matches desc",
+        "size": 1,
+        "title": "Mode popularity (14 days)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "piechart"
+      },
+      "name": "modes"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where name == 'robot_select' and tostring(customDimensions.env) == 'prod' and timestamp > ago(14d) | summarize Picks = count() by Robot = tostring(customDimensions.cyan) | order by Picks desc",
+        "size": 1,
+        "title": "Robot picks — cyan side (14 days)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "robots"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where tostring(customDimensions.env) == 'prod' and cloud_RoleName == 'jah' and timestamp > ago(7d) | where name in ('session_start', 'menu_view', 'mode_select', 'match_start', 'match_end') | summarize Count = count() by Step = name | extend Order = case(Step == 'session_start', 1, Step == 'menu_view', 2, Step == 'mode_select', 3, Step == 'match_start', 4, 5) | order by Order asc | project Step, Count",
+        "size": 1,
+        "title": "Funnel counts (7 days)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "funnel"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where name == 'match_end' and tostring(customDimensions.env) == 'prod' and timestamp > ago(14d) | summarize MedianMinutes = round(percentile(todouble(customMeasurements.duration_s), 50) / 60, 1) by Mode = tostring(customDimensions.mode) | order by MedianMinutes desc",
+        "size": 1,
+        "title": "Median match length, minutes (14 days)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "barchart"
+      },
+      "name": "duration"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where name == 'boot_perf' and tostring(customDimensions.env) == 'prod' | summarize p50_ms = percentile(todouble(customMeasurements.load_ms), 50), p90_ms = percentile(todouble(customMeasurements.load_ms), 90) by bin(timestamp, 1d) | render timechart",
+        "size": 1,
+        "title": "Boot time to menu (p50 / p90)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "boot"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where cloud_RoleName == 'site' and timestamp > ago(14d) | summarize Count = count() by name, bin(timestamp, 1d) | render timechart",
+        "size": 1,
+        "title": "Website — views and play clicks",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "site"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents | where name == 'error' and tostring(customDimensions.env) == 'prod' and timestamp > ago(7d) | summarize Hits = count(), Players = dcount(user_Id) by Message = tostring(customDimensions.msg), At = tostring(customDimensions.where) | top 10 by Hits",
+        "size": 0,
+        "title": "Top exceptions in the wild (7 days)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "errors"
+    }
+  ],
+  "styleSettings": {},
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

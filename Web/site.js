@@ -33,10 +33,35 @@ const ROSTER = [
 ];
 
 /* ── play links ──────────────────────────────────────────────────── */
+/* ?src=site rides along so the game's own session_start can say the player
+   came from this page — the only cross-property joint there is. */
 for (const a of document.querySelectorAll('.js-play')) {
-  a.href = PLAY_URL;
+  a.href = PLAY_URL + '?src=site';
   a.rel = 'noopener';
 }
+
+/* ── metrics ─────────────────────────────────────────────────────── */
+/* First-party and cookieless (ANALYTICS_PLAN.md): nothing is written to the
+   device, and both ids are random per page load — so nothing here is a
+   persistent identifier. sendBeacon so play_click survives the navigation;
+   the Blob stays untyped because a typed one forces a CORS preflight that
+   beacons cannot perform. */
+const METRICS_URL = 'https://jah-metrics-fn.azurewebsites.net/api/e';
+const mhex = n => Array.from(crypto.getRandomValues(new Uint8Array(n)),
+  b => b.toString(16).padStart(2, '0')).join('');
+const MIID = mhex(16), MSID = mhex(8);
+let mseq = 0;
+function metric(e, p) {
+  try {
+    const body = JSON.stringify({ v: 1, app: 'site', env: 'prod',
+      iid: MIID, sid: MSID, events: [{ e, t: Date.now(), n: mseq++, p }] });
+    if (!navigator.sendBeacon || !navigator.sendBeacon(METRICS_URL, new Blob([body])))
+      fetch(METRICS_URL, { method: 'POST', body, keepalive: true });
+  } catch (err) { /* analytics never breaks the page */ }
+}
+metric('page_view', { path: location.pathname, ref: document.referrer.slice(0, 64) });
+for (const a of document.querySelectorAll('.js-play'))
+  a.addEventListener('click', () => metric('play_click', {}));
 
 /* ── footer year ─────────────────────────────────────────────────── */
 document.getElementById('year').textContent = new Date().getFullYear();

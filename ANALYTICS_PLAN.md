@@ -28,9 +28,17 @@ Unity client (WebGL / iOS / Android)          www.jah.cc (site beacon, ~15 lines
 grant), one pipeline for the game on every platform *and* the marketing site, and a clean
 story for Apple's Kids Category and Google Play Families when mobile ships.
 
-**Status: Phase 1 (client library) built 2026-08-03** — `Assets/Scripts/Metrics/Metrics.cs`
-+ `Assets/Plugins/WebGL/MetricsBeacon.jslib`, compile-checked, inert until an endpoint is
-provisioned. Phases 2–6 pending.
+**Status 2026-08-04: LIVE end to end.** Phases 1–5 done — client library
+(`Assets/Scripts/Metrics/Metrics.cs` + `Assets/Plugins/WebGL/MetricsBeacon.jslib`),
+Azure stack provisioned (`Tools/provision_metrics.ps1`), ingest Function deployed
+(`Tools/metrics_fn/`, `Tools/deploy_metrics_fn.ps1`) at
+`https://jah-metrics-fn.azurewebsites.net/api/e`, all 15 modes instrumented via the
+`GameModeController.Mode` setter seam, account uid join wired off `AccountClient.Changed`,
+site beacon + `?src=site` + `privacy.html` deployed to www.jah.cc, and the "JAH Metrics"
+workbook published (`Tools/create_metrics_workbook.ps1`). Phase 6 (mobile checklist)
+remains for when iOS/Android builds exist. Ops notes: POST with header `x-jah-debug: 1`
+to get the Function's gate trace instead of the blind 204; the client accepts single-event
+loss on cold starts by design (batching + reflush covers real sessions).
 
 ## Why not the obvious products (verified 2026-08-03)
 
