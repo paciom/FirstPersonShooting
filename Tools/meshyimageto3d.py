@@ -43,6 +43,13 @@ STAGES = f"{ROOT}/Assets/Models/Stages"
 TEXTURE_PROMPTS = {
     "ranger": ("white and light grey armour panels with bright cyan light "
                "strips, clean flat panels, stylised toy finish"),
+    # Jet forms keep their robot's palette — the frame shows the airframe, the
+    # prompt only has to keep the colours honest. Named <robot>-jet so state,
+    # download dir (Assets/Models/Stages/<robot>-jet) and the roster's jet scan
+    # all fall out of the same key with no special-casing here.
+    "ranger-jet": ("white and light grey armour panels with bright cyan light "
+                   "strips, tinted glass cockpit canopy, clean flat panels, "
+                   "stylised toy finish"),
     "bolt": ("navy blue armour panels with bright yellow accents and white "
              "trim, cyan light strips, clean flat panels, stylised toy finish"),
     "hawk": ("turquoise teal armour panels with golden yellow accents, dark "
