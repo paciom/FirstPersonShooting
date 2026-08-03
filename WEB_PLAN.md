@@ -121,11 +121,32 @@ keyart so a shared link unfurls into that image.
    ```
    powershell -ExecutionPolicy Bypass -File Tools/deploy_site.ps1
    ```
-6. ⬜ DNS at the registrar: `www` CNAME to the SWA hostname, apex redirect to
-   www, then re-run with `-BindDomain` and Azure issues the certificate itself.
+6. ⬜ DNS in the `jah.cc` zone at **Cloudflare** (owned, zone active, free plan).
+   The site answers on **both** `jah.cc` and `www.jah.cc`; the game keeps
+   `play.jah.cc`.
 
-Steps 5–6 need two answers: **who is the registrar for `jah.cc`** (and is the
-domain already owned) and **do we take the Cloudflare route for `play.jah.cc`**.
+   | Type | Name | Value | Proxy |
+   | --- | --- | --- | --- |
+   | CNAME | `@` | `kind-sea-0d8a69e0f.7.azurestaticapps.net` | **DNS only** |
+   | CNAME | `www` | `kind-sea-0d8a69e0f.7.azurestaticapps.net` | **DNS only** |
+   | TXT | `@` | the apex validation token from `-BindDomain` | — |
+   | CNAME | `play` | `photonarenaweb.z13.web.core.windows.net` | **Proxied** |
+
+   Three things that bite here:
+   - **Grey cloud on `@` and `www`.** A proxied record resolves to Cloudflare's
+     IPs, so Azure's validation never sees its own hostname, never validates,
+     and never issues the certificate. Azure serves TLS for these two directly.
+   - **The apex has no CNAME to validate against**, so Azure issues a TXT token
+     instead — published at `@`, not at `_dnsauth` (that is Front Door's
+     convention, not Static Web Apps'). Cloudflare's CNAME flattening handles
+     serving the apex; no ALIAS record type is needed.
+   - **`play` must be proxied AND carry a Host-header override** to
+     `photonarenaweb.z13.web.core.windows.net` (Cloudflare → Rules → Origin
+     Rules), plus SSL/TLS mode Full, or Azure Storage 404s every request.
+
+   The Cloudflare token in `.secrets/cloudflare_token.txt` can read the zone but
+   **not** its DNS records — it was scoped for the TURN work. DNS edits need a
+   token with Zone → DNS → Edit on `jah.cc`, or the dashboard.
 
 ### Two facts worth keeping
 
