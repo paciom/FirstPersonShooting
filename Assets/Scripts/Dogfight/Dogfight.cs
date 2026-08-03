@@ -3,13 +3,15 @@ using Unity.AI.Navigation;
 using UnityEngine;
 
 /// <summary>
-/// DOGFIGHT — the sky duel.
+/// DOGFIGHT — the sky duel, at whatever size the select screen asked for.
 ///
-/// Two robots land on pads over a navy void, fold into jets by stop motion,
-/// and race each other to five wrecks. One card seats the player in the cyan
-/// cockpit against a CPU pilot; the AI WAR card seats two CPU pilots and turns
-/// the camera into a broadcast that cuts between them. Either way the camera
-/// answers C (chase / cockpit) — the couch gets the first-person seat too.
+/// Each side fields <see cref="DogfightTeamSize.PerTeam"/> jets of its picked
+/// robot. Squadrons land on a row of pads over the navy void, fold into jets
+/// by stop motion in formation, climb out together, and race to a team score
+/// that scales with the roster (five wrecks a pilot). One card seats the
+/// player in the LEAD cyan jet with AI wingmates; the AI WAR card seats CPU
+/// pilots everywhere and hands the couch a broadcast camera. Either way C
+/// toggles chase/cockpit, and T walks the transformation triangle.
 ///
 /// It owns its world the way TANK RAID owns its battlefield: entering
 /// deactivates the arena's environment and hides its cast, everything is
@@ -26,8 +28,8 @@ using UnityEngine;
 /// the score mid-sortie is worse than no referee (BrawlMatch's reasoning).
 /// </summary>
 /// <remarks>Runs before the pawns, at the drivers' order: this class writes
-/// the hero's <c>Steer</c>/<c>Throttle</c>/<c>Firing</c>, and a driver that
-/// ran after its pawn would always be one frame stale.</remarks>
+/// the hero's seams, and a driver that ran after its pawn would always be
+/// one frame stale.</remarks>
 [DefaultExecutionOrder(-50)]
 public class Dogfight : MonoBehaviour
 {
@@ -35,26 +37,33 @@ public class Dogfight : MonoBehaviour
 
     const float JetShield = 100f;
 
-    /// <summary>First to this many wrecks takes the sortie.</summary>
-    const int KillsToWin = 5;
+    /// <summary>Wrecks a PILOT is worth chasing — the team target is this
+    /// times the team size, capped where a sortie stops being one sitting.</summary>
+    const int KillsPerPilot = 5;
+    const int KillsCap = 20;
 
-    /// <summary>The dying jet's screen time, and the winner's breather.</summary>
     const float RespawnBeat = 2.5f;
-
-    /// <summary>Seconds of shielded grace after a respawn, blinked so it reads.</summary>
     const float GraceSeconds = 2f;
 
-    /// <summary>The ceremony: robots stand, fold, then climb out.</summary>
     const float IntroSeconds = 0.9f;
     const float MorphSeconds = 1.8f;
     const float LaunchSeconds = 2.4f;
 
-    /// <summary>Metres between the two pads. Close enough that each robot's
-    /// fold is in the other's shot; far enough that the climb-out separates
-    /// them before guns are free.</summary>
+    /// <summary>Metres between the two pad rows, and along each row between
+    /// wingmates. Close enough that a squadron's fold reads as one ceremony;
+    /// far enough that the climb-out never braids.</summary>
     const float PadSpacing = 64f;
+    const float WingSpacing = 11f;
 
     enum Stage { Intro, Morph, Launch, Fight, Over }
+
+    /// <summary>One seat: a pawn and its respawn/grace clocks.</summary>
+    class Slot
+    {
+        public JetPawn pawn;
+        public float respawnAt = -1f;
+        public float graceUntil;
+    }
 
     // -------------------------------------------------------------------- state
 
@@ -71,23 +80,24 @@ public class Dogfight : MonoBehaviour
     int _cyanRobot;
     int _magentaRobot;
     bool _playerControls;
+    int _teamSize = 1;
+    int _killsToWin = KillsPerPilot;
 
-    JetPawn _cyan;
-    JetPawn _magenta;
-    GameObject _cyanPad;
-    GameObject _magentaPad;
+    // Plain fields, not readonly: readonly collections are silently reset by
+    // a recompile-during-Play, and a referee with amnesia mid-sortie is the
+    // exact bug that rule exists for.
+    List<Slot> _cyanTeam = new List<Slot>();
+    List<Slot> _magentaTeam = new List<Slot>();
+    List<GameObject> _pads = new List<GameObject>();
+
+    /// <summary>The player's seat — lead jet of the cyan row.</summary>
+    JetPawn Hero => _cyanTeam.Count > 0 ? _cyanTeam[0].pawn : null;
 
     Stage _stage = Stage.Intro;
     float _stageStart;
     int _cyanScore;
     int _magentaScore;
-    float _cyanRespawnAt = -1f;
-    float _magentaRespawnAt = -1f;
-    float _cyanGraceUntil;
-    float _magentaGraceUntil;
 
-    /// <summary>The player's seeker: what the diamond is on, and for how
-    /// long the nose has held it. Locked at <see cref="PlayerLockSeconds"/>.</summary>
     Transform _lockCandidate;
     Vector3 _lockCandidateCenter;
     float _lockProgress;
@@ -113,6 +123,9 @@ public class Dogfight : MonoBehaviour
 
     void Setup()
     {
+        _teamSize = DogfightTeamSize.PerTeam;
+        _killsToWin = Mathf.Min(KillsCap, KillsPerPilot * _teamSize);
+
         var player = FindFirstObjectByType<PlayerBrain>();
         if (player != null)
             Hide(player.gameObject);
@@ -141,27 +154,25 @@ public class Dogfight : MonoBehaviour
         // see the WeaponsFree assertion in Update.
         DogfightTurret.BuildRing();
 
-        // Robots first: standing on their pads, facing each other across the
-        // void, cyan on the west pad. The pawns themselves live at the scene
+        // Two rows of pads face each other across the void, one robot on
+        // each — cyan the west row. The pawns themselves live at the scene
         // root (see the class note); only the set dressing is staged.
-        var cyanAt = new Vector3(-PadSpacing * 0.5f, DogfightSky.PadY, 0f);
-        var magentaAt = new Vector3(PadSpacing * 0.5f, DogfightSky.PadY, 0f);
-        _cyan = SpawnPawn(_cyanRobot, 0, cyanAt, 90f);
-        _magenta = SpawnPawn(_magentaRobot, 1, magentaAt, -90f);
-        // The pawn's origin is its flight CENTRE, so the standing robot's feet
-        // hang half a fit below it — the pad top meets them there. After the
-        // fold the low-slung jet is left hovering a body above the pad, which
-        // is exactly the shot the clips end on.
-        Vector3 underFeet = Vector3.down * (JetPawn.JetSize * 0.5f);
-        _cyanPad = _sky.BuildPad(cyanAt + underFeet, MatchAnnouncer.TeamColor(0));
-        _magentaPad = _sky.BuildPad(magentaAt + underFeet, MatchAnnouncer.TeamColor(1));
+        for (int i = 0; i < _teamSize; i++)
+        {
+            float wing = (i - (_teamSize - 1) * 0.5f) * WingSpacing;
+            SpawnSeat(_cyanTeam, _cyanRobot, 0,
+                new Vector3(-PadSpacing * 0.5f, DogfightSky.PadY, wing), 90f);
+            SpawnSeat(_magentaTeam, _magentaRobot, 1,
+                new Vector3(PadSpacing * 0.5f, DogfightSky.PadY, wing), -90f);
+        }
 
         _cameraRig = BuildCameraRig();
         _camera = _cameraRig.GetComponent<Camera>();
         _director = _cameraRig.GetComponent<DogfightCamera>();
-        _director.Follow(_cyan);
+        _director.Follow(Hero);
 
         _hud = DogfightHud.Build(transform);
+        _hud.SetScoreTarget(_killsToWin);
         _hud.SetScore(0, 0);
         _hud.SetReticleVisible(false);
         _hud.SetPilotRowVisible(false);
@@ -171,21 +182,25 @@ public class Dogfight : MonoBehaviour
         _stageStart = Time.time;
     }
 
-    JetPawn SpawnPawn(int robotIndex, int teamId, Vector3 position, float yaw)
+    void SpawnSeat(List<Slot> team, int robotIndex, int teamId, Vector3 position, float yaw)
     {
         var entry = _roster != null && _roster.HasRobots
             ? _roster.Get(robotIndex)
             : default;
         var pawn = JetPawn.Spawn(entry, JetStagesFor(entry), teamId, position, yaw, JetShield);
         pawn.OnWrecked += Wrecked;
-        return pawn;
+        team.Add(new Slot { pawn = pawn });
+
+        // The pawn's origin is its flight CENTRE, so the standing robot's
+        // feet hang half a fit below it — the pad top meets them there.
+        _pads.Add(_sky.BuildPad(position + Vector3.down * (JetPawn.JetSize * 0.5f),
+            MatchAnnouncer.TeamColor(teamId)));
     }
 
     /// <summary>
     /// The stop-motion set this robot flies. Its own where the jet pipeline
     /// has been run for it; the ranger's airframe (in this robot's team
-    /// paint) where it has not — one robot has flown so far, and a mode only
-    /// ranger could enter would be a menu card that mostly apologises.
+    /// paint) where it has not.
     /// </summary>
     GameObject[] JetStagesFor(RobotRoster.Entry entry)
     {
@@ -216,10 +231,11 @@ public class Dogfight : MonoBehaviour
 
             case Stage.Morph:
                 float progress = Mathf.Clamp01(elapsed / MorphSeconds);
-                if (_cyan.HasMorph)
-                    _cyan.ShowMorph(progress);
-                if (_magenta.HasMorph)
-                    _magenta.ShowMorph(progress);
+                ForEachPawn(pawn =>
+                {
+                    if (pawn.HasMorph)
+                        pawn.ShowMorph(progress);
+                });
                 if (elapsed >= MorphSeconds)
                 {
                     Advance(Stage.Launch);
@@ -228,14 +244,15 @@ public class Dogfight : MonoBehaviour
                 break;
 
             case Stage.Launch:
-                // The mode itself is the pilot for the climb-out: both jets
-                // get the same gentle nose-up and full throttle, written
-                // through the same seam the player and the brains use.
+                // The mode itself is the pilot for the climb-out: the whole
+                // formation gets the same gentle nose-up and full throttle,
+                // written through the same seams everyone else uses.
                 var climb = new Vector2(0f, Mathf.Lerp(0.55f, 0.1f, elapsed / LaunchSeconds));
-                _cyan.Steer = climb;
-                _cyan.Throttle = 1f;
-                _magenta.Steer = climb;
-                _magenta.Throttle = 1f;
+                ForEachPawn(pawn =>
+                {
+                    pawn.Steer = climb;
+                    pawn.Throttle = 1f;
+                });
                 if (elapsed >= LaunchSeconds)
                 {
                     Advance(Stage.Fight);
@@ -244,7 +261,9 @@ public class Dogfight : MonoBehaviour
                 break;
 
             case Stage.Fight:
-                RunFight();
+                if (_playerControls)
+                    DrivePlayer();
+                RunRespawns();
                 break;
 
             case Stage.Over:
@@ -260,9 +279,21 @@ public class Dogfight : MonoBehaviour
         DogfightTurret.WeaponsFree = _stage == Stage.Fight || _stage == Stage.Over;
 
         ReadCameraKeys();
-        RunGraceBlink(_cyan, _cyanGraceUntil);
-        RunGraceBlink(_magenta, _magentaGraceUntil);
+        foreach (var slot in _cyanTeam)
+            RunGraceBlink(slot);
+        foreach (var slot in _magentaTeam)
+            RunGraceBlink(slot);
         Readout();
+    }
+
+    void ForEachPawn(System.Action<JetPawn> act)
+    {
+        foreach (var slot in _cyanTeam)
+            if (slot.pawn != null)
+                act(slot.pawn);
+        foreach (var slot in _magentaTeam)
+            if (slot.pawn != null)
+                act(slot.pawn);
     }
 
     void Advance(Stage stage)
@@ -273,9 +304,8 @@ public class Dogfight : MonoBehaviour
 
     void Launch()
     {
-        _cyan.FlightOn = true;
-        _magenta.FlightOn = true;
-        foreach (var pad in new[] { _cyanPad, _magentaPad })
+        ForEachPawn(pawn => pawn.FlightOn = true);
+        foreach (var pad in _pads)
         {
             if (pad == null)
                 continue;
@@ -285,21 +315,32 @@ public class Dogfight : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Guns free. Brains go on every CPU seat with mirrored break sides down
+    /// the rows, and quarries dealt round-robin across the aisle — a squadron
+    /// that all picked the same enemy would fly as one blob and die as one.
+    /// </summary>
     void OpenFight()
     {
         _hud.Flash("FIGHT", new Color(1f, 0.75f, 0.2f));
         _hud.SetReticleVisible(_playerControls);
         _hud.SetPilotRowVisible(_playerControls);
-        if (_playerControls)
+
+        for (int i = 0; i < _cyanTeam.Count; i++)
         {
-            AddBrain(_magenta, _cyan, -1f);
+            bool playerSeat = _playerControls && i == 0;
+            if (!playerSeat)
+                AddBrain(_cyanTeam[i].pawn,
+                    _magentaTeam[i % _magentaTeam.Count].pawn,
+                    i % 2 == 0 ? 1f : -1f);
         }
-        else
+        for (int i = 0; i < _magentaTeam.Count; i++)
+            AddBrain(_magentaTeam[i].pawn,
+                _cyanTeam[i % _cyanTeam.Count].pawn,
+                i % 2 == 0 ? -1f : 1f);
+
+        if (!_playerControls)
         {
-            // Mirrored break sides, so the opening merge becomes a circle
-            // rather than a queue.
-            AddBrain(_cyan, _magenta, 1f);
-            AddBrain(_magenta, _cyan, -1f);
             _director.Broadcast = true;
             _hud.SetCaption("C — VIEW   ·   SPACE — NEXT JET");
         }
@@ -313,13 +354,6 @@ public class Dogfight : MonoBehaviour
         brain.breakSign = breakSign;
     }
 
-    void RunFight()
-    {
-        if (_playerControls)
-            DrivePlayer();
-        RunRespawns();
-    }
-
     /// <summary>
     /// The stick, per form. As a JET the airframe chases the cursor (offset
     /// from the screen's centre is the steer, deadzoned so a parked mouse
@@ -331,15 +365,16 @@ public class Dogfight : MonoBehaviour
     /// </summary>
     void DrivePlayer()
     {
-        if (_cyan == null || _cyan.IsDown)
+        var hero = Hero;
+        if (hero == null || hero.IsDown)
             return;
 
         if (Input.GetKeyDown(KeyCode.T))
-            _cyan.RequestNextForm();
-        if (_cyan.Morphing)
+            hero.RequestNextForm();
+        if (hero.Morphing)
             return;
 
-        if (_cyan.CurrentForm == JetPawn.Form.Jet)
+        if (hero.CurrentForm == JetPawn.Form.Jet)
         {
             Vector2 mouse = new Vector2(
                 (Input.mousePosition.x - Screen.width * 0.5f) / (Screen.height * 0.38f),
@@ -356,46 +391,44 @@ public class Dogfight : MonoBehaviour
                              - (Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
             steer += new Vector2(keyYaw, keyPitch);
 
-            _cyan.Steer = steer;
-            _cyan.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
-                             - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+            hero.Steer = steer;
+            hero.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
+                            - (Input.GetKey(KeyCode.S) ? 1f : 0f);
         }
         else
         {
             var ray = _camera.ScreenPointToRay(Input.mousePosition);
-            _cyan.AimAt(ray.origin + ray.direction * 140f);
-            _cyan.Steer = new Vector2(Input.GetAxisRaw("Horizontal"),
+            hero.AimAt(ray.origin + ray.direction * 140f);
+            hero.Steer = new Vector2(Input.GetAxisRaw("Horizontal"),
                 Input.GetAxisRaw("Vertical"));
         }
 
-        _cyan.Firing = Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
+        hero.Firing = Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
 
         UpdatePlayerLock();
         if (Input.GetMouseButtonDown(1) && _lockProgress >= PlayerLockSeconds)
-            _cyan.TryFireMissile(_lockCandidate);
+            hero.TryFireMissile(_lockCandidate);
         if (Input.GetKeyDown(KeyCode.F))
-            _cyan.TryPopFlares();
+            hero.TryPopFlares();
     }
 
     /// <summary>
-    /// The seeker's eye: the enemy jet or the nearest live turret, whichever
-    /// the nose is actually on. Hold it inside the cone and the diamond
-    /// solidifies; look away and the lock starts over — a missile costs
-    /// commitment, which is the whole difference from the guns.
+    /// The seeker's eye: the nearest enemy jet or turret the hero's AIM is
+    /// actually on. Hold it inside the cone and the diamond solidifies; look
+    /// away and the lock starts over — a missile costs commitment.
     /// </summary>
     void UpdatePlayerLock()
     {
+        var hero = Hero;
         Transform best = null;
         Vector3 bestCenter = Vector3.zero;
         float bestAngle = PlayerLockCone;
 
-        // Measured against the form's AIM, not the nose — a tank locks with
-        // its cursor, a jet with its flight path.
-        Vector3 seeker = _cyan.AimDirection;
-        var enemy = JetPawn.NearestEnemy(_cyan.transform.position, 0, PlayerLockRange);
+        Vector3 seeker = hero.AimDirection;
+        var enemy = JetPawn.NearestEnemy(hero.transform.position, 0, PlayerLockRange);
         if (enemy != null)
         {
-            float angle = Vector3.Angle(seeker, enemy.Center - _cyan.transform.position);
+            float angle = Vector3.Angle(seeker, enemy.Center - hero.transform.position);
             if (angle < bestAngle)
             {
                 bestAngle = angle;
@@ -404,10 +437,10 @@ public class Dogfight : MonoBehaviour
             }
         }
 
-        var turret = DogfightTurret.Nearest(_cyan.transform.position, PlayerLockRange);
+        var turret = DogfightTurret.Nearest(hero.transform.position, PlayerLockRange);
         if (turret != null)
         {
-            float angle = Vector3.Angle(seeker, turret.Center - _cyan.transform.position);
+            float angle = Vector3.Angle(seeker, turret.Center - hero.transform.position);
             if (angle < bestAngle)
             {
                 best = turret.transform;
@@ -443,16 +476,19 @@ public class Dogfight : MonoBehaviour
 
     void Wrecked(JetPawn pawn)
     {
-        bool cyanDown = pawn == _cyan;
+        var slot = FindSlot(pawn, out bool cyanSide);
+        if (slot == null)
+            return;
+
         if (_stage == Stage.Fight)
         {
-            if (cyanDown)
+            if (cyanSide)
                 _magentaScore++;
             else
                 _cyanScore++;
             _hud.SetScore(_cyanScore, _magentaScore);
 
-            int scorer = cyanDown ? 1 : 0;
+            int scorer = cyanSide ? 1 : 0;
             _hud.Flash($"{MatchAnnouncer.TeamName(scorer)} SCORES",
                 MatchAnnouncer.TeamColor(scorer));
         }
@@ -460,73 +496,106 @@ public class Dogfight : MonoBehaviour
         if (_director.Subject == pawn)
             _director.Shake(1.1f);
 
-        if (cyanDown)
-            _cyanRespawnAt = Time.time + RespawnBeat;
-        else
-            _magentaRespawnAt = Time.time + RespawnBeat;
+        slot.respawnAt = Time.time + RespawnBeat;
 
         if (_stage == Stage.Fight
-            && (_cyanScore >= KillsToWin || _magentaScore >= KillsToWin))
+            && (_cyanScore >= _killsToWin || _magentaScore >= _killsToWin))
             EndSortie();
+    }
+
+    Slot FindSlot(JetPawn pawn, out bool cyanSide)
+    {
+        foreach (var slot in _cyanTeam)
+            if (slot.pawn == pawn)
+            {
+                cyanSide = true;
+                return slot;
+            }
+        foreach (var slot in _magentaTeam)
+            if (slot.pawn == pawn)
+            {
+                cyanSide = false;
+                return slot;
+            }
+        cyanSide = false;
+        return null;
     }
 
     void RunRespawns()
     {
-        if (_cyanRespawnAt > 0f && Time.time >= _cyanRespawnAt)
-        {
-            _cyanRespawnAt = -1f;
-            RespawnPawn(_cyan, _magenta);
-            _cyanGraceUntil = Time.time + GraceSeconds;
-        }
-        if (_magentaRespawnAt > 0f && Time.time >= _magentaRespawnAt)
-        {
-            _magentaRespawnAt = -1f;
-            RespawnPawn(_magenta, _cyan);
-            _magentaGraceUntil = Time.time + GraceSeconds;
-        }
-
-        if (_cyan != null && _cyan.Shield != null)
-            _cyan.Shield.invulnerable = Time.time < _cyanGraceUntil;
-        if (_magenta != null && _magenta.Shield != null)
-            _magenta.Shield.invulnerable = Time.time < _magentaGraceUntil;
+        for (int i = 0; i < _cyanTeam.Count; i++)
+            RunRespawn(_cyanTeam[i], i);
+        for (int i = 0; i < _magentaTeam.Count; i++)
+            RunRespawn(_magentaTeam[i], i);
     }
 
-    /// <summary>Back onto the spawn ring on the far side from the enemy,
-    /// facing the fight — never into the fence, never into a waiting gun.</summary>
-    void RespawnPawn(JetPawn pawn, JetPawn enemy)
+    void RunRespawn(Slot slot, int index)
     {
-        Vector3 away = Vector3.right * (pawn.Team == 0 ? -1f : 1f);
-        if (enemy != null)
+        if (slot.pawn == null)
+            return;
+        if (slot.respawnAt > 0f && Time.time >= slot.respawnAt)
         {
-            Vector3 flat = new Vector3(enemy.transform.position.x, 0f,
-                enemy.transform.position.z);
+            slot.respawnAt = -1f;
+            RespawnPawn(slot.pawn, index);
+            slot.graceUntil = Time.time + GraceSeconds;
+        }
+        if (slot.pawn.Shield != null)
+            slot.pawn.Shield.invulnerable = Time.time < slot.graceUntil;
+    }
+
+    /// <summary>Back onto the spawn ring on the far side from the enemy's
+    /// centre of mass, wingmates fanned along the ring so a squadron never
+    /// respawns as a single stacked target — always facing the fight.</summary>
+    void RespawnPawn(JetPawn pawn, int index)
+    {
+        Vector3 centroid = Vector3.zero;
+        int enemies = 0;
+        foreach (var other in JetPawn.All)
+        {
+            if (other == null || other.Team == pawn.Team || other.IsDown)
+                continue;
+            centroid += other.transform.position;
+            enemies++;
+        }
+
+        Vector3 away = Vector3.right * (pawn.Team == 0 ? -1f : 1f);
+        if (enemies > 0)
+        {
+            Vector3 flat = centroid / enemies;
+            flat.y = 0f;
             if (flat.sqrMagnitude > 1f)
                 away = -flat.normalized;
         }
+
+        // Fan the seats: 0 dead ahead, then ±14, ±28... so wingmates arrive
+        // abreast rather than nose-to-tail.
+        float fan = (index % 2 == 0 ? 1f : -1f) * Mathf.Ceil(index / 2f) * 14f;
+        away = Quaternion.Euler(0f, fan, 0f) * away;
+
         Vector3 at = away * DogfightSky.SpawnRing + Vector3.up * DogfightSky.SpawnAltitude;
         float yaw = Quaternion.LookRotation(-away, Vector3.up).eulerAngles.y;
         pawn.Respawn(at, yaw);
     }
 
-    /// <summary>The grace made visible: a blink nothing else in the sky has,
-    /// so "you cannot be hurt yet" needs no caption. Skipped for the cockpit
-    /// subject — the camera owns that jet's visibility.</summary>
-    void RunGraceBlink(JetPawn pawn, float graceUntil)
+    /// <summary>The grace made visible: a blink nothing else in the sky has.
+    /// Skipped for the cockpit subject — the camera owns that jet's visibility.</summary>
+    void RunGraceBlink(Slot slot)
     {
+        var pawn = slot.pawn;
         if (pawn == null || pawn.IsDown)
             return;
         if (_director.Cockpit && _director.Subject == pawn)
             return;
-        if (Time.time < graceUntil)
-            pawn.SetVisible(Mathf.FloorToInt((graceUntil - Time.time) * 9f) % 2 == 0);
-        else if (Time.time < graceUntil + 0.5f)
+        if (Time.time < slot.graceUntil)
+            pawn.SetVisible(Mathf.FloorToInt((slot.graceUntil - Time.time) * 9f) % 2 == 0);
+        else if (Time.time < slot.graceUntil + 0.5f)
             pawn.SetVisible(true);
     }
 
     void EndSortie()
     {
         Advance(Stage.Over);
-        int winner = _cyanScore >= KillsToWin ? 0 : 1;
+        int winner = _cyanScore >= _killsToWin ? 0 : 1;
         Color accent = MatchAnnouncer.TeamColor(winner);
         _hud.Flash($"{MatchAnnouncer.TeamName(winner)} TAKES THE SKY", accent, 3f);
         _hud.ShowOver($"{MatchAnnouncer.TeamName(winner)} WINS",
@@ -538,11 +607,12 @@ public class Dogfight : MonoBehaviour
 
     void Readout()
     {
-        if (_hud == null || _cyan == null || _magenta == null)
+        if (_hud == null)
             return;
 
-        _hud.SetShields(_cyan.Shield != null ? _cyan.Shield.Normalized : 0f,
-            _magenta.Shield != null ? _magenta.Shield.Normalized : 0f);
+        // Team pools, not pilots: the sum of what each side still has in the
+        // air. At 1 v 1 this is exactly the old two-pilot readout.
+        _hud.SetShields(TeamShield(_cyanTeam), TeamShield(_magentaTeam));
 
         var subject = _director.Subject;
         if (subject != null)
@@ -554,11 +624,12 @@ public class Dogfight : MonoBehaviour
                 MatchAnnouncer.TeamColor(subject.Team));
         }
 
-        if (_playerControls && _stage == Stage.Fight)
+        var hero = Hero;
+        if (_playerControls && _stage == Stage.Fight && hero != null)
         {
-            _hud.SetReticleHot(_cyan.AssistTarget != null);
+            _hud.SetReticleHot(hero.AssistTarget != null);
             UpdateTargetArrow();
-            _hud.SetOrdnance(_cyan.MissileReadyFraction, _cyan.MissileReady, _cyan.FlareCharges);
+            _hud.SetOrdnance(hero.MissileReadyFraction, hero.MissileReady, hero.FlareCharges);
             _hud.SetLockDiamond(
                 _lockCandidate != null
                     ? _camera.WorldToViewportPoint(_lockCandidateCenter)
@@ -566,6 +637,20 @@ public class Dogfight : MonoBehaviour
                 _lockCandidate == null ? 0 : _lockProgress >= PlayerLockSeconds ? 2 : 1);
             WarnOfMissiles();
         }
+    }
+
+    static float TeamShield(List<Slot> team)
+    {
+        float current = 0f, max = 0f;
+        foreach (var slot in team)
+        {
+            if (slot.pawn == null || slot.pawn.Shield == null)
+                continue;
+            max += slot.pawn.Shield.maxShield;
+            if (!slot.pawn.IsDown)
+                current += slot.pawn.Shield.Current;
+        }
+        return max > 0f ? current / max : 0f;
     }
 
     static string FormName(JetPawn.Form form) =>
@@ -576,13 +661,14 @@ public class Dogfight : MonoBehaviour
     /// throttles the shouting).</summary>
     void WarnOfMissiles()
     {
-        if (_cyan == null || _cyan.IsDown)
+        var hero = Hero;
+        if (hero == null || hero.IsDown)
             return;
         foreach (var missile in DogfightMissile.All)
         {
-            if (missile == null || missile.Quarry != _cyan.transform)
+            if (missile == null || missile.Quarry != hero.transform)
                 continue;
-            if ((missile.transform.position - _cyan.transform.position).sqrMagnitude < 55f * 55f)
+            if ((missile.transform.position - hero.transform.position).sqrMagnitude < 55f * 55f)
             {
                 _hud.WarnIncoming();
                 return;
@@ -595,7 +681,8 @@ public class Dogfight : MonoBehaviour
     /// so the sign flip keeps the arrow honest.</summary>
     void UpdateTargetArrow()
     {
-        var enemy = JetPawn.NearestEnemy(_cyan.transform.position, 0);
+        var hero = Hero;
+        var enemy = JetPawn.NearestEnemy(hero.transform.position, 0);
         if (enemy == null)
         {
             _hud.SetTargetArrow(Vector2.zero, false);

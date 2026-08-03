@@ -29,6 +29,9 @@ public class DogfightHud : MonoBehaviour
     Image _magentaImage;
     Image[] _cyanPips;
     Image[] _magentaPips;
+    Text _scoreText;
+    Text _scoreHint;
+    bool _numericScore;
     Text _speed;
     Text _form;
     RawImage _reticle;
@@ -129,7 +132,9 @@ public class DogfightHud : MonoBehaviour
     }
 
     /// <summary>First to five, counted in pips under the top centre — the
-    /// TankRaid lives vocabulary, one row per team.</summary>
+    /// TankRaid lives vocabulary, one row per team. Bigger targets (team
+    /// sorties run to five per pilot) trade the pips for numerals: twenty
+    /// squares a side is an abacus, not a scoreboard.</summary>
     void BuildScorePips()
     {
         Box("ScoreFrame", Panel, new Vector2(0.5f, 1f), new Vector2(0f, -52f),
@@ -145,6 +150,28 @@ public class DogfightHud : MonoBehaviour
             _magentaPips[i] = Box($"MagentaPip{i}", _magenta, new Vector2(0.5f, 1f),
                 new Vector2(22f + i * 24f, -52f), new Vector2(16f, 16f));
         }
+
+        _scoreText = Label("ScoreText", "0  —  0", 30, Color.white, FontStyle.Bold,
+            new Vector2(0.5f, 1f), new Vector2(0f, -52f), new Vector2(280f, 40f));
+        _scoreHint = Label("ScoreHint", "", 14, new Color(1f, 1f, 1f, 0.45f),
+            FontStyle.Normal, new Vector2(0.5f, 1f), new Vector2(0f, -84f),
+            new Vector2(280f, 20f));
+        _scoreText.gameObject.SetActive(false);
+        _scoreHint.gameObject.SetActive(false);
+    }
+
+    /// <summary>How many wrecks end the sortie — decides pips or numerals.</summary>
+    public void SetScoreTarget(int target)
+    {
+        _numericScore = target > PipsToWin;
+        for (int i = 0; i < PipsToWin; i++)
+        {
+            _cyanPips[i].gameObject.SetActive(!_numericScore);
+            _magentaPips[i].gameObject.SetActive(!_numericScore);
+        }
+        _scoreText.gameObject.SetActive(_numericScore);
+        _scoreHint.gameObject.SetActive(_numericScore);
+        _scoreHint.text = $"FIRST  TO  {target}";
     }
 
     void BuildReticle()
@@ -209,6 +236,11 @@ public class DogfightHud : MonoBehaviour
 
     public void SetScore(int cyan, int magenta)
     {
+        if (_numericScore)
+        {
+            _scoreText.text = $"{cyan}  —  {magenta}";
+            return;
+        }
         for (int i = 0; i < PipsToWin; i++)
         {
             _cyanPips[i].color = i < cyan ? _cyan : new Color(1f, 1f, 1f, 0.14f);

@@ -144,10 +144,13 @@ public static class RobotSelectMenu
             BuildLevelPicker(canvasGo.transform, pendingMode);
 
         // The two Gunfight modes pick how many robots a side as well as which
-        // one. Nothing else does: every other mode's cast is fixed by its rules
-        // (two corners in a Brawl, one driver in Tank Raid).
+        // one — and the two Dogfight cards pick how many jets, off their own
+        // store. Nothing else does: every other mode's cast is fixed by its
+        // rules (two corners in a Brawl, one driver in Tank Raid).
         if (pendingMode == GameMode.AIvAI || pendingMode == GameMode.PlayerVsAI)
             BuildTeamSizePicker(canvasGo.transform, pendingMode == GameMode.PlayerVsAI);
+        if (pendingMode == GameMode.Dogfight || pendingMode == GameMode.DogfightWar)
+            BuildDogfightSizePicker(canvasGo.transform, pendingMode == GameMode.Dogfight);
 
         inspector.BuildUI(canvasGo.transform);
 
@@ -535,12 +538,34 @@ public static class RobotSelectMenu
     /// Player v AI it is not obvious — the player is one of their team's
     /// robots, so 4 v 4 gives them three allies rather than four.
     /// </summary>
-    static void BuildTeamSizePicker(Transform parent, bool playerPlays)
+    static void BuildTeamSizePicker(Transform parent, bool playerPlays) =>
+        BuildSizePicker(parent, "ROBOTS  PER  TEAM", TeamSize.Presets,
+            TeamSize.Min, TeamSize.Max,
+            () => TeamSize.PerTeam, size => TeamSize.PerTeam = size,
+            TeamSize.IsPreset, size => TeamSize.Describe(size, playerPlays));
+
+    /// <summary>DOGFIGHT's row: same control, its own store — presets 1/2/4
+    /// and a lower ceiling, because a jet is a heavier thing than a robot.</summary>
+    static void BuildDogfightSizePicker(Transform parent, bool playerPlays) =>
+        BuildSizePicker(parent, "JETS  PER  TEAM", DogfightTeamSize.Presets,
+            DogfightTeamSize.Min, DogfightTeamSize.Max,
+            () => DogfightTeamSize.PerTeam, size => DogfightTeamSize.PerTeam = size,
+            DogfightTeamSize.IsPreset, size => TeamSize.Describe(size, playerPlays));
+
+    /// <summary>
+    /// The size row itself: preset chips, the OTHER box, the range hint and
+    /// the spelled-out summary. Which numbers those are — and where the
+    /// chosen one lives — belongs to the caller; two mode families share
+    /// this without sharing a store.
+    /// </summary>
+    static void BuildSizePicker(Transform parent, string caption, int[] presets,
+        int min, int max, System.Func<int> get, System.Action<int> set,
+        System.Func<int, bool> isPreset, System.Func<int, string> describe)
     {
         const float RowY = 350f;
         const float ChipPitch = 100f, FirstChipX = -440f;
 
-        var chips = new Image[TeamSize.Presets.Length];
+        var chips = new Image[presets.Length];
         var labels = new Text[chips.Length];
         InputField box = null;
         Text summary = null;
@@ -550,14 +575,14 @@ public static class RobotSelectMenu
 
         void RefreshChips()
         {
-            int size = TeamSize.PerTeam;
+            int size = get();
             for (int i = 0; i < chips.Length; i++)
             {
-                bool on = TeamSize.Presets[i] == size;
+                bool on = presets[i] == size;
                 chips[i].color = on ? selectedTint : CardColor;
                 labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
             }
-            summary.text = TeamSize.Describe(size, playerPlays);
+            summary.text = describe(size);
         }
 
         void Refresh()
@@ -566,19 +591,19 @@ public static class RobotSelectMenu
             // The box carries the number only while it is the one in charge; on
             // a preset it drops back to its placeholder.
             echoing = true;
-            int size = TeamSize.PerTeam;
-            box.text = TeamSize.IsPreset(size) ? "" : size.ToString();
+            int size = get();
+            box.text = isPreset(size) ? "" : size.ToString();
             echoing = false;
         }
 
-        var caption = MakeText(parent, "TeamSizeLabel", "ROBOTS  PER  TEAM", 18,
+        var captionText = MakeText(parent, "TeamSizeLabel", caption, 18,
             new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
             new Vector2(0.5f, 0.5f), new Vector2(-640f, RowY), new Vector2(220f, 26f));
-        caption.alignment = TextAnchor.MiddleRight;
+        captionText.alignment = TextAnchor.MiddleRight;
 
         for (int i = 0; i < chips.Length; i++)
         {
-            int size = TeamSize.Presets[i];
+            int size = presets[i];
             var chip = MakeImage(parent, $"TeamSize_{size}", CardColor);
             var rect = chip.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -590,7 +615,7 @@ public static class RobotSelectMenu
             button.targetGraphic = chip;
             button.onClick.AddListener(() =>
             {
-                TeamSize.PerTeam = size;
+                set(size);
                 Refresh();
             });
 
@@ -603,13 +628,16 @@ public static class RobotSelectMenu
             labels[i].horizontalOverflow = HorizontalWrapMode.Overflow;
         }
 
-        box = BuildAmountBox(parent, new Vector2(-10f, RowY));
-        MakeText(parent, "TeamSizeRange", $"ANY  {TeamSize.Min} – {TeamSize.Max}", 15,
+        // The row packs left as the preset count shrinks, so a three-chip
+        // deck and a four-chip deck both end flush against the OTHER box.
+        float boxX = FirstChipX + presets.Length * ChipPitch + 30f;
+        box = BuildAmountBox(parent, new Vector2(boxX, RowY), max);
+        MakeText(parent, "TeamSizeRange", $"ANY  {min} – {max}", 15,
             new Color(1f, 1f, 1f, 0.38f), FontStyle.Normal,
-            new Vector2(0.5f, 0.5f), new Vector2(130f, RowY), new Vector2(160f, 24f));
+            new Vector2(0.5f, 0.5f), new Vector2(boxX + 140f, RowY), new Vector2(160f, 24f));
 
         summary = MakeText(parent, "TeamSizeSummary", "", 20, HoloCyan, FontStyle.Bold,
-            new Vector2(0.5f, 0.5f), new Vector2(470f, RowY), new Vector2(500f, 46f));
+            new Vector2(0.5f, 0.5f), new Vector2(boxX + 480f, RowY), new Vector2(500f, 46f));
         summary.alignment = TextAnchor.MiddleLeft;
 
         box.onValueChanged.AddListener(typed =>
@@ -619,9 +647,9 @@ public static class RobotSelectMenu
             // Out-of-range and half-typed entries are ignored rather than
             // clamped: clamping mid-keystroke rewrites the field, and "1" on
             // the way to "16" is not a request for a 1 v 1.
-            if (int.TryParse(typed, out int size) && size >= TeamSize.Min && size <= TeamSize.Max)
+            if (int.TryParse(typed, out int size) && size >= min && size <= max)
             {
-                TeamSize.PerTeam = size;
+                set(size);
                 RefreshChips();
             }
         });
@@ -630,7 +658,7 @@ public static class RobotSelectMenu
         box.onEndEdit.AddListener(typed =>
         {
             if (int.TryParse(typed, out int size))
-                TeamSize.PerTeam = size;
+                set(size);
             Refresh();
         });
 
@@ -638,7 +666,7 @@ public static class RobotSelectMenu
     }
 
     /// <summary>The type-a-number box, built the way MainMenu builds its map-code field.</summary>
-    static InputField BuildAmountBox(Transform parent, Vector2 position)
+    static InputField BuildAmountBox(Transform parent, Vector2 position, int max)
     {
         var frame = MakeImage(parent, "TeamSizeBox", new Color(0.04f, 0.09f, 0.15f, 0.95f));
         var rect = frame.rectTransform;
@@ -662,7 +690,7 @@ public static class RobotSelectMenu
         field.targetGraphic = frame;
         field.textComponent = text;
         field.placeholder = placeholder;
-        field.characterLimit = TeamSize.Max.ToString().Length;
+        field.characterLimit = max.ToString().Length;
         field.contentType = InputField.ContentType.IntegerNumber;
         return field;
     }

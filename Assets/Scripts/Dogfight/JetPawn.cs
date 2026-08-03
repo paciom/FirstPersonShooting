@@ -770,9 +770,38 @@ public class JetPawn : MonoBehaviour
             default: MoveTank(dt); break;
         }
 
+        Separate(dt);
         PullTrigger();
         Firing = false;
         _hasAim = false;
+    }
+
+    /// <summary>
+    /// Keep pawns out of each other — TankPawn's push, lifted into the air
+    /// for the squadron sizes. Everything here moves by writing its own
+    /// transform, so Unity's collision response never runs, and a formation
+    /// that could occupy one point would fly as a blob and read as one jet.
+    /// </summary>
+    void Separate(float dt)
+    {
+        Vector3 push = Vector3.zero;
+        foreach (var other in Live)
+        {
+            if (other == null || other == this)
+                continue;
+            Vector3 gap = transform.position - other.transform.position;
+            const float want = 4.5f;
+            float distance = gap.magnitude;
+            if (distance >= want || distance < 1e-4f)
+                continue;
+            push += gap / distance * (want - distance);
+        }
+        if (push.sqrMagnitude < 1e-6f)
+            return;
+        // Grounded forms hold their ride height; the deck owns their y.
+        if (Grounded)
+            push.y = 0f;
+        transform.position += Vector3.ClampMagnitude(push, 3f) * (5f * dt);
     }
 
     /// <summary>Mid-fold physics: fall, gently, and land if the deck arrives
