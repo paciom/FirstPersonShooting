@@ -116,28 +116,45 @@ public class TankTurret : MonoBehaviour
         if (pivot == null)
             return;
 
-        Vector3 barrel = Flat(RawBarrel(pivot));
+        // Everything is measured against the DECK, never against the world.
+        // A turret is bolted to a ring: it can only spin in the plane of the
+        // hull it sits on, whatever that hull is doing. Turning it about the
+        // world's up instead works right up until the hull stops being level —
+        // and then the turret rolls off its own mounting, which is exactly what
+        // a banking jet in Dogfight showed.
+        Vector3 axis = Deck(pivot).up;
+        Vector3 barrel = Vector3.ProjectOnPlane(RawBarrel(pivot), axis);
         // With no target this frame the turret walks back to dead ahead, which
         // is where a tank carries its gun when nothing is worth pointing it at.
-        Vector3 wanted = Flat(aiming ? _aimPoint - pivot.position : transform.forward);
+        Vector3 wanted = Vector3.ProjectOnPlane(
+            aiming ? _aimPoint - pivot.position : transform.forward, axis);
         if (barrel.sqrMagnitude < 1e-6f || wanted.sqrMagnitude < 1e-6f)
             return;
 
-        float delta = Vector3.SignedAngle(barrel, wanted, Vector3.up);
+        float delta = Vector3.SignedAngle(barrel, wanted, axis);
         _offTarget = Mathf.Abs(delta);
 
+        // Space.Self about the turret's OWN up, which is the deck's up and
+        // stays the deck's up: every turn is a spin about an axis the turn
+        // itself leaves untouched, so the seating can never drift no matter how
+        // long the fight runs or how the hull is flying.
         float step = turnSpeed * Time.deltaTime;
-        pivot.Rotate(Vector3.up, Mathf.Clamp(delta, -step, step), Space.World);
+        pivot.Rotate(Vector3.up, Mathf.Clamp(delta, -step, step), Space.Self);
 
         RideBarrel(pivot);
     }
 
-    static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+    /// <summary>
+    /// The hull the turret is bolted to. Its siblings are the hull mesh — the
+    /// rig puts Hull and TurretPivot side by side — so its axes ARE the deck's,
+    /// including whatever pitch and bank the vehicle is carrying.
+    /// </summary>
+    Transform Deck(Transform pivot) => pivot.parent != null ? pivot.parent : transform;
 
     /// <summary>
-    /// Which way the gun is actually pointing right now, flat and normalized —
-    /// what the vehicle's weapons fire along, so the shots and the barrel can
-    /// never disagree. Zero when there is no turret to read.
+    /// Which way the gun is actually pointing right now, normalized and flat in
+    /// the deck's plane — what the vehicle's weapons fire along, so the shots
+    /// and the barrel can never disagree. Zero when there is no turret to read.
     ///
     /// Read from the two live transforms rather than from the pivot's forward:
     /// the pivot inherits the quarter turn VehicleSkin puts on the model to
@@ -148,7 +165,9 @@ public class TankTurret : MonoBehaviour
         get
         {
             var pivot = ResolvePivot();
-            return pivot == null ? Vector3.zero : Flat(_tip.position - pivot.position).normalized;
+            if (pivot == null)
+                return Vector3.zero;
+            return Vector3.ProjectOnPlane(RawBarrel(pivot), Deck(pivot).up).normalized;
         }
     }
 
