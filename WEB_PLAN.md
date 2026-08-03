@@ -140,9 +140,14 @@ keyart so a shared link unfurls into that image.
      instead — published at `@`, not at `_dnsauth` (that is Front Door's
      convention, not Static Web Apps'). Cloudflare's CNAME flattening handles
      serving the apex; no ALIAS record type is needed.
-   - **`play` must be proxied AND carry a Host-header override** to
-     `photonarenaweb.z13.web.core.windows.net` (Cloudflare → Rules → Origin
-     Rules), plus SSL/TLS mode Full, or Azure Storage 404s every request.
+   - **`play` is proxied**, and — measured 2026-08-03, contrary to the warning
+     written above it — needed **no** Origin Rule and no Host-header override:
+     the storage static website answers on whatever Host arrives, and with
+     `Accept-Encoding: gzip` (which every browser sends) Cloudflare passes the
+     origin's `Content-Encoding: gzip` straight through, same Content-Length and
+     same Content-MD5. That pass-through is the thing that had to be true —
+     Unity's build has the decompression fallback off, so the browser is the
+     only thing that can decompress the 240 MB data file.
 
    The Cloudflare token in `.secrets/cloudflare_token.txt` can read the zone but
    **not** its DNS records — it was scoped for the TURN work. DNS edits need a
