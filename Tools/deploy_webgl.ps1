@@ -12,15 +12,23 @@
     Symptom of getting this wrong: the loading bar never appears and the console
     says the file is not a valid Unity web build.
 
+    Cloudflare fronts this storage account at play.jah.cc and caches the build
+    files for a day, so a deploy that does not purge leaves visitors on a new
+    index.html fetching the previous build's data file — a mismatch that fails
+    to boot rather than merely being stale. The purge runs last, once every
+    blob is up, because purging mid-upload just re-caches the gap.
+
 .EXAMPLE
     pwsh Tools/deploy_webgl.ps1
     pwsh Tools/deploy_webgl.ps1 -Clean      # drop stale blobs from a previous build first
+    pwsh Tools/deploy_webgl.ps1 -NoPurge    # leave the Cloudflare cache alone
 #>
 param(
     [string]$BuildDir = (Join-Path $PSScriptRoot '..\Build\WebGL'),
     [string]$Account  = 'photonarenaweb',
     [string]$Group    = 'photon-arena-rg',
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$NoPurge
 )
 
 $ErrorActionPreference = 'Stop'
@@ -113,3 +121,55 @@ $url = az storage account show -g $Group -n $Account --query 'primaryEndpoints.w
 Write-Host ''
 Write-Host "Uploaded $uploaded file(s)."
 Write-Host "Live at: $url"
+
+# --- Cloudflare cache ------------------------------------------------------
+# Every build reuses the same blob names, so the edge would keep serving the
+# previous deploy until its 24h TTL expired. Purge only after the last upload.
+
+function Read-Secret([string]$Name) {
+    $path = Join-Path $PSScriptRoot "..\.secrets\$Name"
+    if (-not (Test-Path $path)) { return $null }
+    $value = (Get-Content $path -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+    return $value
+}
+
+if ($NoPurge) {
+    Write-Host 'Skipping Cloudflare purge (-NoPurge).'
+    return
+}
+
+$zone  = Read-Secret 'cloudflare_zone_id.txt'
+$token = Read-Secret 'cloudflare_token.txt'
+
+if (-not $zone -or -not $token) {
+    Write-Host ''
+    Write-Host 'Cloudflare purge SKIPPED - credentials not found.' -ForegroundColor Yellow
+    Write-Host '  Expected .secrets/cloudflare_zone_id.txt and .secrets/cloudflare_token.txt'
+    Write-Host '  Until then play.jah.cc keeps serving the previous build for up to 24h.'
+    return
+}
+
+Write-Host ''
+Write-Host 'Purging the Cloudflare cache...'
+try {
+    $response = Invoke-RestMethod -Method Post `
+        -Uri "https://api.cloudflare.com/client/v4/zones/$zone/purge_cache" `
+        -Headers @{ Authorization = "Bearer $token" } `
+        -ContentType 'application/json' `
+        -Body '{"purge_everything":true}'
+
+    if ($response.success) {
+        Write-Host 'Cloudflare cache purged.'
+    }
+    else {
+        # Don't throw: the blobs are already up, so the deploy itself succeeded.
+        $why = ($response.errors | ForEach-Object { $_.message }) -join '; '
+        Write-Host "Cloudflare purge FAILED: $why" -ForegroundColor Red
+        Write-Host '  Purge by hand, or play.jah.cc will serve a mismatched build.'
+    }
+}
+catch {
+    Write-Host "Cloudflare purge FAILED: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host '  Purge by hand, or play.jah.cc will serve a mismatched build.'
+}
