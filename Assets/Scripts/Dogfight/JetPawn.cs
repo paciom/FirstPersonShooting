@@ -97,14 +97,16 @@ public class JetPawn : MonoBehaviour
     /// deliberately not used: this delta wing is 1.9 wide by 1.7 long, so that
     /// rule faces it sideways by construction.
     ///
-    /// The measurement (Tools-side vertex probe, 2026-08-03): the jet's nose
-    /// points -X in the GLB, and the tank stage8s prove glTFast keeps the X
-    /// sign for this content (their glTF barrel vector is -X, and TankPawn's
-    /// in-Unity record says the barrels are -X too). -X onto +Z is +90. One
-    /// constant covers the set because every jet clip frames its subject the
-    /// same way.
+    /// -90 is an IN-GAME measurement, and the sign matters more than the
+    /// story: a Tools-side vertex probe put the nose on the GLB's -X, but that
+    /// probe walks node translations and ignores node ROTATIONS, so its frame
+    /// is not the frame glTFast instantiates — +90 flew the whole set visibly
+    /// tail-first (chase camera staring down the canopy). If a future jet set
+    /// comes out backwards, flip this 180 and trust the screenshot, not the
+    /// probe. One constant covers the set because every jet clip frames its
+    /// subject the same way.
     /// </summary>
-    const float StageYaw = 90f;
+    const float StageYaw = -90f;
 
     // The gun, in TankArsenal's vocabulary: coloured by TEAM, because "whose
     // shot is that" has to be answerable at a glance in a two-jet furball.
