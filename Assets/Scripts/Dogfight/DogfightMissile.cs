@@ -104,12 +104,19 @@ public class DogfightMissile : MonoBehaviour
             trailGlow = 1.7f,           // the exhaust IS the read at this speed
         };
 
-        var bolt = GenericBolt.Spawn(from, direction.normalized, spec, teamId, ownerRoot);
-        bolt.homingTarget = lockRoot;
-        MissileModels.Dress(bolt, jet ? 0 : 2, jet ? 1.1f : 1.5f);
+        // War FX rides on top of the bolt's own glow splash: the glow is the
+        // energy read, the pack's flame-and-smoke is the WEIGHT.
+        spec.onImpact = (bolt, hit) =>
+            WarFx.Spawn(WarFx.Kind.Small, hit.point + hit.normal * 0.3f, 1.2f);
+        spec.onExpire = bolt =>
+            WarFx.Spawn(WarFx.Kind.Small, bolt.transform.position, 0.7f);
 
-        var missile = bolt.gameObject.AddComponent<DogfightMissile>();
-        missile.Bolt = bolt;
+        var spawned = GenericBolt.Spawn(from, direction.normalized, spec, teamId, ownerRoot);
+        spawned.homingTarget = lockRoot;
+        MissileModels.Dress(spawned, jet ? 0 : 2, jet ? 1.1f : 1.5f);
+
+        var missile = spawned.gameObject.AddComponent<DogfightMissile>();
+        missile.Bolt = spawned;
         return missile;
     }
 
@@ -141,7 +148,10 @@ public class DogfightMissile : MonoBehaviour
             return;
         if ((WeaponUtil.Center(shield) - transform.position).sqrMagnitude
             <= FuseRadius * FuseRadius)
+        {
+            WarFx.Spawn(WarFx.Kind.Small, transform.position, 1.2f);
             Bolt.Die(transform.position);
+        }
     }
 
     /// <summary>One look at the sky for a better (worse) idea. Only jets can

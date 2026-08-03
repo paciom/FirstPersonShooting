@@ -150,6 +150,9 @@ public class Dogfight : MonoBehaviour
             _stageRoot.transform.SetParent(environment, false);
 
         _sky = DogfightSky.Build(_stageRoot.transform);
+        // War FX plumes parent under the stage root, so lingering smoke dies
+        // with the set instead of drifting over the main menu.
+        WarFx.Bin = _stageRoot.transform;
         // The battery goes up with the set but holds fire until the fight —
         // see the WeaponsFree assertion in Update.
         DogfightTurret.BuildRing();
@@ -500,7 +503,13 @@ public class Dogfight : MonoBehaviour
 
         if (_stage == Stage.Fight
             && (_cyanScore >= _killsToWin || _magentaScore >= _killsToWin))
+        {
+            // The match point gets the mushroom: a nuke rising off the deck
+            // under the final wreck, because an eight year old just won.
+            Vector3 under = pawn.Center;
+            WarFx.Spawn(WarFx.Kind.Nuke, new Vector3(under.x, 0f, under.z));
             EndSortie();
+        }
     }
 
     Slot FindSlot(JetPawn pawn, out bool cyanSide)
@@ -716,6 +725,8 @@ public class Dogfight : MonoBehaviour
         DogfightFlare.DespawnAll();
         DogfightTurret.DespawnAll();
         JetPawn.DespawnAll();
+        // Plumes still burning under the stage root go down with it.
+        WarFx.Bin = null;
 
         if (_cameraRig != null)
             Destroy(_cameraRig);

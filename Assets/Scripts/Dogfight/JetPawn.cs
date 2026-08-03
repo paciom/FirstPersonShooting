@@ -265,6 +265,7 @@ public class JetPawn : MonoBehaviour
     TankTurret _turret;
     TrailRenderer[] _trails;
     GameObject _chute;
+    GameObject _burnFx;
     bool _morphBurst;
 
     readonly List<MorphLeg> _morphQueue = new List<MorphLeg>();
@@ -1059,6 +1060,10 @@ public class JetPawn : MonoBehaviour
         SetChuteVisible(false);
         _turret.enabled = false;
         VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.6f);
+        // The kill shot, and then the burn: War FX flame rides the wreck all
+        // the way down (or where it stands, for a deck death) until respawn.
+        WarFx.Spawn(WarFx.Kind.Big, Center, 1.2f);
+        _burnFx = WarFx.AttachFire(transform, Vector3.up * 0.3f, 1.1f);
         OnWrecked?.Invoke(this);
     }
 
@@ -1087,6 +1092,11 @@ public class JetPawn : MonoBehaviour
         _yaw = yaw;
         _pitch = 0f;
         _roll = 0f;
+        if (_burnFx != null)
+        {
+            Destroy(_burnFx);
+            _burnFx = null;
+        }
         _flareCharges = FlareChargesMax;
         _missileReadyAt = Time.time + 1.5f;
         _morphQueue.Clear();

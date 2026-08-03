@@ -41,16 +41,24 @@ public class JetBrain : MonoBehaviour
     const float TailedRange = 38f;
     const float BreakSeconds = 1.6f;
 
-    /// <summary>Fire guns only this close to on-target. Wider than the pawn's
-    /// own assist cone: the brain squeezes early and lets the assist finish.</summary>
-    const float FireCone = 9f;
+    /// <summary>
+    /// Fire guns this close to on-target. WIDE on purpose, and measured
+    /// against the true lead every frame rather than the think-beat's
+    /// jittered goal: the first cut of this brain gated its trigger behind
+    /// both, and two AI pilots flew a whole war without firing a shot. A
+    /// pilot who is roughly behind someone should be HOSING — the pawn's own
+    /// assist converts the last few degrees into hits, the rest is tracer,
+    /// and tracer is what a dogfight looks like from the couch.
+    /// </summary>
+    const float FireCone = 18f;
     const float FireRange = 85f;
 
-    /// <summary>Missile discipline: the cone must be HELD, not visited.</summary>
-    const float MissileCone = 8f;
-    const float MissileHoldSeconds = 0.8f;
-    const float MissileRangeNear = 22f;
-    const float MissileRangeFar = 75f;
+    /// <summary>Missile discipline: the cone must be HELD, not visited —
+    /// but held briefly, at spectacle cadence, not sniper cadence.</summary>
+    const float MissileCone = 14f;
+    const float MissileHoldSeconds = 0.45f;
+    const float MissileRangeNear = 20f;
+    const float MissileRangeFar = 80f;
 
     /// <summary>A missile chasing me matters from here; the flare hand moves
     /// when it closes to <see cref="FlareRange"/>.</summary>
@@ -253,7 +261,7 @@ public class JetBrain : MonoBehaviour
             else if (Time.time - _coneHeldSince >= MissileHoldSeconds
                      && Time.time >= _missileAt
                      && pawn.TryFireMissile(quarry.transform))
-                _missileAt = Time.time + Random.Range(8f, 12f);
+                _missileAt = Time.time + Random.Range(6f, 9f);
         }
 
         // Tails and carousels are sky problems; forget them down here.
@@ -474,7 +482,19 @@ public class JetBrain : MonoBehaviour
         bool cutting = Time.time < _cutUntil;
         pawn.Throttle = cutting || distance > 45f ? 1f : distance < 16f ? -0.5f : 0f;
 
-        if (quarry == null || !_goalIsLead)
+        FightGuns(me);
+    }
+
+    /// <summary>
+    /// The trigger, every frame, against the TARGET — not against whatever
+    /// goal the last think-beat left behind. Saddle chase, cut, gun run: if
+    /// the nose is roughly on the lead, the guns talk, and a missile follows
+    /// any half-second of real alignment. What the fight looks like is made
+    /// here as much as in the steering.
+    /// </summary>
+    void FightGuns(Vector3 me)
+    {
+        if (quarry == null || quarry.IsDown)
         {
             pawn.Firing = false;
             _coneHeldSince = -1f;
@@ -482,17 +502,17 @@ public class JetBrain : MonoBehaviour
         }
 
         Vector3 toQuarry = quarry.Center - me;
-        float offCone = Vector3.Angle(pawn.transform.forward, _goal - me);
-        bool facing = Vector3.Dot(pawn.transform.forward, toQuarry.normalized) > 0f;
+        float distance = toQuarry.magnitude;
+        Vector3 lead = quarry.Center + quarry.Velocity * (distance / 90f) - me;
+        float offLead = Vector3.Angle(pawn.transform.forward, lead);
+        bool facing = Vector3.Dot(pawn.transform.forward, toQuarry.normalized) > 0.15f;
 
-        pawn.Firing = toQuarry.magnitude < FireRange && offCone < FireCone && facing;
+        pawn.Firing = facing && distance < FireRange && offLead < FireCone;
 
-        // The missile: cone held for most of a second, range honest, cadence
-        // rolled — and the pawn's own tube cooldown still has the last word.
         bool missileGeometry = facing
-                               && offCone < MissileCone
-                               && toQuarry.magnitude > MissileRangeNear
-                               && toQuarry.magnitude < MissileRangeFar;
+                               && offLead < MissileCone
+                               && distance > MissileRangeNear
+                               && distance < MissileRangeFar;
         if (!missileGeometry)
         {
             _coneHeldSince = -1f;
@@ -505,7 +525,7 @@ public class JetBrain : MonoBehaviour
                  && Time.time >= _missileAt
                  && pawn.TryFireMissile(quarry.transform))
         {
-            _missileAt = Time.time + Random.Range(8f, 12f);
+            _missileAt = Time.time + Random.Range(6f, 9f);
         }
     }
 }

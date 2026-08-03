@@ -327,6 +327,10 @@ public class DogfightTurret : MonoBehaviour
             return;
         IsDead = true;
         VfxUtil.Explosion(Center, Paint, 1.6f);
+        // The battery goes up properly — War FX blast, then a burn that
+        // marks the trophy until teardown sweeps the turret away.
+        WarFx.Spawn(WarFx.Kind.Big, Center, 1.4f);
+        WarFx.AttachFire(_yawPivot, Vector3.up * 0.5f, 1.3f);
         if (_railMissile != null)
             _railMissile.gameObject.SetActive(false);
         if (_pitchPivot != null)
