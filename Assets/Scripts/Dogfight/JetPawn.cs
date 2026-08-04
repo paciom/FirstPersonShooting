@@ -1047,9 +1047,11 @@ public class JetPawn : MonoBehaviour
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
         main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
+        // Fewer, larger licks: each card carries the pack's flame sprite, so
+        // the burn reads as fire rather than as a bead chain of glows.
+        main.startSize = new ParticleSystem.MinMaxCurve(0.7f, 1.1f);
         main.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(1f, 0.62f, 0.2f, 0.85f), new Color(1f, 0.35f, 0.12f, 0.8f));
+            new Color(1f, 0.85f, 0.6f, 0.95f), new Color(1f, 0.6f, 0.3f, 0.9f));
         main.maxParticles = 160;
 
         var emission = flame.emission;
@@ -1070,9 +1072,13 @@ public class JetPawn : MonoBehaviour
         // as "up" is all but gone.
         velocity.y = new ParticleSystem.MinMaxCurve(0.12f);
 
+        // The pack's burning-flame material, exactly as its own fire wears
+        // it; the glow blob stays only as the no-pack fallback.
         var renderer = go.GetComponent<ParticleSystemRenderer>();
-        renderer.material = VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
-            new Color(1f, 0.5f, 0.18f), 2.0f);
+        renderer.material = WarFx.FlameMaterial() != null
+            ? WarFx.FlameMaterial()
+            : VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
+                new Color(1f, 0.5f, 0.18f), 2.0f);
         return flame;
     }
 
@@ -1104,6 +1110,13 @@ public class JetPawn : MonoBehaviour
         shape.shapeType = ParticleSystemShapeType.Sphere;
         shape.radius = 0.25f;
 
+        // Real smoke tumbles: every puff born at its own angle, turning
+        // slowly — identical upright sprites are what read as "dots".
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        var spin = smoke.rotationOverLifetime;
+        spin.enabled = true;
+        spin.z = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
+
         // Gentle swell only — ballooning puffs merge a line into a cloud.
         var size = smoke.sizeOverLifetime;
         size.enabled = true;
@@ -1128,20 +1141,26 @@ public class JetPawn : MonoBehaviour
             });
         fade.color = gradient;
 
-        // Dark alpha-blended puffs — the pack's own URP-safe blend shader,
-        // with the project's puff texture; additive would GLOW, and glowing
-        // smoke is a health bar pretending to be a party.
+        // The pack's own smoke sprite — a textured, soft-edged puff, which is
+        // the difference between smoke and a row of grey dots. Fallback to a
+        // hand-built blend of the project's puff texture if the pack is gone.
         var renderer = go.GetComponent<ParticleSystemRenderer>();
-        var blend = Shader.Find("WFX/Alpha Blended (No Soft Particles)");
-        Material material = blend != null
-            ? new Material(blend)
-            : VfxUtil.MakeAdditiveMaterial(VfxUtil.PuffTexture, new Color(0.1f, 0.1f, 0.1f), 0.5f);
-        material.name = "DamageSmoke";
-        if (material.HasProperty("_MainTex"))
-            material.SetTexture("_MainTex", VfxUtil.PuffTexture);
-        if (material.HasProperty("_TintColor"))
-            material.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.5f));
-        renderer.material = material;
+        var packPuff = WarFx.SmokePuffMaterial();
+        if (packPuff != null)
+        {
+            renderer.material = packPuff;
+        }
+        else
+        {
+            var blend = Shader.Find("WFX/Alpha Blended (No Soft Particles)");
+            Material material = blend != null
+                ? new Material(blend)
+                : VfxUtil.MakeAdditiveMaterial(VfxUtil.PuffTexture, new Color(0.1f, 0.1f, 0.1f), 0.5f);
+            material.name = "DamageSmoke";
+            if (material.HasProperty("_MainTex"))
+                material.SetTexture("_MainTex", VfxUtil.PuffTexture);
+            renderer.material = material;
+        }
         return smoke;
     }
 

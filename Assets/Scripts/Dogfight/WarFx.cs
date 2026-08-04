@@ -38,6 +38,8 @@ public static class WarFx
     static readonly Dictionary<Kind, GameObject> Prefabs = new Dictionary<Kind, GameObject>();
     static readonly Dictionary<Material, Material> Converted = new Dictionary<Material, Material>();
     static GameObject _firePrefab;
+    static Material _smokePuff;
+    static Material _flame;
 
     static readonly string[] LegacyPrefixes = { "Particles/", "Legacy Shaders/" };
 
@@ -68,6 +70,51 @@ public static class WarFx
         instance.transform.localPosition = localOffset;
         Fit(instance, scale);
         return instance;
+    }
+
+    /// <summary>
+    /// The pack's own smoke-puff look, for emitters the pack did not author
+    /// — the damage trails. Its source (WFX_M_Smoke) sits on a dead built-in
+    /// shader, so it goes through the same conversion every spawned effect
+    /// gets, and the tint is handed back to vertex colour, where the
+    /// particles do their own grading. Null when the pack is missing; the
+    /// caller keeps its procedural fallback.
+    /// </summary>
+    public static Material SmokePuffMaterial()
+    {
+        if (_smokePuff != null)
+            return _smokePuff;
+        var material = FindMaterial(Prefab(Kind.Big), "WFX_M_Smoke");
+        if (material == null)
+            return null;
+        _smokePuff = Convert(material);
+        if (_smokePuff.HasProperty("_TintColor"))
+            _smokePuff.SetColor("_TintColor", Color.white);
+        return _smokePuff;
+    }
+
+    /// <summary>The pack's burning-flame material, straight off its own fire
+    /// prefab — scroll-additive, URP-safe, fire-tinted by its author. What a
+    /// flame SPRITE looks like when it is not a glow blob.</summary>
+    public static Material FlameMaterial()
+    {
+        if (_flame != null)
+            return _flame;
+        if (_firePrefab == null)
+            _firePrefab = Resources.Load<GameObject>("WarFX/WFX_Fire SmallFlame (Black Smoke)");
+        _flame = FindMaterial(_firePrefab, "WFX_M_FlameSmall");
+        return _flame;
+    }
+
+    static Material FindMaterial(GameObject prefab, string namePrefix)
+    {
+        if (prefab == null)
+            return null;
+        foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+            foreach (var material in renderer.sharedMaterials)
+                if (material != null && material.name.StartsWith(namePrefix))
+                    return material;
+        return null;
     }
 
     /// <summary>A burn at a place rather than on a thing — the crash-site
