@@ -283,6 +283,8 @@ public class JetPawn : MonoBehaviour
     TrailRenderer[] _trails;
     GameObject _chute;
     GameObject _burnFx;
+    ParticleSystem _damageSmoke;
+    GameObject _damageFire;
     bool _morphBurst;
 
     readonly List<MorphLeg> _morphQueue = new List<MorphLeg>();
@@ -357,8 +359,11 @@ public class JetPawn : MonoBehaviour
         jet.Shield = go.AddComponent<EnergyShield>();
         jet.Shield.maxShield = maxShield;
         jet.Shield.teamId = teamId;
+        // NO regeneration: damage is a story the airframe keeps telling
+        // until the wreck — smoke, then flame, then down. The only repair
+        // in this sky is the respawn.
         jet.Shield.regenDelay = 4f;
-        jet.Shield.regenPerSecond = 8f;
+        jet.Shield.regenPerSecond = 0f;
 
         jet._muzzle = new GameObject("JetMuzzle").transform;
         jet._muzzle.SetParent(go.transform, false);
@@ -765,6 +770,10 @@ public class JetPawn : MonoBehaviour
 
     void Update()
     {
+        // Runs even while down: a wreck spiralling in should be the
+        // smokiest thing in the sky, not the cleanest.
+        UpdateDamageState();
+
         if (_down)
         {
             if (!Grounded)
@@ -972,6 +981,94 @@ public class JetPawn : MonoBehaviour
             _turret.AimAt(_aimPoint);
     }
 
+    /// <summary>
+    /// The airframe tells its shield's story: past half damage a smoke
+    /// trail, critical adds open flame. With no regeneration these only
+    /// ever escalate — the respawn is what clears them. The smoke is a
+    /// world-space emitter, so it hangs in the air behind the flight path
+    /// the way every cartoon says it should.
+    /// </summary>
+    void UpdateDamageState()
+    {
+        float health = Shield != null && !IsDown ? Shield.Normalized : 0f;
+
+        bool smoking = health < 0.55f;
+        if (smoking && _damageSmoke == null)
+            _damageSmoke = BuildDamageSmoke();
+        if (_damageSmoke != null)
+        {
+            var emission = _damageSmoke.emission;
+            emission.rateOverTime = smoking
+                ? Mathf.Lerp(30f, 8f, health / 0.55f)
+                : 0f;
+        }
+
+        if (health < 0.22f && !IsDown && _damageFire == null)
+            _damageFire = WarFx.AttachFire(transform, Vector3.up * 0.2f, 0.7f);
+    }
+
+    ParticleSystem BuildDamageSmoke()
+    {
+        var go = new GameObject("DamageSmoke");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, 0.1f, -_halfLength * 0.5f);
+
+        var smoke = go.AddComponent<ParticleSystem>();
+        var main = smoke.main;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(1.1f, 1.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 1.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+        main.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(0.12f, 0.12f, 0.13f, 0.55f), new Color(0.3f, 0.3f, 0.32f, 0.45f));
+        main.maxParticles = 120;
+
+        var emission = smoke.emission;
+        emission.rateOverTime = 0f;
+
+        var shape = smoke.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.25f;
+
+        // Smoke swells and rises a little as it is left behind.
+        var size = smoke.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f,
+            new AnimationCurve(new Keyframe(0f, 0.4f), new Keyframe(1f, 1.6f)));
+        var velocity = smoke.velocityOverLifetime;
+        velocity.enabled = true;
+        velocity.space = ParticleSystemSimulationSpace.World;
+        velocity.y = new ParticleSystem.MinMaxCurve(0.8f);
+
+        var fade = smoke.colorOverLifetime;
+        fade.enabled = true;
+        var gradient = new Gradient();
+        gradient.SetKeys(
+            new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[]
+            {
+                new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.15f),
+                new GradientAlphaKey(0f, 1f),
+            });
+        fade.color = gradient;
+
+        // Dark alpha-blended puffs — the pack's own URP-safe blend shader,
+        // with the project's puff texture; additive would GLOW, and glowing
+        // smoke is a health bar pretending to be a party.
+        var renderer = go.GetComponent<ParticleSystemRenderer>();
+        var blend = Shader.Find("WFX/Alpha Blended (No Soft Particles)");
+        Material material = blend != null
+            ? new Material(blend)
+            : VfxUtil.MakeAdditiveMaterial(VfxUtil.PuffTexture, new Color(0.1f, 0.1f, 0.1f), 0.5f);
+        material.name = "DamageSmoke";
+        if (material.HasProperty("_MainTex"))
+            material.SetTexture("_MainTex", VfxUtil.PuffTexture);
+        if (material.HasProperty("_TintColor"))
+            material.SetColor("_TintColor", new Color(0.5f, 0.5f, 0.5f, 0.5f));
+        renderer.material = material;
+        return smoke;
+    }
+
     /// <summary>Common landing test. True on the frame the deck arrives.</summary>
     bool TouchDownCheck(float rideHeight)
     {
@@ -1129,6 +1226,17 @@ public class JetPawn : MonoBehaviour
         {
             Destroy(_burnFx);
             _burnFx = null;
+        }
+        if (_damageFire != null)
+        {
+            Destroy(_damageFire);
+            _damageFire = null;
+        }
+        if (_damageSmoke != null)
+        {
+            var emission = _damageSmoke.emission;
+            emission.rateOverTime = 0f;
+            _damageSmoke.Clear();
         }
         _flareCharges = FlareChargesMax;
         _missileReadyAt = Time.time + 1.5f;
