@@ -53,6 +53,8 @@ public class DogfightHud : MonoBehaviour
     GameObject _over;
     Text _overTitle;
     Text _overBody;
+    GameObject _helpPanel;
+    GameObject _helpButton;
     GameObject[] _ordnanceParts;
     RectTransform _missileFill;
     Image _missileFillImage;
@@ -524,6 +526,80 @@ public class DogfightHud : MonoBehaviour
             new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(700f, 110f));
 
         _over.SetActive(false);
+    }
+
+    // ------------------------------------------------------------------- help
+
+    /// <summary>
+    /// The "?" in the corner and the card it opens: every key, grouped the
+    /// way the game thinks — per form, then the verbs that work everywhere.
+    /// Built per mode, because the couch watching an AI WAR has three keys
+    /// and a pilot has a cockpit's worth. Toggled by the button (desktop
+    /// mouse) or the ? key; hidden while the touch sticks are up, where a
+    /// keyboard card answers a question nobody asked.
+    /// </summary>
+    public void BuildHelp(bool playerControls)
+    {
+        var button = Box("HelpButton", Panel, new Vector2(0.5f, 1f),
+            new Vector2(240f, -52f), new Vector2(38f, 38f));
+        button.raycastTarget = true;
+        Label(button.transform, "Mark", "?", 24, Warn, FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(38f, 38f));
+        var click = button.gameObject.AddComponent<Button>();
+        click.transition = Selectable.Transition.None;
+        click.onClick.AddListener(ToggleHelp);
+        _helpButton = button.gameObject;
+
+        _helpPanel = Box("HelpPanel", new Color(0.02f, 0.05f, 0.09f, 0.94f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(860f, 560f)).gameObject;
+        var tile = _helpPanel.GetComponent<Image>();
+        tile.sprite = MainMenu.RoundedTile();
+        tile.type = Image.Type.Sliced;
+        // Last sibling: the card draws over every readout on this canvas.
+        _helpPanel.transform.SetAsLastSibling();
+
+        Label(_helpPanel.transform, "Title", "HOW  TO  PLAY", 40, Warn, FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 236f), new Vector2(700f, 54f));
+
+        string body = playerControls
+            ? "JET   —   Mouse steers (the jet chases your cursor)   ·   W boost   ·   S brake\n" +
+              "ROBOT / TANK   —   Mouse aims   ·   WASD moves\n" +
+              "\n" +
+              "Hold Click or SPACE   —   guns\n" +
+              "Right Click   —   missile (hold the ring on a target until it locks)\n" +
+              "F   —   flares, when INCOMING flashes\n" +
+              "T   —   transform:  jet  →  robot  →  tank  →  jet\n" +
+              "C   —   chase / cockpit camera\n" +
+              "\n" +
+              "=   —   thumb sticks on any screen      ESC   —   menu"
+            : "C   —   chase / cockpit camera\n" +
+              "SPACE   —   jump the broadcast to the next jet\n" +
+              "\n" +
+              "The camera tag on a pilot's bar marks who you are watching.\n" +
+              "\n" +
+              "=   —   thumb sticks on any screen      ESC   —   menu";
+        var text = Label(_helpPanel.transform, "Body", body, 24, Color.white,
+            FontStyle.Normal, new Vector2(0.5f, 0.5f), new Vector2(0f, -50f),
+            new Vector2(780f, 420f));
+        text.alignment = TextAnchor.MiddleLeft;
+
+        _helpPanel.SetActive(false);
+    }
+
+    public void ToggleHelp()
+    {
+        if (_helpPanel != null)
+            _helpPanel.SetActive(!_helpPanel.activeSelf);
+    }
+
+    /// <summary>Touch players get buttons, not key cards — the "?" steps
+    /// aside while the sticks are up (and takes its open card with it).</summary>
+    public void SetHelpButtonVisible(bool visible)
+    {
+        if (_helpButton != null && _helpButton.activeSelf != visible)
+            _helpButton.SetActive(visible);
+        if (!visible && _helpPanel != null && _helpPanel.activeSelf)
+            _helpPanel.SetActive(false);
     }
 
     /// <summary>

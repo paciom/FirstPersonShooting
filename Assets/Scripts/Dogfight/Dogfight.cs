@@ -197,6 +197,12 @@ public class Dogfight : MonoBehaviour
         foreach (var slot in _magentaTeam)
             magentaPawns.Add(slot.pawn);
         _hud.BuildPawnBars(cyanPawns, magentaPawns, _playerControls ? Hero : null);
+        _hud.BuildHelp(_playerControls);
+
+        // The glass hands. They appear on a real touch, or on '=' anywhere —
+        // TouchControls' own testing toggle, which this mode follows.
+        if (_playerControls)
+            DogfightSticks.Build(transform);
 
         _stage = Stage.Intro;
         _stageStart = Time.time;
@@ -299,6 +305,10 @@ public class Dogfight : MonoBehaviour
         // pacifist would be a quiet bug nobody files.
         DogfightTurret.WeaponsFree = _stage == Stage.Fight || _stage == Stage.Over;
 
+        // '?' is Shift+Slash on most boards; the bare key counts too.
+        if (Input.GetKeyDown(KeyCode.Slash))
+            _hud.ToggleHelp();
+
         ReadCameraKeys();
         foreach (var slot in _cyanTeam)
             RunGraceBlink(slot);
@@ -390,8 +400,17 @@ public class Dogfight : MonoBehaviour
         if (hero == null || hero.IsDown)
             return;
 
-        if (Input.GetKeyDown(KeyCode.T))
+        bool glass = DogfightSticks.Showing;
+
+        // The tap verbs land before the morph gate so CAM answers mid-fold;
+        // the pawn refuses what it must (a fold during a fold, an unlocked
+        // missile) on its own.
+        if (Input.GetKeyDown(KeyCode.T) || DogfightSticks.TransformTapped)
             hero.RequestNextForm();
+        if (DogfightSticks.CameraTapped)
+            _director.ToggleView();
+        if (Input.GetKeyDown(KeyCode.F) || DogfightSticks.FlaresTapped)
+            hero.TryPopFlares();
         if (hero.Morphing)
             return;
 
@@ -400,7 +419,7 @@ public class Dogfight : MonoBehaviour
             Vector2 mouse = new Vector2(
                 (Input.mousePosition.x - Screen.width * 0.5f) / (Screen.height * 0.38f),
                 (Input.mousePosition.y - Screen.height * 0.5f) / (Screen.height * 0.38f));
-            if (mouse.magnitude < 0.08f)
+            if (mouse.magnitude < 0.08f || glass)
                 mouse = Vector2.zero;
             var steer = Vector2.ClampMagnitude(mouse, 1f);
 
@@ -410,27 +429,72 @@ public class Dogfight : MonoBehaviour
                            - (Input.GetKey(KeyCode.A) ? 1f : 0f);
             float keyPitch = (Input.GetKey(KeyCode.UpArrow) ? 1f : 0f)
                              - (Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
-            steer += new Vector2(keyYaw, keyPitch);
+            // The sticks ADD, they do not replace — the TANK RAID rule.
+            steer += new Vector2(keyYaw, keyPitch) + DogfightSticks.Steer;
 
             hero.Steer = steer;
-            hero.Throttle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
-                            - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+            float keyThrottle = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.LeftShift) ? 1f : 0f)
+                                - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+            // Right thumb up is the burner, down is the brake.
+            hero.Throttle = glass && Mathf.Abs(DogfightSticks.AimStick.y) > 0.05f
+                ? DogfightSticks.AimStick.y
+                : keyThrottle;
         }
         else
         {
-            var ray = _camera.ScreenPointToRay(Input.mousePosition);
-            hero.AimAt(ray.origin + ray.direction * 140f);
             hero.Steer = new Vector2(Input.GetAxisRaw("Horizontal"),
-                Input.GetAxisRaw("Vertical"));
+                Input.GetAxisRaw("Vertical")) + DogfightSticks.Steer;
+            if (glass)
+            {
+                AimByThumb(hero);
+            }
+            else
+            {
+                var ray = _camera.ScreenPointToRay(Input.mousePosition);
+                hero.AimAt(ray.origin + ray.direction * 140f);
+            }
         }
 
-        hero.Firing = Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
+        // On glass the guns fire themselves — a thumb that must hold FIRE is
+        // a thumb that cannot steer. Keys and mouse keep the trigger.
+        hero.Firing = glass
+            ? _stage == Stage.Fight
+            : Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
 
         UpdatePlayerLock();
-        if (Input.GetMouseButtonDown(1) && _lockProgress >= PlayerLockSeconds)
+        if ((Input.GetMouseButtonDown(1) || DogfightSticks.MissileTapped)
+            && _lockProgress >= PlayerLockSeconds)
             hero.TryFireMissile(_lockCandidate);
-        if (Input.GetKeyDown(KeyCode.F))
-            hero.TryPopFlares();
+    }
+
+    /// <summary>The right thumb's aim for the ground forms: a camera-relative
+    /// direction while deflected, the nearest threat while at rest — nobody
+    /// aims a tank with a stick they are also driving with.</summary>
+    void AimByThumb(JetPawn hero)
+    {
+        Vector2 thumb = DogfightSticks.AimStick;
+        if (thumb.sqrMagnitude > 0.01f)
+        {
+            Vector3 forward = _camera.transform.forward;
+            forward.y = 0f;
+            forward.Normalize();
+            Vector3 right = _camera.transform.right;
+            right.y = 0f;
+            right.Normalize();
+            Vector3 direction = right * thumb.x + forward * thumb.y;
+            hero.AimAt(hero.Center + direction * 75f + Vector3.up * 6f);
+            return;
+        }
+
+        var enemy = JetPawn.NearestEnemy(hero.transform.position, 0, 120f);
+        if (enemy != null)
+        {
+            hero.AimAt(enemy.Center);
+            return;
+        }
+        var battery = DogfightTurret.Nearest(hero.transform.position, 120f);
+        if (battery != null)
+            hero.AimAt(battery.Center);
     }
 
     /// <summary>
@@ -661,6 +725,7 @@ public class Dogfight : MonoBehaviour
 
         // Every pilot's own bar, and the camera tag on whoever is on screen.
         _hud.UpdatePawnBars(_director.Subject);
+        _hud.SetHelpButtonVisible(!DogfightSticks.Showing);
 
         var subject = _director.Subject;
         if (subject != null)
