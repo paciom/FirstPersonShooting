@@ -986,8 +986,11 @@ public class GameModeController : MonoBehaviour
         _story = StoryDirector.Begin(this, _roster, episodeId, autoExit);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("STORY   ·   ESC — Menu",
-                    "STORY   ·   tap MENU to go back");
+        // A render run keeps the frame clean — no hint bar burned into the
+        // movie. Interactive viewers still get told where the exit is.
+        if (!autoExit)
+            ShowOverlay("STORY   ·   ESC — Menu",
+                        "STORY   ·   tap MENU to go back");
         LockCursor(false);
     }
 
