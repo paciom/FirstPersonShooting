@@ -88,28 +88,33 @@ public class JetPawn : MonoBehaviour
     const float PitchLimit = 62f;
 
     /// <summary>
-    /// Extra yaw that turns a generated AIRCRAFT-class stage nose-forward.
-    /// -90 is an IN-GAME measurement, and the sign matters more than the
-    /// story: the offline vertex probe walks node translations but ignores
-    /// node rotations, so its frame is not glTFast's — +90 flew the whole
-    /// set visibly tail-first. If a future jet set comes out backwards,
-    /// flip this 180 and trust the screenshot, not the probe. The TANK
-    /// set's aircraft-class stages do not use this: stage8 carries real
-    /// barrel markers, so its yaw is measured through TankPawn.NoseYaw.
+    /// A stop-motion set does NOT share one frame: Meshy normalizes each
+    /// reconstruction to its own canonical front, and mid-set — at the frame
+    /// where it stops reading the image as a creature and starts reading it
+    /// as a craft — the canonical flips a quarter turn. Measured with a
+    /// full-TRS vertex probe (toes/head/taper angles per stage, calibrated
+    /// against the flight-confirmed jet and the tank's barrel markers,
+    /// 2026-08-04): the ranger jet set is robot-framed through stage 5, the
+    /// tank set through stage 4. Bounds cannot make this call — a half-
+    /// folded robot lying flat measures like an aircraft and faces like a
+    /// robot — so the splits are DATA, re-probed per future set
+    /// (Tools-side; see DOGFIGHT_PLAN.md).
     /// </summary>
-    const float StageYaw = -90f;
+    const int JetRobotFramedStages = 5;
+    const int TankRobotFramedStages = 4;
+
+    /// <summary>Yaw for robot-framed stages: the Meshy-humanoid canonical
+    /// through glTFast, probe-confirmed at ~0 across both sets' robot frames.</summary>
+    const float RobotStageYaw = 0f;
 
     /// <summary>
-    /// And the yaw for ROBOT-class stages — the standing and half-folded
-    /// frames whose HEIGHT still dominates. A separate number because Meshy
-    /// normalizes each reconstruction to its own canonical front and it
-    /// fronts a humanoid differently than a delta wing: one constant across
-    /// the set marched the robot stages through the fold 90 degrees off the
-    /// jet they become (caught on screenshots, 2026-08-04). Zero is the
-    /// Meshy-humanoid canonical mapped through glTFast; if the robots morph
-    /// facing backwards instead, make this 180 — again trust the screenshot.
+    /// Yaw for the jet set's aircraft-framed stages. -90 is an IN-GAME
+    /// measurement (a probe-derived +90 flew the set tail-first); the tank
+    /// set does not use this — its vehicle yaw is measured live off the
+    /// stage-8 barrel markers and shared by its whole vehicle frame group.
+    /// If a future set flies backwards, flip 180 and trust the screenshot.
     /// </summary>
-    const float RobotStageYaw = 0f;
+    const float StageYaw = -90f;
 
     // The gun, in TankArsenal's vocabulary: coloured by TEAM, because "whose
     // shot is that" has to be answerable at a glance in a two-jet furball.
@@ -325,15 +330,18 @@ public class JetPawn : MonoBehaviour
         jet._model.SetParent(go.transform, false);
 
         jet._jetSet = BuildSet(jet._model, jetStages, tint, entry.paintAnchorHue,
-            _ => StageYaw, out var jetBox);
+            JetRobotFramedStages, _ => StageYaw, out var jetBox);
         if (!jet._jetSet.Exists)
             jet._jetSet = BlockJetSet(jet._model, tint, out jetBox);
-        // The tank set's yaw is measured off its own stage8 barrel markers —
-        // TankPawn's answer, for TankPawn's reason: nothing generated agrees
-        // about forward, but a tank at rest points its gun over its nose.
+        // The tank set's vehicle yaw is measured off its stage8 barrel
+        // markers — TankPawn's answer, for TankPawn's reason: nothing
+        // generated agrees about forward, but a tank at rest points its gun
+        // over its nose. Resolved once from the LAST stage and shared by the
+        // whole vehicle frame group, because only stage8 carries markers and
+        // the old per-stage fallback marched the mid-fold 180 off the tank.
         jet._tankSet = BuildSet(jet._model, entry.HasStages ? entry.transformStages : null,
-            tint, entry.paintAnchorHue,
-            instance => TankPawn.NoseYaw(jet._model, instance, 90f), out _);
+            tint, entry.paintAnchorHue, TankRobotFramedStages,
+            last => TankPawn.NoseYaw(jet._model, last, -90f), out _);
 
         jet.Team = teamId;
         jet._yaw = yaw;
@@ -388,15 +396,19 @@ public class JetPawn : MonoBehaviour
     }
 
     /// <summary>
-    /// Instantiate and fit one stop-motion set. Each stage is fitted to
-    /// <see cref="JetSize"/> on its own largest dimension and centred on its
-    /// bounds — the flight pivot — with its yaw applied BEFORE anything is
-    /// measured, because a rotation after the fit moves the mesh off the
-    /// centring solved for it. Returns the LAST stage's bounds through
-    /// <paramref name="finalBox"/> (the jet or the tank — the fighting shape).
+    /// Instantiate and fit one stop-motion set. The first
+    /// <paramref name="robotFrames"/> stages take <see cref="RobotStageYaw"/>;
+    /// the rest share one craft yaw, resolved from the LAST stage (the
+    /// finished jet or tank) by <paramref name="craftYawFrom"/> — which is
+    /// why the whole set is instantiated before anything is turned. Each
+    /// stage is fitted to <see cref="JetSize"/> on its own largest dimension
+    /// and centred on its bounds — the flight pivot — with its yaw applied
+    /// BEFORE anything is measured, because a rotation after the fit moves
+    /// the mesh off the centring solved for it. Returns the LAST stage's
+    /// bounds through <paramref name="finalBox"/> (the fighting shape).
     /// </summary>
     static StageSet BuildSet(Transform model, GameObject[] stages, Color tint, float anchorHue,
-        System.Func<Transform, float> yawFor, out Bounds finalBox)
+        int robotFrames, System.Func<Transform, float> craftYawFrom, out Bounds finalBox)
     {
         finalBox = new Bounds(Vector3.zero, Vector3.one * JetSize);
         if (stages == null || stages.Length == 0)
@@ -412,33 +424,33 @@ public class JetPawn : MonoBehaviour
             var holder = new GameObject($"Stage{i + 1}").transform;
             holder.SetParent(model, false);
             var instance = Object.Instantiate(stages[i], holder);
+            set.holders[i] = holder.gameObject;
+            set.renderers[i] = instance.GetComponentsInChildren<Renderer>(true);
+        }
 
-            var renderers = instance.GetComponentsInChildren<Renderer>(true);
+        float craftYaw = craftYawFrom(set.holders[stages.Length - 1].transform.GetChild(0));
+
+        for (int i = 0; i < stages.Length; i++)
+        {
+            var holder = set.holders[i].transform;
+            var instance = holder.GetChild(0);
+            var renderers = set.renderers[i];
             if (renderers.Length > 0)
             {
-                // Classify BEFORE turning: a stage that is taller than it is
-                // wide or long is still robot-shaped, and Meshy fronts
-                // robot-shaped reconstructions on a different axis than
-                // aircraft-shaped ones — one yaw across the set marches the
-                // fold through a quarter-turn (see the two constants).
-                Bounds raw = RobotFactory.MeasureWorldBounds(renderers);
-                bool robotClass = raw.size.y >= raw.size.x && raw.size.y >= raw.size.z;
-                instance.transform.localRotation = Quaternion.Euler(0f,
-                    robotClass ? RobotStageYaw : yawFor(instance.transform), 0f);
+                instance.localRotation = Quaternion.Euler(0f,
+                    i < robotFrames ? RobotStageYaw : craftYaw, 0f);
 
-                raw = RobotFactory.MeasureWorldBounds(renderers);
+                Bounds raw = RobotFactory.MeasureWorldBounds(renderers);
                 float largest = Mathf.Max(raw.size.x, raw.size.y, raw.size.z);
-                instance.transform.localScale *= JetSize / Mathf.Max(0.01f, largest);
+                instance.localScale *= JetSize / Mathf.Max(0.01f, largest);
 
                 Bounds fitted = RobotFactory.MeasureWorldBounds(renderers);
-                instance.transform.position += holder.position - fitted.center;
+                instance.position += holder.position - fitted.center;
 
                 TeamPaint.Apply(renderers, tint, 0, false, anchorHue);
                 if (i == stages.Length - 1)
                     finalBox = new Bounds(Vector3.zero, fitted.size);
             }
-            set.holders[i] = holder.gameObject;
-            set.renderers[i] = renderers;
             // Start dark; ShowStage lights exactly one.
             foreach (var renderer in renderers)
                 renderer.enabled = false;

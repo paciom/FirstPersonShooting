@@ -98,3 +98,10 @@ Frames are picked where the silhouette changes (ranger-jet: 0/22/30/38/46/54/66/
 of 121 — the fold is done by ~72), cropped 640 → 560 to shed the Ai watermark,
 and never taken from a frame with a flash in it. Ranger's jet run: 2026-08-03,
 240 credits, all eight stages accepted first try.
+
+After download, run `python Tools/stageorient.py` (point it at the new set):
+Meshy flips its canonical front mid-set where the frames stop reading as a
+creature, and JetPawn carries that split as a per-set robot-framed stage
+count (ranger: jet 5, tank 4). If the new set's flip lands elsewhere, update
+the constant — and settle any yaw SIGN doubt with one in-game screenshot,
+never an offline probe alone.
