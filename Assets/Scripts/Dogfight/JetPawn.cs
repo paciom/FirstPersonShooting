@@ -102,7 +102,12 @@ public class JetPawn : MonoBehaviour
     /// </summary>
     static readonly Dictionary<string, int> JetRobotFrames = new Dictionary<string, int>
     {
-        { "ranger", 5 },
+        // The full fleet, probed 2026-08-05 as each set landed. Titan folds
+        // into a craft frame by stage four; bolt, hawk and scout stay
+        // creature-framed almost to the end.
+        { "ranger", 5 }, { "bolt", 6 }, { "hawk", 6 }, { "knight", 4 },
+        { "panther", 5 }, { "racer", 5 }, { "samurai", 5 }, { "scout", 6 },
+        { "titan", 3 },
     };
     const int JetRobotFramesDefault = 5;
 
