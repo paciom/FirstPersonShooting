@@ -210,7 +210,9 @@ public class DogfightSky : MonoBehaviour
         ring.name = "PadRing";
         ring.transform.SetParent(pad.transform, false);
         ring.transform.localScale = new Vector3(1.05f, 0.1f, 1.05f);
-        ring.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+        // Proud of the pad's top face, never level with it: two coplanar
+        // cylinder caps z-fight as a wheel of flashing triangles.
+        ring.transform.localPosition = new Vector3(0f, 1.0f, 0f);
         ring.GetComponent<MeshRenderer>().sharedMaterial = ArenaMaterials.Emissive(
             $"dogfight-pad-{ColorUtility.ToHtmlStringRGB(teamColor)}", teamColor, 1.8f);
         return pad;

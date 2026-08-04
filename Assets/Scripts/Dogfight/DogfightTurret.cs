@@ -168,7 +168,9 @@ public class DogfightTurret : MonoBehaviour
         ring.name = "BaseRing";
         ring.transform.SetParent(footing.transform, false);
         ring.transform.localScale = new Vector3(1.03f, 0.06f, 1.03f);
-        ring.transform.localPosition = new Vector3(0f, 0.95f, 0f);
+        // Clear of the footing's cap — near-coplanar caps z-fight (the pad
+        // ring's lesson, applied here before anyone screenshots it).
+        ring.transform.localPosition = new Vector3(0f, 1.02f, 0f);
         ring.GetComponent<MeshRenderer>().sharedMaterial = trim;
 
         var column = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
