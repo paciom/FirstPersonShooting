@@ -189,6 +189,15 @@ public class Dogfight : MonoBehaviour
         _hud.SetPilotRowVisible(false);
         _hud.SetCaption("");
 
+        // One bar per pilot, camera tag managed per frame in Readout.
+        var cyanPawns = new List<JetPawn>();
+        foreach (var slot in _cyanTeam)
+            cyanPawns.Add(slot.pawn);
+        var magentaPawns = new List<JetPawn>();
+        foreach (var slot in _magentaTeam)
+            magentaPawns.Add(slot.pawn);
+        _hud.BuildPawnBars(cyanPawns, magentaPawns, _playerControls ? Hero : null);
+
         _stage = Stage.Intro;
         _stageStart = Time.time;
     }
@@ -650,15 +659,8 @@ public class Dogfight : MonoBehaviour
         if (_hud == null)
             return;
 
-        // The LEFT bar belongs to whoever is holding the stick: in the
-        // player's seat it is THEIR jet — a bar that stays half-full while
-        // your own wreck falls is a lie with a wingmate's name on it. The
-        // broadcast keeps team pools on both sides, and the enemy side is
-        // always the pool; at 1 v 1 every reading is identical.
-        float ownSide = _playerControls && Hero != null && Hero.Shield != null
-            ? (Hero.IsDown ? 0f : Hero.Shield.Normalized)
-            : TeamShield(_cyanTeam);
-        _hud.SetShields(ownSide, TeamShield(_magentaTeam));
+        // Every pilot's own bar, and the camera tag on whoever is on screen.
+        _hud.UpdatePawnBars(_director.Subject);
 
         var subject = _director.Subject;
         if (subject != null)
@@ -683,20 +685,6 @@ public class Dogfight : MonoBehaviour
                 _lockCandidate == null ? 0 : _lockProgress >= PlayerLockSeconds ? 2 : 1);
             WarnOfMissiles();
         }
-    }
-
-    static float TeamShield(List<Slot> team)
-    {
-        float current = 0f, max = 0f;
-        foreach (var slot in team)
-        {
-            if (slot.pawn == null || slot.pawn.Shield == null)
-                continue;
-            max += slot.pawn.Shield.maxShield;
-            if (!slot.pawn.IsDown)
-                current += slot.pawn.Shield.Current;
-        }
-        return max > 0f ? current / max : 0f;
     }
 
     static string FormName(JetPawn.Form form) =>

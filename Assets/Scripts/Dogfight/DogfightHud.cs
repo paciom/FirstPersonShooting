@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,10 +24,19 @@ public class DogfightHud : MonoBehaviour
     Color _cyan;
     Color _magenta;
 
-    RectTransform _cyanFill;
-    Image _cyanImage;
-    RectTransform _magentaFill;
-    Image _magentaImage;
+    /// <summary>One pilot's row: their bar, their name, and the camera tag
+    /// that says "you are watching this one".</summary>
+    class PawnBar
+    {
+        public JetPawn pawn;
+        public RectTransform fill;
+        public Image fillImage;
+        public Image frame;
+        public Text label;
+        public GameObject cameraTag;
+    }
+
+    readonly List<PawnBar> _pawnBars = new List<PawnBar>();
     Image[] _cyanPips;
     Image[] _magentaPips;
     Text _scoreText;
@@ -75,8 +85,6 @@ public class DogfightHud : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         gameObject.AddComponent<GraphicRaycaster>();
 
-        BuildShieldBar(true, out _cyanFill, out _cyanImage);
-        BuildShieldBar(false, out _magentaFill, out _magentaImage);
         BuildScorePips();
         BuildReticle();
         BuildArrow();
@@ -98,37 +106,131 @@ public class DogfightHud : MonoBehaviour
         BuildOverPanel();
     }
 
-    /// <summary>One team's shield, top corner of its own side. The away bar is
-    /// how a pilot on someone's tail watches the work land.</summary>
-    void BuildShieldBar(bool cyanSide, out RectTransform fill, out Image fillImage)
+    /// <summary>
+    /// One row per PILOT, stacked down each team's corner, draining toward
+    /// the middle of the screen. Built once the cast is final; the camera
+    /// tag — a little lens glyph at the inner end of the row — is lit on
+    /// exactly one of them by <see cref="UpdatePawnBars"/>, so "which jet am
+    /// I watching" is never a question. The player's own row says YOU.
+    /// </summary>
+    public void BuildPawnBars(IReadOnlyList<JetPawn> cyans, IReadOnlyList<JetPawn> magentas,
+        JetPawn hero)
+    {
+        // Each row is FOUR siblings under the canvas (frame, track, label,
+        // tag) — swept piece by piece; reaching for a shared parent here
+        // would find the canvas itself.
+        foreach (var bar in _pawnBars)
+        {
+            if (bar.frame != null)
+                Destroy(bar.frame.gameObject);
+            if (bar.fill != null && bar.fill.parent != null)
+                Destroy(bar.fill.parent.gameObject);
+            if (bar.label != null)
+                Destroy(bar.label.gameObject);
+            if (bar.cameraTag != null)
+                Destroy(bar.cameraTag);
+        }
+        _pawnBars.Clear();
+
+        for (int i = 0; i < cyans.Count; i++)
+            BuildPawnBar(cyans[i], true, i, cyans[i] == hero);
+        for (int i = 0; i < magentas.Count; i++)
+            BuildPawnBar(magentas[i], false, i, false);
+    }
+
+    const float PawnBarWidth = 232f;
+
+    void BuildPawnBar(JetPawn pawn, bool cyanSide, int row, bool isHero)
     {
         Color team = cyanSide ? _cyan : _magenta;
         Vector2 anchor = cyanSide ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
-        float x = cyanSide ? 230f : -230f;
+        float x = cyanSide ? 150f : -150f;
+        float y = -40f - row * 26f;
 
-        Box($"ShieldFrame_{(cyanSide ? "C" : "M")}", Panel, anchor,
-            new Vector2(x, -52f), new Vector2(420f, 34f)).transform.SetAsFirstSibling();
-        var track = Box($"ShieldTrack_{(cyanSide ? "C" : "M")}", new Color(0f, 0f, 0f, 0.45f),
-            anchor, new Vector2(x, -52f), new Vector2(404f, 20f));
+        var bar = new PawnBar { pawn = pawn };
+        bar.frame = Box($"PawnBar_{(cyanSide ? "C" : "M")}{row}", Panel, anchor,
+            new Vector2(x, y), new Vector2(PawnBarWidth + 12f, 20f));
+        var track = Box("Track", new Color(0f, 0f, 0f, 0.45f), anchor,
+            new Vector2(x, y), new Vector2(PawnBarWidth, 12f));
 
         var fillGo = new GameObject("Fill");
         fillGo.transform.SetParent(track.transform, false);
-        fillImage = fillGo.AddComponent<Image>();
-        fillImage.color = team;
-        fill = fillImage.rectTransform;
-        // Pivoted at the OUTER screen edge, so both bars drain toward the
-        // middle — the same read whichever seat you take.
+        bar.fillImage = fillGo.AddComponent<Image>();
+        bar.fillImage.color = team;
+        bar.fill = bar.fillImage.rectTransform;
+        // Pivoted at the OUTER screen edge, so every bar drains toward the
+        // middle — the same read whichever side it hangs from.
         float pivotX = cyanSide ? 0f : 1f;
-        fill.anchorMin = new Vector2(pivotX, 0f);
-        fill.anchorMax = new Vector2(pivotX, 1f);
-        fill.pivot = new Vector2(pivotX, 0.5f);
-        fill.anchoredPosition = Vector2.zero;
-        fill.sizeDelta = new Vector2(404f, 0f);
+        bar.fill.anchorMin = new Vector2(pivotX, 0f);
+        bar.fill.anchorMax = new Vector2(pivotX, 1f);
+        bar.fill.pivot = new Vector2(pivotX, 0.5f);
+        bar.fill.anchoredPosition = Vector2.zero;
+        bar.fill.sizeDelta = new Vector2(PawnBarWidth, 0f);
 
-        Label($"ShieldLabel_{(cyanSide ? "C" : "M")}",
-            MatchAnnouncer.TeamName(cyanSide ? 0 : 1), 15, new Color(1f, 1f, 1f, 0.55f),
-            FontStyle.Bold, anchor, new Vector2(cyanSide ? 64f : -396f, -26f),
-            new Vector2(120f, 20f));
+        // The name rides the OUTER end, the camera tag the INNER — the tag
+        // points into the sky the camera is actually showing.
+        string name = isHero ? "YOU"
+            : $"{MatchAnnouncer.TeamName(cyanSide ? 0 : 1)} {row + 1}";
+        bar.label = Label($"PawnLabel_{(cyanSide ? "C" : "M")}{row}", name, 12,
+            new Color(1f, 1f, 1f, 0.6f), isHero ? FontStyle.Bold : FontStyle.Normal,
+            anchor, new Vector2(cyanSide ? 24f : -24f, y), new Vector2(90f, 18f));
+        bar.label.alignment = cyanSide ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
+        bar.label.rectTransform.pivot = new Vector2(cyanSide ? 0f : 1f, 0.5f);
+
+        bar.cameraTag = BuildCameraTag(anchor,
+            new Vector2(cyanSide ? x + PawnBarWidth * 0.5f + 26f : x - PawnBarWidth * 0.5f - 26f, y));
+        _pawnBars.Add(bar);
+    }
+
+    /// <summary>A camera the size of a pea: body, lens ring, and the little
+    /// red light that says LIVE. Primitive-built like every other glyph here.</summary>
+    GameObject BuildCameraTag(Vector2 anchor, Vector2 at)
+    {
+        var body = Box("CameraTag", new Color(1f, 1f, 1f, 0.85f), anchor, at,
+            new Vector2(16f, 11f));
+
+        var lens = new GameObject("Lens");
+        lens.transform.SetParent(body.transform, false);
+        var ring = lens.AddComponent<RawImage>();
+        ring.texture = VfxUtil.RingTexture;
+        ring.color = new Color(0.1f, 0.1f, 0.12f, 0.95f);
+        ring.raycastTarget = false;
+        ring.rectTransform.sizeDelta = new Vector2(9f, 9f);
+
+        var light = Box("Rec", new Color(1f, 0.25f, 0.2f, 1f), anchor,
+            at + new Vector2(6f, 7f), new Vector2(4f, 4f));
+        light.transform.SetParent(body.transform, true);
+
+        body.gameObject.SetActive(false);
+        return body.gameObject;
+    }
+
+    /// <summary>Every pilot's truth, every frame — and the camera tag on the
+    /// one being watched. A downed row dims to empty until its respawn.</summary>
+    public void UpdatePawnBars(JetPawn subject)
+    {
+        foreach (var bar in _pawnBars)
+        {
+            if (bar.pawn == null)
+                continue;
+            float health = bar.pawn.Shield != null && !bar.pawn.IsDown
+                ? bar.pawn.Shield.Normalized
+                : 0f;
+            bar.fill.sizeDelta = new Vector2(PawnBarWidth * Mathf.Clamp01(health), 0f);
+            Color team = bar.pawn.Team == 0 ? _cyan : _magenta;
+            bar.fillImage.color = health > 0.34f ? team : health > 0.16f ? Warn : Danger;
+
+            bool downed = bar.pawn.IsDown;
+            bar.frame.color = downed
+                ? new Color(Panel.r, Panel.g, Panel.b, 0.3f)
+                : Panel;
+            var labelColor = bar.label.color;
+            labelColor.a = downed ? 0.25f : 0.6f;
+            bar.label.color = labelColor;
+
+            if (bar.cameraTag != null)
+                bar.cameraTag.SetActive(bar.pawn == subject);
+        }
     }
 
     /// <summary>First to five, counted in pips under the top centre — the
@@ -220,19 +322,6 @@ public class DogfightHud : MonoBehaviour
     }
 
     // ------------------------------------------------------------------ updates
-
-    public void SetShields(float cyanNormalized, float magentaNormalized)
-    {
-        SetBar(_cyanFill, _cyanImage, _cyan, cyanNormalized);
-        SetBar(_magentaFill, _magentaImage, _magenta, magentaNormalized);
-    }
-
-    void SetBar(RectTransform fill, Image image, Color team, float normalized)
-    {
-        normalized = Mathf.Clamp01(normalized);
-        fill.sizeDelta = new Vector2(404f * normalized, 0f);
-        image.color = normalized > 0.34f ? team : normalized > 0.16f ? Warn : Danger;
-    }
 
     public void SetScore(int cyan, int magenta)
     {
