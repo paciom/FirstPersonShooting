@@ -53,11 +53,18 @@ public class JetBrain : MonoBehaviour
     const float FireCone = 18f;
     const float FireRange = 85f;
 
-    /// <summary>Missile discipline: the cone must be HELD, not visited —
-    /// but held briefly, at spectacle cadence, not sniper cadence.</summary>
-    const float MissileCone = 14f;
-    const float MissileHoldSeconds = 0.45f;
-    const float MissileRangeNear = 20f;
+    /// <summary>
+    /// Missile discipline: the cone must be HELD, not visited — but briefly,
+    /// and from wherever the fight actually happens. The near limit sat at
+    /// 20 m for a pilot whose own pursuit parks 9-14 m behind its target:
+    /// geometry went permanently false the moment the chase succeeded, and
+    /// no missile ever flew. It now reaches inside the saddle (the proximity
+    /// fuse and the ten-metre gap keep the shooter clear of its own splash),
+    /// and the cone is wide enough to mature against a target that jinks.
+    /// </summary>
+    const float MissileCone = 20f;
+    const float MissileHoldSeconds = 0.3f;
+    const float MissileRangeNear = 10f;
     const float MissileRangeFar = 80f;
 
     /// <summary>

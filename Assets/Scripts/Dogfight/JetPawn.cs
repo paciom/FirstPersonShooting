@@ -1255,6 +1255,9 @@ public class JetPawn : MonoBehaviour
             : AimDirection;
         DogfightMissile.Launch(from, direction, Team, transform, lockRoot,
             DogfightMissile.Flavor.Jet);
+        // The launch is an EVENT: a spark burst off the rail, so a missile
+        // leaving reads from the far side of the arena, not just up close.
+        VfxUtil.SpawnBurst(from, MatchAnnouncer.TeamColor(Team), 12, 6f, 0.14f);
         return true;
     }
 

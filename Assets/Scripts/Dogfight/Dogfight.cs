@@ -109,8 +109,10 @@ public class Dogfight : MonoBehaviour
     Transform _lockCandidate;
     Vector3 _lockCandidateCenter;
     float _lockProgress;
-    const float PlayerLockSeconds = 0.7f;
-    const float PlayerLockCone = 12f;
+    // Generous on purpose: the lock is the missile's tutorial, and a cone a
+    // maneuvering AI keeps slipping out of is a tutorial nobody finishes.
+    const float PlayerLockSeconds = 0.5f;
+    const float PlayerLockCone = 16f;
     const float PlayerLockRange = 115f;
 
     public static Dogfight Begin(GameModeController owner, RobotRoster roster,
