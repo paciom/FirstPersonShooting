@@ -77,6 +77,13 @@ public class StoryDirector : MonoBehaviour
         foreach (var bot in FindObjectsByType<AIBrain>(FindObjectsSortMode.None))
             Hide(bot.gameObject);
 
+        // The weapon console's always-on FPS counter is dev furniture — it
+        // has no place burned into a movie frame. Hidden, not destroyed, so
+        // its lock state survives the mode.
+        var console = FindFirstObjectByType<WeaponDebugConsole>();
+        if (console != null)
+            Hide(console.gameObject);
+
         _blockManager = FindFirstObjectByType<ArenaBlockManager>();
         if (_blockManager != null)
             _blockManager.enabled = false;
@@ -470,13 +477,18 @@ public class StoryDirector : MonoBehaviour
 
         switch (kind)
         {
+            // Solo coverage sits OFF the eyeline: dead on the facing axis the
+            // conversation partner stands between lens and subject, and the
+            // first render came back with a robot's back filling half the
+            // frame. Swung toward the audience side so coverage stays
+            // consistent shot to shot.
             case "closeup":
-                _camera.SetShot(headPos + t.forward * 2.0f + t.right * 0.35f,
+                _camera.SetShot(headPos + OffAxis(t, 25f) * 1.9f,
                     head, headPos, 33f);
                 return;
             case "medium":
-                _camera.SetShot(t.position + t.forward * 3.4f + t.right * 0.5f
-                    + Vector3.up * 1.55f, head, headPos, 41f);
+                _camera.SetShot(t.position + OffAxis(t, 35f) * 3.3f
+                    + Vector3.up * 1.5f, head, headPos, 41f);
                 return;
             case "ots":
             {
@@ -525,6 +537,16 @@ public class StoryDirector : MonoBehaviour
         float distance = Mathf.Clamp(axis.magnitude * 1.5f + 2.4f, 3.6f, 7.5f);
         _camera.SetShot(mid + side * distance + Vector3.up * 1.5f, null,
             mid + Vector3.up * 1.25f, 46f);
+    }
+
+    /// <summary>The actor's forward, swung a few degrees off the facing axis
+    /// — to whichever side faces the house (-z), so every piece of solo
+    /// coverage comes from the audience's side of the line.</summary>
+    static Vector3 OffAxis(Transform t, float degrees)
+    {
+        Vector3 a = Quaternion.AngleAxis(degrees, Vector3.up) * t.forward;
+        Vector3 b = Quaternion.AngleAxis(-degrees, Vector3.up) * t.forward;
+        return a.z < b.z ? a : b;
     }
 
     Vector3 Centroid()
