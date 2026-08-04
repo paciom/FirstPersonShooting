@@ -52,9 +52,11 @@ public static class WarFx
     }
 
     /// <summary>
-    /// A looping burn riding <paramref name="parent"/> — a downed pawn, a
-    /// killed battery. It lives until its parent dies or the caller puts it
-    /// out; nothing here will do it for you.
+    /// A looping burn riding <paramref name="parent"/> — a killed battery.
+    /// It lives until its parent dies or the caller puts it out; nothing
+    /// here will do it for you. (Moving pawns burn with their own streak
+    /// systems instead: this prefab is a bonfire, and a bonfire cannot be
+    /// steered — its plume rises in its own frame however its parent turns.)
     /// </summary>
     public static GameObject AttachFire(Transform parent, Vector3 localOffset, float scale = 1f)
     {
@@ -65,6 +67,20 @@ public static class WarFx
         var instance = Object.Instantiate(_firePrefab, parent);
         instance.transform.localPosition = localOffset;
         Fit(instance, scale);
+        return instance;
+    }
+
+    /// <summary>A burn at a place rather than on a thing — the crash-site
+    /// scar. Bins with the other plumes and puts itself out.</summary>
+    public static GameObject SpawnFire(Vector3 at, float scale, float seconds)
+    {
+        if (_firePrefab == null)
+            _firePrefab = Resources.Load<GameObject>("WarFX/WFX_Fire SmallFlame (Black Smoke)");
+        if (_firePrefab == null)
+            return null;
+        var instance = Object.Instantiate(_firePrefab, at, Quaternion.identity, Bin);
+        Fit(instance, scale);
+        Object.Destroy(instance, seconds);
         return instance;
     }
 

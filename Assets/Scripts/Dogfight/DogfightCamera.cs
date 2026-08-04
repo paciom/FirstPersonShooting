@@ -21,6 +21,11 @@ public class DogfightCamera : MonoBehaviour
     /// that the jet you are not watching stays a character.</summary>
     public const float CutSeconds = 7f;
 
+    /// <summary>How long the broadcast sits on a crater after the wreck it
+    /// was riding meets the deck. Less than the mode's respawn beat, so the
+    /// cut always lands before the respawn yanks the subject away.</summary>
+    const float WreckLingerSeconds = 1.8f;
+
     const float ChaseBack = 9f;
     const float ChaseUp = 3.1f;
     const float LookAhead = 14f;
@@ -68,7 +73,18 @@ public class DogfightCamera : MonoBehaviour
             Subject.SetVisible(true);
     }
 
-    /// <summary>The broadcast's "next jet" — SPACE, or the cut clock.</summary>
+    /// <summary>A kill anywhere is THE shot: the broadcast drops what it was
+    /// doing and rides the wreck down. Its own linger clock decides when to
+    /// look away again.</summary>
+    public void CoverWreck(JetPawn wreck)
+    {
+        if (wreck != null && wreck != Subject)
+            Follow(wreck);
+    }
+
+    /// <summary>The broadcast's "next jet" — SPACE, or the cut clock. Prefers
+    /// the living: a camera that cuts from one crater to another is a war
+    /// correspondent, not a sports broadcast.</summary>
     public void Next()
     {
         var all = JetPawn.All;
@@ -78,15 +94,22 @@ public class DogfightCamera : MonoBehaviour
         for (int i = 0; i < all.Count; i++)
             if (all[i] == Subject)
                 from = i;
+        JetPawn fallback = null;
         for (int step = 1; step <= all.Count; step++)
         {
             var candidate = all[(from + step) % all.Count];
-            if (candidate != null)
+            if (candidate == null)
+                continue;
+            if (!candidate.IsDown)
             {
                 Follow(candidate);
                 return;
             }
+            if (fallback == null)
+                fallback = candidate;
         }
+        if (fallback != null)
+            Follow(fallback);
     }
 
     public void Shake(float amount) => _shake = Mathf.Max(_shake, amount);
@@ -95,6 +118,12 @@ public class DogfightCamera : MonoBehaviour
     {
         if (Subject == null)
             return;
+
+        // A falling wreck is never cut away from: the clock is held at the
+        // linger length until impact, so the countdown that finally cuts
+        // starts at the crater, not at the kill.
+        if (Broadcast && Subject.IsDown && !Subject.WreckLanded)
+            _nextCut = Time.time + WreckLingerSeconds;
 
         if (Broadcast && Time.time >= _nextCut)
             Next();

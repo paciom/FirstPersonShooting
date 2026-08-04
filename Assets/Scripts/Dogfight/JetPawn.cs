@@ -243,6 +243,16 @@ public class JetPawn : MonoBehaviour
 
     public System.Action<JetPawn> OnWrecked;
 
+    /// <summary>Fired when the falling wreck meets the deck (or immediately,
+    /// for a pawn killed standing on it) — the moment of the big explosion.
+    /// The mode schedules the respawn off this, so a long fall is a long
+    /// funeral and a short one is a short one.</summary>
+    public System.Action<JetPawn> OnWreckLanded;
+
+    /// <summary>True from impact until respawn: the wreck is gone, the
+    /// crash site is burning, the camera is allowed to look away.</summary>
+    public bool WreckLanded { get; private set; }
+
     /// <summary>One stop-motion set, fitted and parked under the model.</summary>
     struct StageSet
     {
@@ -282,9 +292,8 @@ public class JetPawn : MonoBehaviour
     TankTurret _turret;
     TrailRenderer[] _trails;
     GameObject _chute;
-    GameObject _burnFx;
     ParticleSystem _damageSmoke;
-    GameObject _damageFire;
+    ParticleSystem _burnFlame;
     TrailRenderer _fireTrail;
     bool _morphBurst;
 
@@ -1005,33 +1014,67 @@ public class JetPawn : MonoBehaviour
         }
 
         bool critical = health < 0.22f;
-        if (critical && !IsDown && _damageFire == null)
+        if ((critical || _down) && _burnFlame == null)
         {
-            _damageFire = WarFx.AttachFire(transform, Vector3.up * 0.15f, 0.7f);
+            _burnFlame = BuildBurnFlame();
             _fireTrail = BuildFireTrail();
         }
+        if (_burnFlame != null)
+        {
+            // The flame is a WORLD-SPACE emitter: flakes of fire are dropped
+            // at the tail and left behind, so motion itself paints the streak
+            // and nothing has to be aimed — the pack's bonfire prefab could
+            // never be steered (its plume rises in its own frame however its
+            // parent turns), so the pawn burns with a flame of its own and
+            // the bonfire stays where bonfires belong, on dead turrets.
+            var emission = _burnFlame.emission;
+            emission.rateOverTime = _down && !WreckLanded ? 90f
+                : WreckLanded ? 0f
+                : critical ? 55f : 0f;
+        }
         if (_fireTrail != null)
-            _fireTrail.emitting = critical || _down;
-
-        // A burning aircraft's flame streams down the fuselage, not up off a
-        // campfire — the prefab is a bonfire, so its plume gets pointed along
-        // the relative wind whenever there is one. Slow or parked, up is
-        // honest again. The death burn streams the same way, which is what
-        // turns the spiral into a comet.
-        OrientBurn(_damageFire);
-        OrientBurn(_burnFx);
+            _fireTrail.emitting = (critical || _down) && !WreckLanded;
     }
 
-    void OrientBurn(GameObject fx)
+    /// <summary>Short-lived orange flakes, dropped and left like the smoke
+    /// — at speed a fire streak, at rest a flicker. Kept under the
+    /// bloom-whiteout line.</summary>
+    ParticleSystem BuildBurnFlame()
     {
-        if (fx == null)
-            return;
-        bool streaming = !Grounded && ReadoutSpeed > 9f;
-        Quaternion want = streaming
-            ? Quaternion.Euler(-90f, 0f, 0f)      // plume +Y onto local -Z: aft
-            : Quaternion.identity;
-        fx.transform.localRotation = Quaternion.Slerp(fx.transform.localRotation, want,
-            1f - Mathf.Exp(-6f * Time.deltaTime));
+        var go = new GameObject("BurnFlame");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, 0.1f, -_halfLength * 0.45f);
+
+        var flame = go.AddComponent<ParticleSystem>();
+        var main = flame.main;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.6f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
+        main.startColor = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.62f, 0.2f, 0.85f), new Color(1f, 0.35f, 0.12f, 0.8f));
+        main.maxParticles = 160;
+
+        var emission = flame.emission;
+        emission.rateOverTime = 0f;
+
+        var shape = flame.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.2f;
+
+        var size = flame.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f,
+            new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0.1f)));
+        var velocity = flame.velocityOverLifetime;
+        velocity.enabled = true;
+        velocity.space = ParticleSystemSimulationSpace.World;
+        velocity.y = new ParticleSystem.MinMaxCurve(0.5f);
+
+        var renderer = go.GetComponent<ParticleSystemRenderer>();
+        renderer.material = VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
+            new Color(1f, 0.5f, 0.18f), 2.0f);
+        return flame;
     }
 
     /// <summary>The critical-damage streak: a fire-coloured ribbon off the
@@ -1240,17 +1283,17 @@ public class JetPawn : MonoBehaviour
             trail.emitting = false;
         SetChuteVisible(false);
         _turret.enabled = false;
-        VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.6f);
-        // The kill shot, and then the burn: War FX flame rides the wreck all
-        // the way down (or where it stands, for a deck death) until respawn.
-        WarFx.Spawn(WarFx.Kind.Big, Center, 1.2f);
-        _burnFx = WarFx.AttachFire(transform, Vector3.up * 0.3f, 1.1f);
+        // The kill shot is a POP, not the payoff — the payoff is the ground.
+        VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.4f);
+        WarFx.Spawn(WarFx.Kind.Small, Center, 1.2f);
         OnWrecked?.Invoke(this);
+        // A pawn killed standing on the deck has no fall to fall.
+        if (Grounded)
+            LandWreck();
     }
 
-    /// <summary>A dying flier falls out of the fight; a dying tank or
-    /// grounded robot just burns where it stands. Either way the respawn
-    /// clock is already running.</summary>
+    /// <summary>A dying flier loses control and rides its wreck all the way
+    /// down — the fall IS the shot. It ends where falls end.</summary>
     void Tumble()
     {
         float dt = Time.deltaTime;
@@ -1263,6 +1306,41 @@ public class JetPawn : MonoBehaviour
                               + Vector3.down * (falling * 6f * dt);
         if (falling > 0.35f && Random.value < 12f * dt)
             VfxUtil.SpawnBurst(Center, new Color(1f, 0.6f, 0.25f), 4, 3f, 0.14f);
+
+        if (transform.position.y <= GroundY + 0.9f)
+            LandWreck();
+    }
+
+    /// <summary>
+    /// The impact: the big explosion, a burning scar that outlives the
+    /// wreck, and the airframe itself gone — what is left on the field is
+    /// fire, which is the honest remainder of a jet. The mode hears about
+    /// it and starts the respawn clock from HERE, so the camera always gets
+    /// its crash before it gets its cut.
+    /// </summary>
+    void LandWreck()
+    {
+        if (WreckLanded)
+            return;
+        WreckLanded = true;
+        Grounded = true;
+        transform.position = new Vector3(transform.position.x, GroundY + 0.9f,
+            transform.position.z);
+
+        VfxUtil.Explosion(transform.position, MatchAnnouncer.TeamColor(Team), 2.4f);
+        WarFx.Spawn(WarFx.Kind.Big, transform.position, 1.8f);
+        VfxUtil.SpawnBurst(transform.position, new Color(0.75f, 0.7f, 0.6f), 26, 7f, 0.2f);
+        WarFx.SpawnFire(transform.position, 1.3f, 6f);
+
+        SetVisible(false);
+        foreach (var trail in _trails)
+            trail.Clear();
+        if (_damageSmoke != null)
+        {
+            var emission = _damageSmoke.emission;
+            emission.rateOverTime = 0f;
+        }
+        OnWreckLanded?.Invoke(this);
     }
 
     /// <summary>Back on the spawn ring, always as a jet: airframe whole, gun
@@ -1270,18 +1348,16 @@ public class JetPawn : MonoBehaviour
     public void Respawn(Vector3 position, float yaw)
     {
         _down = false;
+        WreckLanded = false;
         _yaw = yaw;
         _pitch = 0f;
         _roll = 0f;
-        if (_burnFx != null)
+        SetVisible(true);
+        if (_burnFlame != null)
         {
-            Destroy(_burnFx);
-            _burnFx = null;
-        }
-        if (_damageFire != null)
-        {
-            Destroy(_damageFire);
-            _damageFire = null;
+            var flameEmission = _burnFlame.emission;
+            flameEmission.rateOverTime = 0f;
+            _burnFlame.Clear();
         }
         if (_fireTrail != null)
         {

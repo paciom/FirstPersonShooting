@@ -42,7 +42,15 @@ public class Dogfight : MonoBehaviour
     const int KillsPerPilot = 5;
     const int KillsCap = 20;
 
+    /// <summary>Seconds between the wreck HITTING THE DECK and the respawn —
+    /// the crash is the shot, so the clock starts at impact, not at the kill.
+    /// The broadcast lingers on the crater a beat less than this, so the cut
+    /// always happens before the respawn yanks the subject across the sky.</summary>
     const float RespawnBeat = 2.5f;
+
+    /// <summary>Failsafe on the fall itself: no funeral runs longer than this
+    /// even if a wreck finds somewhere strange to never land.</summary>
+    const float MaxFallSeconds = 10f;
     const float GraceSeconds = 2f;
 
     const float IntroSeconds = 0.9f;
@@ -192,6 +200,7 @@ public class Dogfight : MonoBehaviour
             : default;
         var pawn = JetPawn.Spawn(entry, JetStagesFor(entry), teamId, position, yaw, JetShield);
         pawn.OnWrecked += Wrecked;
+        pawn.OnWreckLanded += WreckLanded;
         team.Add(new Slot { pawn = pawn });
 
         // The pawn's origin is its flight CENTRE, so the standing robot's
@@ -498,17 +507,39 @@ public class Dogfight : MonoBehaviour
 
         if (_director.Subject == pawn)
             _director.Shake(1.1f);
+        // A kill is THE shot: the broadcast rides the wreck down and lingers
+        // on the crater before it cuts away (the camera holds its own clock).
+        if (!_playerControls)
+            _director.CoverWreck(pawn);
 
-        slot.respawnAt = Time.time + RespawnBeat;
+        // The real respawn clock starts at IMPACT (see WreckLanded); this is
+        // only the failsafe for a fall that never finds the floor.
+        slot.respawnAt = Time.time + MaxFallSeconds;
 
         if (_stage == Stage.Fight
             && (_cyanScore >= _killsToWin || _magentaScore >= _killsToWin))
         {
-            // The match point gets the mushroom: a nuke rising off the deck
-            // under the final wreck, because an eight year old just won.
-            Vector3 under = pawn.Center;
-            WarFx.Spawn(WarFx.Kind.Nuke, new Vector3(under.x, 0f, under.z));
+            // The match point gets the mushroom — but at the IMPACT, where
+            // mushrooms grow, not at the kill shot in mid-air.
+            _finalWreck = pawn;
             EndSortie();
+        }
+    }
+
+    JetPawn _finalWreck;
+
+    /// <summary>The wreck met the deck: now the respawn clock is honest, and
+    /// a match-point crater gets its nuke.</summary>
+    void WreckLanded(JetPawn pawn)
+    {
+        var slot = FindSlot(pawn, out _);
+        if (slot != null)
+            slot.respawnAt = Mathf.Min(slot.respawnAt, Time.time + RespawnBeat);
+        if (pawn == _finalWreck)
+        {
+            _finalWreck = null;
+            WarFx.Spawn(WarFx.Kind.Nuke,
+                new Vector3(pawn.Center.x, 0f, pawn.Center.z));
         }
     }
 
