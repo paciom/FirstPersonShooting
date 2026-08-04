@@ -285,6 +285,7 @@ public class JetPawn : MonoBehaviour
     GameObject _burnFx;
     ParticleSystem _damageSmoke;
     GameObject _damageFire;
+    TrailRenderer _fireTrail;
     bool _morphBurst;
 
     readonly List<MorphLeg> _morphQueue = new List<MorphLeg>();
@@ -999,12 +1000,58 @@ public class JetPawn : MonoBehaviour
         {
             var emission = _damageSmoke.emission;
             emission.rateOverTime = smoking
-                ? Mathf.Lerp(30f, 8f, health / 0.55f)
+                ? Mathf.Lerp(34f, 10f, health / 0.55f)
                 : 0f;
         }
 
-        if (health < 0.22f && !IsDown && _damageFire == null)
-            _damageFire = WarFx.AttachFire(transform, Vector3.up * 0.2f, 0.7f);
+        bool critical = health < 0.22f;
+        if (critical && !IsDown && _damageFire == null)
+        {
+            _damageFire = WarFx.AttachFire(transform, Vector3.up * 0.15f, 0.7f);
+            _fireTrail = BuildFireTrail();
+        }
+        if (_fireTrail != null)
+            _fireTrail.emitting = critical || _down;
+
+        // A burning aircraft's flame streams down the fuselage, not up off a
+        // campfire — the prefab is a bonfire, so its plume gets pointed along
+        // the relative wind whenever there is one. Slow or parked, up is
+        // honest again. The death burn streams the same way, which is what
+        // turns the spiral into a comet.
+        OrientBurn(_damageFire);
+        OrientBurn(_burnFx);
+    }
+
+    void OrientBurn(GameObject fx)
+    {
+        if (fx == null)
+            return;
+        bool streaming = !Grounded && ReadoutSpeed > 9f;
+        Quaternion want = streaming
+            ? Quaternion.Euler(-90f, 0f, 0f)      // plume +Y onto local -Z: aft
+            : Quaternion.identity;
+        fx.transform.localRotation = Quaternion.Slerp(fx.transform.localRotation, want,
+            1f - Mathf.Exp(-6f * Time.deltaTime));
+    }
+
+    /// <summary>The critical-damage streak: a fire-coloured ribbon off the
+    /// tail that reads as "going down" from any distance, at any framerate —
+    /// particles can be missed between frames, a trail cannot.</summary>
+    TrailRenderer BuildFireTrail()
+    {
+        var go = new GameObject("FireTrail");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, 0.1f, -_halfLength * 0.6f);
+        var trail = go.AddComponent<TrailRenderer>();
+        trail.time = 0.9f;
+        trail.startWidth = 0.34f;
+        trail.endWidth = 0.05f;
+        trail.minVertexDistance = 0.3f;
+        // Warm orange, held under the bloom-whiteout line.
+        trail.material = VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
+            new Color(1f, 0.55f, 0.2f), 1.8f);
+        trail.emitting = false;
+        return trail;
     }
 
     ParticleSystem BuildDamageSmoke()
@@ -1016,8 +1063,10 @@ public class JetPawn : MonoBehaviour
         var smoke = go.AddComponent<ParticleSystem>();
         var main = smoke.main;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.1f, 1.8f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 1.2f);
+        // Long-lived, slow puffs: dropped in place and LEFT there, so the
+        // flight path stays drawn across the sky as a line, not a haze.
+        main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
         main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
         main.startColor = new ParticleSystem.MinMaxGradient(
             new Color(0.12f, 0.12f, 0.13f, 0.55f), new Color(0.3f, 0.3f, 0.32f, 0.45f));
@@ -1038,7 +1087,9 @@ public class JetPawn : MonoBehaviour
         var velocity = smoke.velocityOverLifetime;
         velocity.enabled = true;
         velocity.space = ParticleSystemSimulationSpace.World;
-        velocity.y = new ParticleSystem.MinMaxCurve(0.8f);
+        // Barely rising: enough to feel like smoke, not enough to bend the
+        // trail into a curtain.
+        velocity.y = new ParticleSystem.MinMaxCurve(0.3f);
 
         var fade = smoke.colorOverLifetime;
         fade.enabled = true;
@@ -1231,6 +1282,11 @@ public class JetPawn : MonoBehaviour
         {
             Destroy(_damageFire);
             _damageFire = null;
+        }
+        if (_fireTrail != null)
+        {
+            Destroy(_fireTrail.gameObject);
+            _fireTrail = null;
         }
         if (_damageSmoke != null)
         {
