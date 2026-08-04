@@ -88,16 +88,28 @@ public class JetPawn : MonoBehaviour
     const float PitchLimit = 62f;
 
     /// <summary>
-    /// Extra yaw that turns a generated JET stage nose-forward. -90 is an
-    /// IN-GAME measurement, and the sign matters more than the story: the
-    /// offline vertex probe walks node translations but ignores node
-    /// rotations, so its frame is not glTFast's — +90 flew the whole set
-    /// visibly tail-first. If a future jet set comes out backwards, flip
-    /// this 180 and trust the screenshot, not the probe. The TANK set does
-    /// not use this: its stage8 carries real barrel markers, so its yaw is
-    /// measured per robot through TankPawn.NoseYaw.
+    /// Extra yaw that turns a generated AIRCRAFT-class stage nose-forward.
+    /// -90 is an IN-GAME measurement, and the sign matters more than the
+    /// story: the offline vertex probe walks node translations but ignores
+    /// node rotations, so its frame is not glTFast's — +90 flew the whole
+    /// set visibly tail-first. If a future jet set comes out backwards,
+    /// flip this 180 and trust the screenshot, not the probe. The TANK
+    /// set's aircraft-class stages do not use this: stage8 carries real
+    /// barrel markers, so its yaw is measured through TankPawn.NoseYaw.
     /// </summary>
     const float StageYaw = -90f;
+
+    /// <summary>
+    /// And the yaw for ROBOT-class stages — the standing and half-folded
+    /// frames whose HEIGHT still dominates. A separate number because Meshy
+    /// normalizes each reconstruction to its own canonical front and it
+    /// fronts a humanoid differently than a delta wing: one constant across
+    /// the set marched the robot stages through the fold 90 degrees off the
+    /// jet they become (caught on screenshots, 2026-08-04). Zero is the
+    /// Meshy-humanoid canonical mapped through glTFast; if the robots morph
+    /// facing backwards instead, make this 180 — again trust the screenshot.
+    /// </summary>
+    const float RobotStageYaw = 0f;
 
     // The gun, in TankArsenal's vocabulary: coloured by TEAM, because "whose
     // shot is that" has to be answerable at a glance in a two-jet furball.
@@ -400,12 +412,21 @@ public class JetPawn : MonoBehaviour
             var holder = new GameObject($"Stage{i + 1}").transform;
             holder.SetParent(model, false);
             var instance = Object.Instantiate(stages[i], holder);
-            instance.transform.localRotation = Quaternion.Euler(0f, yawFor(instance.transform), 0f);
 
             var renderers = instance.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length > 0)
             {
+                // Classify BEFORE turning: a stage that is taller than it is
+                // wide or long is still robot-shaped, and Meshy fronts
+                // robot-shaped reconstructions on a different axis than
+                // aircraft-shaped ones — one yaw across the set marches the
+                // fold through a quarter-turn (see the two constants).
                 Bounds raw = RobotFactory.MeasureWorldBounds(renderers);
+                bool robotClass = raw.size.y >= raw.size.x && raw.size.y >= raw.size.z;
+                instance.transform.localRotation = Quaternion.Euler(0f,
+                    robotClass ? RobotStageYaw : yawFor(instance.transform), 0f);
+
+                raw = RobotFactory.MeasureWorldBounds(renderers);
                 float largest = Mathf.Max(raw.size.x, raw.size.y, raw.size.z);
                 instance.transform.localScale *= JetSize / Mathf.Max(0.01f, largest);
 
