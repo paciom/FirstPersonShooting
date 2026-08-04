@@ -60,10 +60,24 @@ public class JetBrain : MonoBehaviour
     const float MissileRangeNear = 20f;
     const float MissileRangeFar = 80f;
 
-    /// <summary>A missile chasing me matters from here; the flare hand moves
-    /// when it closes to <see cref="FlareRange"/>.</summary>
+    /// <summary>
+    /// A missile chasing me is TRACKED from here — but the full defensive
+    /// break waits until it closes to <see cref="EvadeRange"/>. The first
+    /// cut of this brain broke the moment anything launched, and with a
+    /// four-turret battery cycling against two jets that meant a missile
+    /// was "inbound" almost always: every pilot spent the whole war
+    /// breaking and flaring, and the guns never spoke. Distant missiles
+    /// are now something you keep fighting through; the flare hand still
+    /// moves at <see cref="FlareRange"/>.
+    /// </summary>
     const float ThreatRange = 60f;
+    const float EvadeRange = 32f;
     const float FlareRange = 30f;
+
+    /// <summary>Batteries are worth guns from here — hunted deliberately
+    /// between kills, strafed opportunistically whenever one drifts
+    /// through the pipper mid-duel.</summary>
+    const float GroundGunRange = 100f;
 
     /// <summary>The carousel detector: this many think-beats of remembered
     /// range, and the spread below which a circle is declared. Six-ish
@@ -159,7 +173,12 @@ public class JetBrain : MonoBehaviour
             Think();
         }
 
-        if (_threat != null)
+        // Break only for a missile that is actually ARRIVING; a distant
+        // launch is tracked (and flared if it gets close) while the fight
+        // goes on.
+        if (_threat != null
+            && Vector3.Distance(_threat.transform.position, pawn.transform.position)
+               < EvadeRange)
             EvadeMissile();
         else
             Fly();
@@ -312,10 +331,13 @@ public class JetBrain : MonoBehaviour
 
         pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 6f) * 0.8f);
         pawn.Throttle = 1f;
-        pawn.Firing = false;
-        _coneHeldSince = -1f;
 
         TickFlares(distance);
+
+        // The break owns the stick, not the trigger: a snapshot through the
+        // turn whenever the geometry allows is half of what a dogfight
+        // looks like.
+        FightGuns(pawn.transform.position);
     }
 
     /// <summary>The flare hand, one rolled reaction beat late and never the
@@ -346,6 +368,30 @@ public class JetBrain : MonoBehaviour
     {
         if (quarry == null)
         {
+            // Nobody in the sky to fight: spend the respawn beat on the
+            // batteries — the same gun-run shape flown against a grounded
+            // enemy, aimed at whatever the ring still has standing. Only an
+            // empty battery leaves a lap of the spawn ring.
+            var battery = DogfightTurret.Nearest(pawn.transform.position);
+            if (battery != null)
+            {
+                Vector3 toBattery = battery.Center - pawn.transform.position;
+                if (Vector3.Angle(pawn.transform.forward, toBattery) < 25f
+                    && toBattery.magnitude < 90f)
+                {
+                    _goal = battery.Center;
+                    _goalIsLead = true;
+                }
+                else
+                {
+                    Vector3 ring = Quaternion.Euler(0f, Time.time * 24f * breakSign, 0f)
+                                   * Vector3.forward * 30f;
+                    _goal = battery.Center + ring + Vector3.up * 42f;
+                    _goalIsLead = false;
+                }
+                return;
+            }
+
             Vector3 flat = new Vector3(pawn.transform.position.x, 0f, pawn.transform.position.z);
             if (flat.sqrMagnitude < 1f)
                 flat = Vector3.forward;
@@ -487,27 +533,58 @@ public class JetBrain : MonoBehaviour
 
     /// <summary>
     /// The trigger, every frame, against the TARGET — not against whatever
-    /// goal the last think-beat left behind. Saddle chase, cut, gun run: if
-    /// the nose is roughly on the lead, the guns talk, and a missile follows
-    /// any half-second of real alignment. What the fight looks like is made
-    /// here as much as in the steering.
+    /// goal the last think-beat left behind. The target is the enemy jet
+    /// while one is up, the nearest battery while none is (a wrecked enemy's
+    /// respawn beat is turret-hunting time, not patrol time) — and even
+    /// mid-duel, a battery drifting through the pipper gets the guns for
+    /// free. Missiles follow any held half-second of alignment on whichever
+    /// target is primary. What the fight looks like is made here as much as
+    /// in the steering.
     /// </summary>
     void FightGuns(Vector3 me)
     {
-        if (quarry == null || quarry.IsDown)
+        Vector3 lead;
+        Vector3 toTarget;
+        Transform lockRoot;
+        bool jetTarget = quarry != null && !quarry.IsDown;
+        if (jetTarget)
         {
-            pawn.Firing = false;
-            _coneHeldSince = -1f;
-            return;
+            toTarget = quarry.Center - me;
+            lead = quarry.Center + quarry.Velocity * (toTarget.magnitude / 90f) - me;
+            lockRoot = quarry.transform;
+        }
+        else
+        {
+            var battery = DogfightTurret.Nearest(me, 130f);
+            if (battery == null)
+            {
+                pawn.Firing = false;
+                _coneHeldSince = -1f;
+                return;
+            }
+            toTarget = battery.Center - me;
+            lead = toTarget;                     // buildings hold still
+            lockRoot = battery.transform;
         }
 
-        Vector3 toQuarry = quarry.Center - me;
-        float distance = toQuarry.magnitude;
-        Vector3 lead = quarry.Center + quarry.Velocity * (distance / 90f) - me;
+        float distance = toTarget.magnitude;
         float offLead = Vector3.Angle(pawn.transform.forward, lead);
-        bool facing = Vector3.Dot(pawn.transform.forward, toQuarry.normalized) > 0.15f;
+        bool facing = Vector3.Dot(pawn.transform.forward, toTarget.normalized) > 0.15f;
 
         pawn.Firing = facing && distance < FireRange && offLead < FireCone;
+
+        // The opportunist's rule: a battery lined up mid-duel is spectacle
+        // nobody has to steer for.
+        if (!pawn.Firing && jetTarget)
+        {
+            var battery = DogfightTurret.Nearest(me, GroundGunRange);
+            if (battery != null)
+            {
+                Vector3 toBattery = battery.Center - me;
+                pawn.Firing = Vector3.Dot(pawn.transform.forward, toBattery.normalized) > 0.15f
+                              && Vector3.Angle(pawn.transform.forward, toBattery) < FireCone;
+            }
+        }
 
         bool missileGeometry = facing
                                && offLead < MissileCone
@@ -523,7 +600,7 @@ public class JetBrain : MonoBehaviour
         }
         else if (Time.time - _coneHeldSince >= MissileHoldSeconds
                  && Time.time >= _missileAt
-                 && pawn.TryFireMissile(quarry.transform))
+                 && pawn.TryFireMissile(lockRoot))
         {
             _missileAt = Time.time + Random.Range(6f, 9f);
         }
