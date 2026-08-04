@@ -294,7 +294,6 @@ public class JetPawn : MonoBehaviour
     GameObject _chute;
     ParticleSystem _damageSmoke;
     ParticleSystem _burnFlame;
-    TrailRenderer _fireTrail;
     bool _morphBurst;
 
     readonly List<MorphLeg> _morphQueue = new List<MorphLeg>();
@@ -1002,38 +1001,36 @@ public class JetPawn : MonoBehaviour
     {
         float health = Shield != null && !IsDown ? Shield.Normalized : 0f;
 
-        bool smoking = health < 0.55f;
+        bool smoking = health < 0.55f || _down;
         if (smoking && _damageSmoke == null)
             _damageSmoke = BuildDamageSmoke();
         if (_damageSmoke != null)
         {
+            // PER METRE, not per second: the trail is a line drawn along the
+            // flight path — uniform at any speed, denser as the damage gets
+            // worse, densest on the way down, and never a blob around a slow
+            // or parked airframe.
             var emission = _damageSmoke.emission;
-            emission.rateOverTime = smoking
-                ? Mathf.Lerp(34f, 10f, health / 0.55f)
-                : 0f;
+            emission.rateOverDistance = !smoking || WreckLanded ? 0f
+                : _down ? 2.6f
+                : Mathf.Lerp(2.2f, 0.8f, health / 0.55f);
         }
 
         bool critical = health < 0.22f;
         if ((critical || _down) && _burnFlame == null)
-        {
             _burnFlame = BuildBurnFlame();
-            _fireTrail = BuildFireTrail();
-        }
         if (_burnFlame != null)
         {
             // The flame is a WORLD-SPACE emitter: flakes of fire are dropped
-            // at the tail and left behind, so motion itself paints the streak
-            // and nothing has to be aimed — the pack's bonfire prefab could
-            // never be steered (its plume rises in its own frame however its
-            // parent turns), so the pawn burns with a flame of its own and
-            // the bonfire stays where bonfires belong, on dead turrets.
+            // at the tail and left behind, so motion itself paints the burn
+            // and nothing has to be aimed. It stays SHORT on purpose — the
+            // long read belongs to the smoke; a long glowing ribbon looks
+            // like a light effect, not a wound.
             var emission = _burnFlame.emission;
             emission.rateOverTime = _down && !WreckLanded ? 90f
                 : WreckLanded ? 0f
                 : critical ? 55f : 0f;
         }
-        if (_fireTrail != null)
-            _fireTrail.emitting = (critical || _down) && !WreckLanded;
     }
 
     /// <summary>Short-lived orange flakes, dropped and left like the smoke
@@ -1048,8 +1045,8 @@ public class JetPawn : MonoBehaviour
         var flame = go.AddComponent<ParticleSystem>();
         var main = flame.main;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.6f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
         main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
         main.startColor = new ParticleSystem.MinMaxGradient(
             new Color(1f, 0.62f, 0.2f, 0.85f), new Color(1f, 0.35f, 0.12f, 0.8f));
@@ -1069,32 +1066,14 @@ public class JetPawn : MonoBehaviour
         var velocity = flame.velocityOverLifetime;
         velocity.enabled = true;
         velocity.space = ParticleSystemSimulationSpace.World;
-        velocity.y = new ParticleSystem.MinMaxCurve(0.5f);
+        // Fire clings; it does not climb. The rise that made the burn read
+        // as "up" is all but gone.
+        velocity.y = new ParticleSystem.MinMaxCurve(0.12f);
 
         var renderer = go.GetComponent<ParticleSystemRenderer>();
         renderer.material = VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
             new Color(1f, 0.5f, 0.18f), 2.0f);
         return flame;
-    }
-
-    /// <summary>The critical-damage streak: a fire-coloured ribbon off the
-    /// tail that reads as "going down" from any distance, at any framerate —
-    /// particles can be missed between frames, a trail cannot.</summary>
-    TrailRenderer BuildFireTrail()
-    {
-        var go = new GameObject("FireTrail");
-        go.transform.SetParent(transform, false);
-        go.transform.localPosition = new Vector3(0f, 0.1f, -_halfLength * 0.6f);
-        var trail = go.AddComponent<TrailRenderer>();
-        trail.time = 0.9f;
-        trail.startWidth = 0.34f;
-        trail.endWidth = 0.05f;
-        trail.minVertexDistance = 0.3f;
-        // Warm orange, held under the bloom-whiteout line.
-        trail.material = VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture,
-            new Color(1f, 0.55f, 0.2f), 1.8f);
-        trail.emitting = false;
-        return trail;
     }
 
     ParticleSystem BuildDamageSmoke()
@@ -1106,33 +1085,36 @@ public class JetPawn : MonoBehaviour
         var smoke = go.AddComponent<ParticleSystem>();
         var main = smoke.main;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        // Long-lived, slow puffs: dropped in place and LEFT there, so the
-        // flight path stays drawn across the sky as a line, not a haze.
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.8f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+        // Long-lived, near-motionless puffs: dropped in place and LEFT
+        // there, so minutes of dogfight stay written across the sky as
+        // lines. Mid-grey rather than near-black — black smoke on a navy
+        // void is a trail nobody can see.
+        main.startLifetime = new ParticleSystem.MinMaxCurve(4.5f, 6f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0f, 0.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.55f, 0.85f);
         main.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(0.12f, 0.12f, 0.13f, 0.55f), new Color(0.3f, 0.3f, 0.32f, 0.45f));
-        main.maxParticles = 120;
+            new Color(0.32f, 0.32f, 0.34f, 0.7f), new Color(0.45f, 0.44f, 0.46f, 0.6f));
+        main.maxParticles = 700;
 
         var emission = smoke.emission;
         emission.rateOverTime = 0f;
+        emission.rateOverDistance = 0f;
 
         var shape = smoke.shape;
         shape.shapeType = ParticleSystemShapeType.Sphere;
         shape.radius = 0.25f;
 
-        // Smoke swells and rises a little as it is left behind.
+        // Gentle swell only — ballooning puffs merge a line into a cloud.
         var size = smoke.sizeOverLifetime;
         size.enabled = true;
         size.size = new ParticleSystem.MinMaxCurve(1f,
-            new AnimationCurve(new Keyframe(0f, 0.4f), new Keyframe(1f, 1.6f)));
+            new AnimationCurve(new Keyframe(0f, 0.7f), new Keyframe(1f, 1.25f)));
         var velocity = smoke.velocityOverLifetime;
         velocity.enabled = true;
         velocity.space = ParticleSystemSimulationSpace.World;
-        // Barely rising: enough to feel like smoke, not enough to bend the
-        // trail into a curtain.
-        velocity.y = new ParticleSystem.MinMaxCurve(0.3f);
+        // All but still: a trail that climbs is a trail that stops being a
+        // trail — this was the "smoke goes up" bug, twice.
+        velocity.y = new ParticleSystem.MinMaxCurve(0.06f);
 
         var fade = smoke.colorOverLifetime;
         fade.enabled = true;
@@ -1338,7 +1320,7 @@ public class JetPawn : MonoBehaviour
         if (_damageSmoke != null)
         {
             var emission = _damageSmoke.emission;
-            emission.rateOverTime = 0f;
+            emission.rateOverDistance = 0f;
         }
         OnWreckLanded?.Invoke(this);
     }
@@ -1359,15 +1341,10 @@ public class JetPawn : MonoBehaviour
             flameEmission.rateOverTime = 0f;
             _burnFlame.Clear();
         }
-        if (_fireTrail != null)
-        {
-            Destroy(_fireTrail.gameObject);
-            _fireTrail = null;
-        }
         if (_damageSmoke != null)
         {
             var emission = _damageSmoke.emission;
-            emission.rateOverTime = 0f;
+            emission.rateOverDistance = 0f;
             _damageSmoke.Clear();
         }
         _flareCharges = FlareChargesMax;
