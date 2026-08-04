@@ -482,9 +482,13 @@ public class StoryDirector : MonoBehaviour
             // first render came back with a robot's back filling half the
             // frame. Swung toward the audience side so coverage stays
             // consistent shot to shot.
+            // Chest-up framing, gaze a touch under the head so the face rides
+            // the frame's upper third — 1.9 m at FOV 33 was a helmet filling
+            // the screen. Static gaze on purpose: a settled speaker doesn't
+            // move, and a rock-steady closeup reads better than a tracked one.
             case "closeup":
-                _camera.SetShot(headPos + OffAxis(t, 25f) * 1.9f,
-                    head, headPos, 33f);
+                _camera.SetShot(headPos + OffAxis(t, 25f) * 2.6f + Vector3.up * 0.1f,
+                    null, headPos - Vector3.up * 0.25f, 36f);
                 return;
             case "medium":
                 _camera.SetShot(t.position + OffAxis(t, 35f) * 3.3f
@@ -695,6 +699,11 @@ public class StoryDirector : MonoBehaviour
         text.color = color;
         text.alignment = TextAnchor.MiddleCenter;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        // Subtitles land on whatever the shot put behind them — a white
+        // robot, a hot rail — and text without a shadow vanishes there.
+        var shadow = go.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+        shadow.effectDistance = new Vector2(2f, -2f);
         return text;
     }
 
