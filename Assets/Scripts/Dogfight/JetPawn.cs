@@ -91,17 +91,33 @@ public class JetPawn : MonoBehaviour
     /// A stop-motion set does NOT share one frame: Meshy normalizes each
     /// reconstruction to its own canonical front, and mid-set — at the frame
     /// where it stops reading the image as a creature and starts reading it
-    /// as a craft — the canonical flips a quarter turn. Measured with a
-    /// full-TRS vertex probe (toes/head/taper angles per stage, calibrated
-    /// against the flight-confirmed jet and the tank's barrel markers,
-    /// 2026-08-04): the ranger jet set is robot-framed through stage 5, the
-    /// tank set through stage 4. Bounds cannot make this call — a half-
-    /// folded robot lying flat measures like an aircraft and faces like a
-    /// robot — so the splits are DATA, re-probed per future set
-    /// (Tools-side; see DOGFIGHT_PLAN.md).
+    /// as a craft — the canonical flips a quarter turn. Bounds cannot make
+    /// this call (a half-folded robot lying flat measures like an aircraft
+    /// and faces like a robot), so the splits are DATA, measured per robot
+    /// per set by Tools/stageorient.py and tabled here. The fleet's tank
+    /// sets probed 2026-08-04: four everywhere except racer and scout, whose
+    /// stage five still faces like a robot. A robot missing from a table
+    /// takes the default — which is also what a robot borrowing the ranger
+    /// airframe should take, since the split belongs to the SET.
     /// </summary>
-    const int JetRobotFramedStages = 5;
-    const int TankRobotFramedStages = 4;
+    static readonly Dictionary<string, int> JetRobotFrames = new Dictionary<string, int>
+    {
+        { "ranger", 5 },
+    };
+    const int JetRobotFramesDefault = 5;
+
+    static readonly Dictionary<string, int> TankRobotFrames = new Dictionary<string, int>
+    {
+        { "ranger", 4 }, { "bolt", 4 }, { "hawk", 4 }, { "knight", 4 },
+        { "panther", 4 }, { "racer", 5 }, { "samurai", 4 }, { "scout", 5 },
+        { "titan", 4 },
+    };
+    const int TankRobotFramesDefault = 4;
+
+    static int FramesFor(Dictionary<string, int> table, string robotName, int fallback) =>
+        robotName != null && table.TryGetValue(robotName.ToLowerInvariant(), out int frames)
+            ? frames
+            : fallback;
 
     /// <summary>Yaw for robot-framed stages: the Meshy-humanoid canonical
     /// through glTFast, probe-confirmed at ~0 across both sets' robot frames.</summary>
@@ -350,7 +366,8 @@ public class JetPawn : MonoBehaviour
         jet._model.SetParent(go.transform, false);
 
         jet._jetSet = BuildSet(jet._model, jetStages, tint, entry.paintAnchorHue,
-            JetRobotFramedStages, _ => StageYaw, out var jetBox);
+            FramesFor(JetRobotFrames, entry.displayName, JetRobotFramesDefault),
+            _ => StageYaw, out var jetBox);
         if (!jet._jetSet.Exists)
             jet._jetSet = BlockJetSet(jet._model, tint, out jetBox);
         // The tank set's vehicle yaw is measured off its stage8 barrel
@@ -360,7 +377,8 @@ public class JetPawn : MonoBehaviour
         // whole vehicle frame group, because only stage8 carries markers and
         // the old per-stage fallback marched the mid-fold 180 off the tank.
         jet._tankSet = BuildSet(jet._model, entry.HasStages ? entry.transformStages : null,
-            tint, entry.paintAnchorHue, TankRobotFramedStages,
+            tint, entry.paintAnchorHue,
+            FramesFor(TankRobotFrames, entry.displayName, TankRobotFramesDefault),
             last => TankPawn.NoseYaw(jet._model, last, -90f), out _);
 
         jet.Team = teamId;

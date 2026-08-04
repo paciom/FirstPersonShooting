@@ -44,12 +44,37 @@ TEXTURE_PROMPTS = {
     "ranger": ("white and light grey armour panels with bright cyan light "
                "strips, clean flat panels, stylised toy finish"),
     # Jet forms keep their robot's palette — the frame shows the airframe, the
-    # prompt only has to keep the colours honest. Named <robot>-jet so state,
-    # download dir (Assets/Models/Stages/<robot>-jet) and the roster's jet scan
-    # all fall out of the same key with no special-casing here.
+    # prompt only has to keep the colours honest (tank-specific words like
+    # "tracks" swap for a canopy). Named <robot>-jet so state, download dir
+    # (Assets/Models/Stages/<robot>-jet) and the roster's jet scan all fall
+    # out of the same key with no special-casing here.
     "ranger-jet": ("white and light grey armour panels with bright cyan light "
                    "strips, tinted glass cockpit canopy, clean flat panels, "
                    "stylised toy finish"),
+    "bolt-jet": ("navy blue armour panels with bright yellow accents and white "
+                 "trim, cyan light strips, tinted glass cockpit canopy, clean "
+                 "flat panels, stylised toy finish"),
+    "hawk-jet": ("turquoise teal armour panels with golden yellow accents, "
+                 "tinted glass cockpit canopy, clean flat panels, stylised "
+                 "toy finish"),
+    "knight-jet": ("orange and white armour panels over dark charcoal, bright "
+                   "cyan light strips, tinted glass cockpit canopy, clean flat "
+                   "panels, stylised toy finish"),
+    "panther-jet": ("bright orange armour panels with bright cyan light strips, "
+                    "navy blue tinted cockpit canopy, clean flat panels, "
+                    "stylised toy finish"),
+    "racer-jet": ("white and pale grey armour panels with orange accents, a "
+                  "dark red tinted cockpit canopy, clean flat panels, stylised "
+                  "toy finish"),
+    "samurai-jet": ("bright turquoise armour panels with orange accents and "
+                    "dark navy plating, tinted glass cockpit canopy, clean "
+                    "flat panels, stylised toy finish"),
+    "scout-jet": ("white and pale grey armour panels with light cyan accents, "
+                  "dark tinted cockpit canopy, clean flat panels, stylised "
+                  "toy finish"),
+    "titan-jet": ("bright blue armour panels with bold yellow accents, tinted "
+                  "glass cockpit canopy, clean flat panels, stylised toy "
+                  "finish"),
     "bolt": ("navy blue armour panels with bright yellow accents and white "
              "trim, cyan light strips, clean flat panels, stylised toy finish"),
     "hawk": ("turquoise teal armour panels with golden yellow accents, dark "
