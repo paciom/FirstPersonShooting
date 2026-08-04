@@ -650,9 +650,15 @@ public class Dogfight : MonoBehaviour
         if (_hud == null)
             return;
 
-        // Team pools, not pilots: the sum of what each side still has in the
-        // air. At 1 v 1 this is exactly the old two-pilot readout.
-        _hud.SetShields(TeamShield(_cyanTeam), TeamShield(_magentaTeam));
+        // The LEFT bar belongs to whoever is holding the stick: in the
+        // player's seat it is THEIR jet — a bar that stays half-full while
+        // your own wreck falls is a lie with a wingmate's name on it. The
+        // broadcast keeps team pools on both sides, and the enemy side is
+        // always the pool; at 1 v 1 every reading is identical.
+        float ownSide = _playerControls && Hero != null && Hero.Shield != null
+            ? (Hero.IsDown ? 0f : Hero.Shield.Normalized)
+            : TeamShield(_cyanTeam);
+        _hud.SetShields(ownSide, TeamShield(_magentaTeam));
 
         var subject = _director.Subject;
         if (subject != null)
