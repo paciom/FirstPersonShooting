@@ -230,6 +230,15 @@ public class JetPawn : MonoBehaviour
 
     public JetPawn AssistTarget { get; private set; }
 
+    /// <summary>True while the assist bent this frame's aim at anything —
+    /// pawn or building. What the reticle warms on.</summary>
+    public bool AssistEngaged { get; private set; }
+
+    /// <summary>An explicitly chosen target — the touch player's tap-lock.
+    /// The gun assist and the idle aims prefer it over whatever is merely
+    /// nearest. Cleared by whoever set it.</summary>
+    public Transform FocusTarget { get; set; }
+
     public bool MissileReady => Time.time >= _missileReadyAt;
 
     public float MissileReadyFraction =>
@@ -1200,6 +1209,7 @@ public class JetPawn : MonoBehaviour
     void PullTrigger()
     {
         AssistTarget = null;
+        AssistEngaged = false;
         Vector3 origin = _gun.muzzle != null ? _gun.muzzle.position : Center;
         Vector3 direction;
         if (CurrentForm == Form.Jet)
@@ -1215,16 +1225,56 @@ public class JetPawn : MonoBehaviour
             return;
         }
 
-        var target = NearestEnemy(transform.position, Team, AssistRange);
-        if (target != null)
+        // The chosen one first — a tapped lock is a promise the guns keep —
+        // then whatever is merely nearest. Buildings hold still; pawns get
+        // led.
+        Vector3 assistCenter = Vector3.zero;
+        Vector3 assistVelocity = Vector3.zero;
+        bool haveAssist = false;
+        if (FocusTarget != null)
         {
-            Vector3 gap = target.Center - origin;
+            var focusShield = FocusTarget.GetComponent<EnergyShield>();
+            if (focusShield != null && !focusShield.IsDown)
+            {
+                var focusPawn = FocusTarget.GetComponent<JetPawn>();
+                var focusTurret = FocusTarget.GetComponent<DogfightTurret>();
+                Vector3 center = focusPawn != null ? focusPawn.Center
+                    : focusTurret != null ? focusTurret.Center
+                    : WeaponUtil.Center(focusShield);
+                if ((center - origin).sqrMagnitude <= AssistRange * AssistRange)
+                {
+                    assistCenter = center;
+                    assistVelocity = focusPawn != null ? focusPawn.Velocity : Vector3.zero;
+                    AssistTarget = focusPawn;
+                    haveAssist = true;
+                }
+            }
+        }
+        if (!haveAssist)
+        {
+            var target = NearestEnemy(transform.position, Team, AssistRange);
+            if (target != null)
+            {
+                assistCenter = target.Center;
+                assistVelocity = target.Velocity;
+                AssistTarget = target;
+                haveAssist = true;
+            }
+        }
+
+        if (haveAssist)
+        {
+            Vector3 gap = assistCenter - origin;
             float seconds = gap.magnitude / GunBoltSpeed;
-            Vector3 predicted = target.Center + target.Velocity * seconds - origin;
+            Vector3 predicted = assistCenter + assistVelocity * seconds - origin;
             if (Vector3.Angle(direction, predicted) <= AssistDegrees)
             {
                 direction = predicted.normalized;
-                AssistTarget = target;
+                AssistEngaged = true;
+            }
+            else
+            {
+                AssistTarget = null;
             }
         }
 

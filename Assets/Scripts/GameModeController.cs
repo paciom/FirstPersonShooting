@@ -1050,7 +1050,7 @@ public class GameModeController : MonoBehaviour
             ShowOverlay("Mouse — Steer / Aim   ·   Click — Guns   ·   R-Click — Missile   ·   " +
                         "T — Transform   ·   F — Flares   ·   C — Cockpit   ·   ? — Help   ·   ESC — Menu",
                         "left thumb steers   ·   right thumb throttles and aims   ·   " +
-                        "the guns fire themselves   ·   tap the side buttons   ·   tap MENU to go back");
+                        "tap an enemy to LOCK   ·   FIRE sends the missile   ·   tap MENU to go back");
         else
             ShowOverlay("DOGFIGHT: AI v AI   ·   C — Cockpit   ·   SPACE — Next jet   ·   ? — Help   ·   ESC — Menu",
                         "DOGFIGHT: AI v AI   ·   tap MENU to go back");

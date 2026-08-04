@@ -47,6 +47,17 @@ public class DogfightSticks : MonoBehaviour
     public static bool TransformTapped { get; private set; }
     public static bool CameraTapped { get; private set; }
 
+    /// <summary>A tap on the WORLD — a touch that ended quickly without ever
+    /// really moving, anywhere that is not a button. The mode spends it on
+    /// target locking. Valid for exactly one frame.</summary>
+    public static bool WorldTapped { get; private set; }
+    public static Vector2 WorldTapPoint { get; private set; }
+
+    /// <summary>A touch older or more travelled than this is steering, not
+    /// tapping.</summary>
+    const float TapSeconds = 0.28f;
+    const float TapDriftPixels = 24f;
+
     const float Radius = 145f;
     const float DeadZone = 0.16f;
     const int MouseId = -1971;
@@ -70,6 +81,10 @@ public class DogfightSticks : MonoBehaviour
         public Vector2 center;
         public Vector2 value;
         public float fade;
+        public float claimedAt;
+        public Vector2 claimedScreen;
+        public Vector2 lastScreen;
+        public bool travelled;
         public bool Held => finger != int.MinValue;
     }
 
@@ -106,6 +121,7 @@ public class DogfightSticks : MonoBehaviour
     void Update()
     {
         MissileTapped = FlaresTapped = TransformTapped = CameraTapped = false;
+        WorldTapped = false;
 
         bool wanted = TouchControls.Active;
         if (_canvas == null && wanted)
@@ -177,10 +193,25 @@ public class DogfightSticks : MonoBehaviour
             stick.finger = id;
             stick.center = ToCanvas(screenPoint);
             stick.baseRect.anchoredPosition = stick.center;
+            stick.claimedAt = Time.unscaledTime;
+            stick.claimedScreen = screenPoint;
+            stick.travelled = false;
         }
+
+        stick.lastScreen = screenPoint;
+        float drift = TapDriftPixels * (Screen.height / 1080f);
+        if ((screenPoint - stick.claimedScreen).sqrMagnitude > drift * drift)
+            stick.travelled = true;
 
         if (ended)
         {
+            // A touch that came and went without travelling was never
+            // steering — it was pointing AT something. Hand it to the mode.
+            if (!stick.travelled && Time.unscaledTime - stick.claimedAt < TapSeconds)
+            {
+                WorldTapped = true;
+                WorldTapPoint = stick.lastScreen;
+            }
             Release(stick);
             return;
         }
@@ -259,7 +290,7 @@ public class DogfightSticks : MonoBehaviour
         // is a button nobody learns. Order: the pair you tap in a panic on
         // top, the pair you tap on purpose below.
         MakeButton("FLARES", new Vector2(-96f, 560f), () => FlaresTapped = true);
-        MakeButton("MISSILE", new Vector2(-96f, 452f), () => MissileTapped = true);
+        MakeButton("FIRE", new Vector2(-96f, 452f), () => MissileTapped = true);
         MakeButton("MORPH", new Vector2(-96f, 344f), () => TransformTapped = true);
         MakeButton("CAM", new Vector2(-96f, 236f), () => CameraTapped = true);
     }

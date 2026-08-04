@@ -109,6 +109,11 @@ public class Dogfight : MonoBehaviour
     Transform _lockCandidate;
     Vector3 _lockCandidateCenter;
     float _lockProgress;
+
+    /// <summary>The touch player's chosen one: tapped straight onto a target,
+    /// held until it dies, leaves, or a tap on empty sky lets it go. While it
+    /// stands it IS the lock — no cone, no hold.</summary>
+    Transform _tapLock;
     // Generous on purpose: the lock is the missile's tutorial, and a cone a
     // maneuvering AI keeps slipping out of is a tutorial nobody finishes.
     const float PlayerLockSeconds = 0.5f;
@@ -413,6 +418,8 @@ public class Dogfight : MonoBehaviour
             _director.ToggleView();
         if (Input.GetKeyDown(KeyCode.F) || DogfightSticks.FlaresTapped)
             hero.TryPopFlares();
+        if (DogfightSticks.WorldTapped)
+            PickTapTarget(DogfightSticks.WorldTapPoint);
         if (hero.Morphing)
             return;
 
@@ -488,25 +495,112 @@ public class Dogfight : MonoBehaviour
             return;
         }
 
+        // At rest the gun watches the CHOSEN one, then whatever is nearest.
+        if (_tapLock != null)
+        {
+            var pawn = _tapLock.GetComponent<JetPawn>();
+            var battery = _tapLock.GetComponent<DogfightTurret>();
+            if (pawn != null && !pawn.IsDown)
+            {
+                hero.AimAt(pawn.Center);
+                return;
+            }
+            if (battery != null && !battery.IsDead)
+            {
+                hero.AimAt(battery.Center);
+                return;
+            }
+        }
+
         var enemy = JetPawn.NearestEnemy(hero.transform.position, 0, 120f);
         if (enemy != null)
         {
             hero.AimAt(enemy.Center);
             return;
         }
-        var battery = DogfightTurret.Nearest(hero.transform.position, 120f);
-        if (battery != null)
-            hero.AimAt(battery.Center);
+        var nearest = DogfightTurret.Nearest(hero.transform.position, 120f);
+        if (nearest != null)
+            hero.AimAt(nearest.Center);
     }
 
     /// <summary>
-    /// The seeker's eye: the nearest enemy jet or turret the hero's AIM is
-    /// actually on. Hold it inside the cone and the diamond solidifies; look
-    /// away and the lock starts over — a missile costs commitment.
+    /// A tap on the world: whichever enemy — jet, robot, tank or battery —
+    /// sits under the thumb, within a forgiving radius, becomes the lock on
+    /// the spot. A tap on empty sky lets the lock go. Screen distance picks
+    /// the winner, because the thumb pointed at PIXELS, not at metres.
+    /// </summary>
+    void PickTapTarget(Vector2 screenPoint)
+    {
+        float reach = 90f * (Screen.height / 1080f);
+        float bestSqr = reach * reach;
+        Transform best = null;
+
+        foreach (var pawn in JetPawn.All)
+        {
+            if (pawn == null || pawn.Team == 0 || pawn.IsDown)
+                continue;
+            if (TapDistance(pawn.Center, screenPoint, out float sqr) && sqr < bestSqr)
+            {
+                bestSqr = sqr;
+                best = pawn.transform;
+            }
+        }
+        foreach (var turret in DogfightTurret.All)
+        {
+            if (turret == null || turret.IsDead)
+                continue;
+            if (TapDistance(turret.Center, screenPoint, out float sqr) && sqr < bestSqr)
+            {
+                bestSqr = sqr;
+                best = turret.transform;
+            }
+        }
+
+        _tapLock = best;
+        if (best != null)
+            _hud.Flash("LOCKED", new Color(1f, 0.75f, 0.2f), 0.6f);
+    }
+
+    bool TapDistance(Vector3 world, Vector2 screenPoint, out float sqrPixels)
+    {
+        Vector3 screen = _camera.WorldToScreenPoint(world);
+        sqrPixels = ((Vector2)screen - screenPoint).sqrMagnitude;
+        return screen.z > 0f;
+    }
+
+    /// <summary>
+    /// The seeker's eye. A tapped target IS the lock while it lives;
+    /// otherwise the nearest enemy jet or turret the hero's AIM is actually
+    /// on — hold it inside the cone and the diamond solidifies; look away
+    /// and the lock starts over. A missile costs commitment, paid either in
+    /// a tap or in a held nose.
     /// </summary>
     void UpdatePlayerLock()
     {
         var hero = Hero;
+
+        if (_tapLock != null)
+        {
+            var shield = _tapLock.GetComponent<EnergyShield>();
+            if (shield == null || shield.IsDown)
+            {
+                _tapLock = null;
+            }
+            else
+            {
+                var pawn = _tapLock.GetComponent<JetPawn>();
+                var battery = _tapLock.GetComponent<DogfightTurret>();
+                _lockCandidate = _tapLock;
+                _lockCandidateCenter = pawn != null ? pawn.Center
+                    : battery != null ? battery.Center
+                    : WeaponUtil.Center(shield);
+                _lockProgress = PlayerLockSeconds;
+                hero.FocusTarget = _tapLock;
+                return;
+            }
+        }
+        hero.FocusTarget = null;
+
         Transform best = null;
         Vector3 bestCenter = Vector3.zero;
         float bestAngle = PlayerLockCone;
@@ -742,7 +836,7 @@ public class Dogfight : MonoBehaviour
         var hero = Hero;
         if (_playerControls && _stage == Stage.Fight && hero != null)
         {
-            _hud.SetReticleHot(hero.AssistTarget != null);
+            _hud.SetReticleHot(hero.AssistEngaged);
             UpdateTargetArrow();
             _hud.SetOrdnance(hero.MissileReadyFraction, hero.MissileReady, hero.FlareCharges);
             _hud.SetLockDiamond(
