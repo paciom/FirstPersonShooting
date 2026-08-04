@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, Dogfight, DogfightWar }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, Dogfight, DogfightWar, Story }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -80,6 +80,7 @@ public class GameModeController : MonoBehaviour
     TDController _towerDefense;
     BrawlController _brawl;
     BrawlShow _brawlShow;
+    StoryDirector _story;
     GameObject _brawlStageSelect;
     ChineseQuest _chineseQuest;
     ChineseRun _chineseRun;
@@ -341,6 +342,13 @@ public class GameModeController : MonoBehaviour
         {
             _brawlShow.Teardown();
             _brawlShow = null;
+        }
+        // The story stage is the Brawl one, so it hands the world back the
+        // same way.
+        if (_story != null)
+        {
+            _story.Teardown();
+            _story = null;
         }
         // Same contract again: Chinese Quest borrows Brawl's world lifecycle
         // wholesale, so it hands the arena back the same way.
@@ -959,6 +967,27 @@ public class GameModeController : MonoBehaviour
         _menuCanvas.SetActive(false);
         ShowOverlay("MARTIAL ARTS SHOW   ·   ← → — Move   ·   ESC — Menu",
                     "MARTIAL ARTS SHOW   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// STORY: an episode file performed by the robot cast — the fixed-cast
+    /// movie mode (MOVIE_PLAN.md). The cast comes from the episode itself,
+    /// so no robot select in front of it; autoExit is the render harness
+    /// asking the mode to flag completion instead of waiting for Escape.
+    /// </summary>
+    public void StartStory(string episodeId = "pilot", bool autoExit = false)
+    {
+        Mode = GameMode.Story;
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _story = StoryDirector.Begin(this, _roster, episodeId, autoExit);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("STORY   ·   ESC — Menu",
+                    "STORY   ·   tap MENU to go back");
         LockCursor(false);
     }
 

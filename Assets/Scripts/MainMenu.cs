@@ -121,6 +121,7 @@ public static class MainMenu
             new Mode("BRAWL", "brawl", () => controller.OpenRobotSelect(GameMode.Brawl)),
             new Mode("BRAWL:  AI  WAR", "brawlwar", () => controller.OpenRobotSelect(GameMode.BrawlWar)),
             new Mode("MARTIAL  ARTS  SHOW", "brawlshow", () => controller.OpenRobotSelect(GameMode.BrawlShow)),
+            new Mode("STORY:  TRAINING  DAY", "story", () => controller.StartStory("pilot")),
         });
         BuildDeck(decks, "WAR  ROOM", Command, -202f, 3, new[]
         {

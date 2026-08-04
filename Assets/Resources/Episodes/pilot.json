@@ -1,0 +1,79 @@
+{
+  "title": "PHOTON  ARENA",
+  "subtitle": "TRAINING  DAY",
+  "cast": [
+    { "name": "ranger", "team": 0, "at": "ENTER_L",
+      "voiceName": "en-US-DavisNeural", "rate": "-2%", "pitch": "-4%" },
+    { "name": "bolt", "team": 1, "at": "ENTER_R",
+      "voiceName": "en-US-AnaNeural", "rate": "+6%", "pitch": "+2%" }
+  ],
+  "scenes": [
+    {
+      "name": "arrival",
+      "beats": [
+        { "caption": "PHOTON  ARENA", "wait": 2.2 },
+        { "caption": "TRAINING  DAY", "wait": 2.0 },
+        { "shot": "wide" },
+        { "who": "ranger", "move": "L" },
+        { "who": "bolt", "move": "R" },
+        { "who": "bolt", "voice": "l01", "shot": "twoshot",
+          "text": "Coach Ranger! Today's the day! Teach me the Photon Spin Kick!" },
+        { "who": "ranger", "voice": "l02", "shot": "ots:bolt>ranger",
+          "text": "Easy, rookie. The spin kick comes last. Basics come first." },
+        { "who": "bolt", "voice": "l03", "shot": "closeup:bolt",
+          "text": "Basics are boring! Watch this!" },
+        { "who": "bolt", "verb": "spinkick", "shot": "wide" },
+        { "who": "bolt", "verb": "knockdown", "wait": 0.4 },
+        { "who": "ranger", "voice": "l04", "shot": "closeup:ranger",
+          "text": "...You fought the floor, Bolt. The floor won." },
+        { "who": "bolt", "verb": "getup", "voice": "l05", "shot": "medium:bolt",
+          "text": "Okay. Maybe one basic." }
+      ]
+    },
+    {
+      "name": "basics",
+      "beats": [
+        { "caption": "LESSON  ONE:  BASICS", "wait": 2.0 },
+        { "who": "ranger", "move": "CL" },
+        { "who": "bolt", "move": "CR" },
+        { "who": "ranger", "verb": "jab", "voice": "l06", "shot": "medium:ranger",
+          "text": "Jab! Quick as a photon." },
+        { "who": "bolt", "verb": "jab", "voice": "l07", "shot": "medium:bolt",
+          "text": "Jab!" },
+        { "who": "ranger", "verb": "block", "voice": "l08", "shot": "medium:ranger",
+          "text": "Guard up! A shield beats a shot." },
+        { "who": "bolt", "verb": "block", "voice": "l09", "shot": "medium:bolt",
+          "text": "Guard up!" },
+        { "who": "ranger", "verb": "sidekick", "voice": "l10", "shot": "medium:ranger",
+          "text": "Side kick! Balance is everything." },
+        { "who": "bolt", "verb": "sidekick", "voice": "l11", "shot": "medium:bolt",
+          "text": "Balance... is... everything!" },
+        { "who": "ranger", "voice": "l12", "shot": "closeup:ranger",
+          "text": "Good! Now spin from the hips, and land soft. You're ready." }
+      ]
+    },
+    {
+      "name": "the spin kick",
+      "beats": [
+        { "caption": "THE  SPIN  KICK", "wait": 2.0 },
+        { "shot": "wide" },
+        { "who": "bolt", "voice": "l13", "shot": "closeup:bolt",
+          "text": "Photon... SPIN KICK!" },
+        { "who": "bolt", "verb": "spinkick", "shot": "front", "wait": 0.4 },
+        { "who": "ranger", "verb": "victory", "voice": "l14", "shot": "ots:bolt>ranger",
+          "text": "You did it! That's the cleanest spin kick I've seen all season!" },
+        { "who": "bolt", "verb": "victory", "voice": "l15", "shot": "closeup:bolt",
+          "text": "YES! Best day ever!" },
+        { "who": "ranger", "voice": "l16", "shot": "twoshot",
+          "text": "Tomorrow... we learn the Flying Kick." },
+        { "who": "bolt", "voice": "l17", "shot": "closeup:bolt",
+          "text": "The FLYING kick?!" },
+        { "who": "bolt", "verb": "flykick", "shot": "wide" },
+        { "who": "bolt", "verb": "knockdown", "wait": 0.5 },
+        { "who": "ranger", "voice": "l18", "shot": "closeup:ranger",
+          "text": "Tomorrow, Bolt. Tomorrow." },
+        { "who": "bolt", "verb": "getup", "shot": "twoshot", "wait": 0.6 }
+      ]
+    }
+  ]
+}
