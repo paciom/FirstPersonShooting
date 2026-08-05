@@ -1005,6 +1005,8 @@ public class RobotInspector : MonoBehaviour
     Slider _slider;
     Image _sliderFill;
     Image _sliderHandle;
+    RectTransform _markerRow;
+    float _trackWidth;
 
     // The right pane's playlist: forward clip and reversed twin per form, so
     // the film runs robot, tank, robot, jet, robot and hands back to the top.
@@ -1144,9 +1146,9 @@ public class RobotInspector : MonoBehaviour
         BuildScrubSlider(panel.transform, new Vector2(-305f, -212f), new Vector2(540f, 22f));
 
         RobotSelectMenu.MakeText(panel.transform, "LeftCaption",
-            "DRAG  TO  ROTATE   ·   SLIDE  TO  TRANSFORM", 22,
+            "DRAG  TO  ROTATE   ·   SLIDE  OR  CLICK  TO  TRANSFORM", 22,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
-            new Vector2(0.5f, 0.5f), new Vector2(-305f, -248f), new Vector2(560f, 30f));
+            new Vector2(0.5f, 0.5f), new Vector2(-305f, -262f), new Vector2(560f, 30f));
         RobotSelectMenu.MakeText(panel.transform, "RightCaption", "TRANSFORMATION", 22,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
             new Vector2(0.5f, 0.5f), new Vector2(305f, -225f), new Vector2(560f, 30f));
@@ -1303,6 +1305,80 @@ public class RobotInspector : MonoBehaviour
         _slider.maxValue = 1f;
         _slider.wholeNumbers = true;
         _slider.onValueChanged.AddListener(value => ApplyScrub(Mathf.RoundToInt(value)));
+
+        // The form markers ride this row: ticks on the track line, labels just
+        // below it. Populated per robot in RebuildMarkers — where the ticks
+        // fall depends on how many stages that robot has.
+        _trackWidth = size.x;
+        var row = new GameObject("ScrubMarkers").AddComponent<RectTransform>();
+        row.SetParent(parent, false);
+        row.anchorMin = row.anchorMax = new Vector2(0.5f, 0.5f);
+        row.anchoredPosition = position;
+        row.sizeDelta = new Vector2(size.x, 48f);
+        _markerRow = row;
+    }
+
+    /// <summary>
+    /// One clickable marker per settled form — ROBOT, TANK, ROBOT, JET, ROBOT —
+    /// a diamond tick on the track with its name beneath, jumping the slider
+    /// straight to that state without walking the folds between.
+    /// </summary>
+    void RebuildMarkers(Color teamColor)
+    {
+        for (int i = _markerRow.childCount - 1; i >= 0; i--)
+            Destroy(_markerRow.GetChild(i).gameObject);
+
+        int count = _scrubStates.Count;
+        int tank = _tankStages.Length - 1;
+        var marks = new System.Collections.Generic.List<(int state, string label)>
+        {
+            (0, "ROBOT"),
+            (tank, "TANK"),
+        };
+        if (_jetStages != null)
+        {
+            // The rig between the acts, and the finished jet past it — the
+            // same arithmetic BuildScrubStages used to lay the list out.
+            marks.Add((2 * tank, "ROBOT"));
+            marks.Add((2 * tank + _jetStages.Length - 1, "JET"));
+        }
+        marks.Add((count - 1, "ROBOT"));
+
+        var robotTint = new Color(1f, 1f, 1f, 0.85f);
+        foreach (var (state, label) in marks)
+        {
+            bool vehicle = label != "ROBOT";
+            var tint = vehicle ? teamColor : robotTint;
+
+            // Along the same inset run the handle travels, so a tick sits
+            // exactly where the handle rests on that state.
+            float frac = count > 1 ? state / (float)(count - 1) : 0f;
+            float x = -_trackWidth * 0.5f + 11f + (_trackWidth - 22f) * frac;
+
+            // The tick is pure paint — it rides the track, and making it a
+            // raycast target there would steal the slider's own drags. Only
+            // the label strip BELOW the track is the button.
+            var tick = RobotSelectMenu.MakeImage(_markerRow, $"Tick_{state}", tint);
+            tick.raycastTarget = false;
+            tick.rectTransform.sizeDelta = new Vector2(9f, 9f);
+            tick.rectTransform.anchoredPosition = new Vector2(x, 0f);
+            tick.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+
+            var mark = new GameObject($"Mark_{state}");
+            var rect = mark.AddComponent<RectTransform>();
+            rect.SetParent(_markerRow, false);
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(x, -21f);
+            rect.sizeDelta = new Vector2(64f, 22f);
+
+            var button = mark.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            int target = state;
+            button.onClick.AddListener(() => _slider.value = target);
+
+            RobotSelectMenu.MakeText(rect, "Label", label, 13, tint, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(64f, 18f));
+        }
     }
 
     /// <summary>
@@ -1314,6 +1390,7 @@ public class RobotInspector : MonoBehaviour
     {
         bool hasStages = entry.HasStages && _model != null;
         _slider.gameObject.SetActive(hasStages);
+        _markerRow.gameObject.SetActive(hasStages);
         if (!hasStages)
             return;
 
@@ -1344,6 +1421,8 @@ public class RobotInspector : MonoBehaviour
         _slider.SetValueWithoutNotify(0f);
         _slider.maxValue = _scrubStates.Count - 1;
         _scrubShown = rig;
+
+        RebuildMarkers(teamColor);
     }
 
     /// <summary>
