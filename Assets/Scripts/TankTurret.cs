@@ -18,9 +18,11 @@ using UnityEngine;
 /// gap by up to <see cref="turnSpeed"/> degrees this frame. Both directions are
 /// read from live transforms, so the loop is right whatever the model shipped as.
 ///
-/// Yaw only. A real turret elevates its gun inside a fixed mantlet; pitching
-/// this one would tip the whole turret block and drive its back edge through the
-/// deck, and these barrels are cast into the turret mesh rather than hinged.
+/// Two axes, on two parts. The turret yaws on its ring; the GUN rises on its
+/// trunnion, cut free of the turret by the same tool so it can elevate inside
+/// its mantlet the way a real one does. Panther is the exception the rig reports
+/// rather than hides: its turret is a solid visored wedge with nothing to
+/// separate, so it tips as one block, and only as far as the deck allows.
 ///
 /// <see cref="Muzzle"/> is a stable transform on the character that rides the
 /// barrel tip, so the vehicle's guns can fire out of the barrel without holding
@@ -34,6 +36,7 @@ public class TankTurret : MonoBehaviour
 {
     /// <summary>Node names written by Tools/tankturret.py.</summary>
     public const string PivotName = "TurretPivot";
+    public const string GunName = "GunPivot";
     public const string TipName = "TurretMuzzle";
 
     /// <summary>Name of the stable muzzle on the character; see <see cref="Muzzle"/>.</summary>
@@ -42,6 +45,25 @@ public class TankTurret : MonoBehaviour
     [Tooltip("How fast the turret slews, in degrees per second. Fast enough to " +
              "answer a target that moves, slow enough to be worth watching.")]
     public float turnSpeed = 160f;
+
+    [Tooltip("How fast the gun rises and falls, in degrees per second.")]
+    public float elevationSpeed = 90f;
+
+    [Tooltip("How far the gun can rise. High enough to answer a jet overhead, " +
+             "which is what a tank in Dogfight spends its life doing — the " +
+             "breeches were rendered at 80 and still sit inside their mantlets.")]
+    [Range(0f, 85f)] public float maxElevation = 75f;
+
+    [Tooltip("How far it can depress — a little, for a target down a slope.")]
+    [Range(0f, 30f)] public float maxDepression = 8f;
+
+    /// <summary>
+    /// Ceiling for a turret with no separable gun, which has to tip the whole
+    /// block to aim up. Past this its back half is inside the deck: Panther's
+    /// turret is a solid wedge and there is nothing on it to elevate alone.
+    /// The SHOTS still take the full angle — the gun is an emitter, not a tube.
+    /// </summary>
+    const float BlockElevation = 14f;
 
     [Tooltip("How close the barrel has to be before the guns are allowed to " +
              "fire — a tank that shoots sideways reads as a bug.")]
@@ -62,12 +84,23 @@ public class TankTurret : MonoBehaviour
     /// <summary>Seconds between attempts to find a turret that isn't there.</summary>
     const float SearchInterval = 0.25f;
 
-    Transform _pivot, _tip, _anchor;
+    Transform _pivot, _gun, _tip, _anchor;
+    Quaternion _pivotRest = Quaternion.identity;
+    Quaternion _gunRest = Quaternion.identity;
+    float _yaw;
     Vector3 _aimPoint;
     bool _hasAim;
     bool _warnedNoTip;
     float _offTarget;
+    float _elevation;
     float _nextSearch;
+
+    /// <summary>The part that rises: the gun where the rig found one, the whole
+    /// turret where it did not.</summary>
+    Transform Riser => _gun != null ? _gun : _pivot;
+
+    /// <summary>How far this tank is allowed to raise its gun.</summary>
+    float ElevationCeiling => _gun != null ? maxElevation : Mathf.Min(maxElevation, BlockElevation);
 
     /// <summary>Track a world position — the target's chest, usually.</summary>
     public void AimAt(Vector3 worldPoint)
@@ -99,8 +132,12 @@ public class TankTurret : MonoBehaviour
     /// </summary>
     void OnDisable()
     {
+        _yaw = 0f;
+        _elevation = 0f;
         if (_pivot != null)
-            _pivot.localRotation = Quaternion.identity;
+            _pivot.localRotation = _pivotRest;
+        if (_gun != null)
+            _gun.localRotation = _gunRest;
     }
 
     /// <summary>
@@ -122,26 +159,78 @@ public class TankTurret : MonoBehaviour
         // world's up instead works right up until the hull stops being level —
         // and then the turret rolls off its own mounting, which is exactly what
         // a banking jet in Dogfight showed.
-        Vector3 axis = Deck(pivot).up;
-        Vector3 barrel = Vector3.ProjectOnPlane(RawBarrel(pivot), axis);
-        // With no target this frame the turret walks back to dead ahead, which
-        // is where a tank carries its gun when nothing is worth pointing it at.
-        Vector3 wanted = Vector3.ProjectOnPlane(
-            aiming ? _aimPoint - pivot.position : transform.forward, axis);
+        Vector3 up = Deck(pivot).up;
+        // With no target this frame the gun walks back to dead ahead and level,
+        // which is how a tank carries it when nothing is worth pointing it at.
+        Vector3 toAim = aiming ? _aimPoint - Riser.position : transform.forward;
+
+        Vector3 barrel = Vector3.ProjectOnPlane(RawBarrel(), up);
+        Vector3 wanted = Vector3.ProjectOnPlane(toAim, up);
         if (barrel.sqrMagnitude < 1e-6f || wanted.sqrMagnitude < 1e-6f)
             return;
 
-        float delta = Vector3.SignedAngle(barrel, wanted, axis);
-        _offTarget = Mathf.Abs(delta);
+        // The turret's own up IS the deck's up and stays the deck's up, so a
+        // bearing held as a plain angle about it can never tilt the turret off
+        // its ring however long the fight runs or however the hull is flying.
+        // Kept as an angle rather than nudged into the transform because the
+        // gun's elevation is composed on top, and that has to start from a
+        // known pose every frame.
+        float delta = Vector3.SignedAngle(barrel, wanted, up);
+        _yaw += Mathf.Clamp(delta, -turnSpeed * Time.deltaTime, turnSpeed * Time.deltaTime);
+        pivot.localRotation = _pivotRest * Quaternion.Euler(0f, _yaw, 0f);
 
-        // Space.Self about the turret's OWN up, which is the deck's up and
-        // stays the deck's up: every turn is a spin about an axis the turn
-        // itself leaves untouched, so the seating can never drift no matter how
-        // long the fight runs or how the hull is flying.
-        float step = turnSpeed * Time.deltaTime;
-        pivot.Rotate(Vector3.up, Mathf.Clamp(delta, -step, step), Space.Self);
+        float rise = Elevate(up, toAim);
 
-        RideBarrel(pivot);
+        // Off target counts BOTH axes: a gun that has the bearing but is still
+        // coming up is not on the jet yet.
+        _offTarget = Mathf.Sqrt(delta * delta + rise * rise);
+
+        RideBarrel();
+    }
+
+    /// <summary>
+    /// Raise or lower the gun toward the aim, and report how far short it still
+    /// is. Returns degrees remaining, signed away from zero.
+    ///
+    /// APPLIED FRESH FROM REST EVERY FRAME rather than nudged. The elevation
+    /// axis is the trunnion — horizontal, across the barrel — and that axis
+    /// swings round with the turret, so an incremental rotation would be
+    /// composing this frame's tilt onto last frame's about a DIFFERENT axis,
+    /// which is precisely the drift that rolled the turret off its ring in
+    /// Dogfight. One stored angle, one rotation, no memory.
+    /// </summary>
+    float Elevate(Vector3 up, Vector3 toAim)
+    {
+        var riser = Riser;
+        if (riser == null)
+            return 0f;
+
+        // The gun starts from its own rest; the turret has just been rebuilt
+        // from its bearing, so it is already at a known pose.
+        if (riser == _gun)
+            riser.localRotation = _gunRest;
+
+        Vector3 flat = Vector3.ProjectOnPlane(toAim, up);
+        float wanted = Mathf.Clamp(
+            Mathf.Atan2(Vector3.Dot(toAim, up), flat.magnitude) * Mathf.Rad2Deg,
+            -maxDepression, maxElevation);
+
+        float remaining = wanted - _elevation;
+        _elevation = Mathf.MoveTowards(_elevation, wanted, elevationSpeed * Time.deltaTime);
+
+        // Trunnion: horizontal, square across the barrel as it now lies. Read
+        // after the yaw, so the gun rises in the plane it is actually pointing.
+        Vector3 barrel = Vector3.ProjectOnPlane(RawBarrel(), up);
+        if (barrel.sqrMagnitude < 1e-6f)
+            return remaining;
+
+        // What the MESH can show is not always the whole angle: a turret with
+        // no separable gun tips as one block and runs out of room early. The
+        // aim keeps the full angle regardless — see BarrelDirection.
+        float shown = Mathf.Clamp(_elevation, -maxDepression, ElevationCeiling);
+        riser.rotation = Quaternion.AngleAxis(-shown, Vector3.Cross(up, barrel).normalized)
+                         * riser.rotation;
+        return remaining;
     }
 
     /// <summary>
@@ -152,9 +241,9 @@ public class TankTurret : MonoBehaviour
     Transform Deck(Transform pivot) => pivot.parent != null ? pivot.parent : transform;
 
     /// <summary>
-    /// Which way the gun is actually pointing right now, normalized and flat in
-    /// the deck's plane — what the vehicle's weapons fire along, so the shots
-    /// and the barrel can never disagree. Zero when there is no turret to read.
+    /// Which way the gun is actually pointing right now, in three dimensions —
+    /// what the vehicle's weapons fire along, so the shots and the barrel can
+    /// never disagree, up or across. Zero when there is no turret to read.
     ///
     /// Read from the two live transforms rather than from the pivot's forward:
     /// the pivot inherits the quarter turn VehicleSkin puts on the model to
@@ -164,14 +253,25 @@ public class TankTurret : MonoBehaviour
     {
         get
         {
-            var pivot = ResolvePivot();
-            if (pivot == null)
+            if (ResolvePivot() == null)
                 return Vector3.zero;
-            return Vector3.ProjectOnPlane(RawBarrel(pivot), Deck(pivot).up).normalized;
+            if (_gun != null)
+                return RawBarrel().normalized;
+
+            // A turret with no separable gun cannot tip far enough to show the
+            // whole angle, but it is an emitter behind a visor rather than a
+            // tube — there is no barrel to disagree with. Bearing from the
+            // mesh, elevation from the aim, so it can still answer something
+            // overhead instead of being the one tank that cannot look up.
+            Vector3 up = Deck(_pivot).up;
+            Vector3 flat = Vector3.ProjectOnPlane(RawBarrel(), up).normalized;
+            float rise = _elevation * Mathf.Deg2Rad;
+            return (flat * Mathf.Cos(rise) + up * Mathf.Sin(rise)).normalized;
         }
     }
 
-    Vector3 RawBarrel(Transform pivot) => _tip.position - pivot.position;
+    /// <summary>Trunnion (or ring) to muzzle: the barrel as it currently lies.</summary>
+    Vector3 RawBarrel() => _tip.position - Riser.position;
 
     /// <summary>
     /// Park the stable muzzle on the barrel tip. Position and aim are copied
@@ -179,10 +279,10 @@ public class TankTurret : MonoBehaviour
     /// and the muzzle light every weapon shares — inside something that a robot
     /// swap destroys.
     /// </summary>
-    void RideBarrel(Transform pivot)
+    void RideBarrel()
     {
         EnsureAnchor();
-        Vector3 direction = RawBarrel(pivot);
+        Vector3 direction = RawBarrel();
         _anchor.position = _tip.position;
         if (direction.sqrMagnitude > 1e-6f)
             _anchor.rotation = Quaternion.LookRotation(direction);
@@ -251,13 +351,14 @@ public class TankTurret : MonoBehaviour
         if (found == null)
             return null;   // hidden, or an unrigged vehicle mesh — leave the cache alone
 
-        Transform tip = null;
+        Transform tip = null, gun = null;
         foreach (var child in found.GetComponentsInChildren<Transform>(true))
-            if (child.name.StartsWith(TipName))
-            {
+        {
+            if (tip == null && child.name.StartsWith(TipName))
                 tip = child;
-                break;
-            }
+            else if (gun == null && child.name.StartsWith(GunName))
+                gun = child;
+        }
 
         if (tip == null)
         {
@@ -274,8 +375,16 @@ public class TankTurret : MonoBehaviour
             return null;
         }
 
+        // Rest poses captured before anything is ever written to them, so
+        // centring on the way out puts the rig back exactly as the model shipped
+        // — and so the elevation always composes onto a known pose.
         _pivot = found;
         _tip = tip;
+        _gun = gun;
+        _pivotRest = found.localRotation;
+        _gunRest = gun != null ? gun.localRotation : Quaternion.identity;
+        _yaw = 0f;
+        _elevation = 0f;
         return _pivot;
     }
 }

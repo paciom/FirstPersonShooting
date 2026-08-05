@@ -365,21 +365,14 @@ public class AIBrain : MonoBehaviour
             if (engaged && Time.time - _sawTargetAt >= reactionDelay && _active != null
                 && (turret == null || turret.OnTarget))
             {
-                // A tank shoots where its barrel points. Firing at the target
-                // instead would be right only while the turret is exactly on
-                // it, and every frame it isn't — the swing, a target that
-                // stepped aside — the shells would leave the gun sideways.
-                //
-                // Heading from the barrel, elevation from the target: the
-                // turret only yaws, so its heading is the honest one, but a
-                // gun that could not look up would never answer anything
-                // standing on a crate.
+                // A tank shoots where its barrel points, bearing AND elevation.
+                // Firing at the target instead would be right only while the
+                // gun is exactly on it, and every frame it isn't — the swing,
+                // the gun still coming up, a target that stepped aside — the
+                // shells would leave the muzzle sideways.
                 Vector3 toTarget = targetCenter - _active.muzzle.position;
                 Vector3 barrel = turret != null ? turret.BarrelDirection : Vector3.zero;
-                Vector3 aim = barrel.sqrMagnitude > 0.01f
-                    ? (barrel * new Vector2(toTarget.x, toTarget.z).magnitude
-                       + Vector3.up * toTarget.y).normalized
-                    : toTarget.normalized;
+                Vector3 aim = barrel.sqrMagnitude > 0.01f ? barrel : toTarget.normalized;
                 // Bots are never aimbots: the error cone rides the shot rather
                 // than the turret, so the gun still visibly points at the enemy.
                 aim = Quaternion.Euler(
