@@ -3,9 +3,10 @@ using UnityEngine;
 
 /// <summary>
 /// DOGFIGHT's set: the navy void the transformation clips were shot on, made a
-/// place — a glowing ground grid far below, a handful of rock spires and cloud
-/// puffs for the speed to read against, two suns, a starfield, and the fly
-/// volume.
+/// place — an airport deck far below (runways, taxi lights, a terminal
+/// district wearing Commander's building models), a handful of rock spires and
+/// cloud puffs for the speed to read against, two suns, a starfield, and the
+/// fly volume.
 ///
 /// THE VOLUME IS SOFT. <see cref="SteerAssist"/> leans on the same steer values
 /// the drivers write, ramping in over the last stretch before an edge, so the
@@ -44,11 +45,17 @@ public class DogfightSky : MonoBehaviour
 
     const float GroundSize = 640f;
 
+    /// <summary>The airfield: two parallel runways flanking the fight's
+    /// centre, so the launch pads sit between them like an apron.</summary>
+    const float RunwayLength = 560f;
+    const float RunwayWidth = 36f;
+    static readonly float[] RunwayX = { -70f, 70f };
+
     /// <summary>The void's own colour — the camera clears to it, the fog fades
     /// to it, and it is deliberately the navy the transformation clips were
     /// shot on.</summary>
     public static readonly Color SkyTint = new Color(0.016f, 0.035f, 0.09f);
-    static readonly Color GroundColor = new Color(0.05f, 0.10f, 0.16f);
+    static readonly Color GroundColor = new Color(0.05f, 0.065f, 0.095f);
     static readonly Color GridGlow = new Color(0.15f, 0.75f, 0.85f);
 
     static readonly List<Transform> Spires = new List<Transform>();
@@ -71,6 +78,7 @@ public class DogfightSky : MonoBehaviour
         SpireRadii.Clear();
 
         BuildGround();
+        BuildTerminalDistrict();
         BuildSpires();
         BuildClouds();
         BuildStars();
@@ -90,9 +98,17 @@ public class DogfightSky : MonoBehaviour
         RenderSettings.fogDensity = 0.0028f;
     }
 
-    /// <summary>The deck far below the fight: dark slab, glowing grid lines. It
-    /// exists to make altitude and speed legible — a void with no texture under
-    /// it reads as standing still at any speed.</summary>
+    /// <summary>
+    /// The deck far below the fight is a night airport: dark tarmac, two
+    /// runways with painted markings, and rows of edge/threshold/taxi lights.
+    /// It exists to make altitude and speed legible — a void with no texture
+    /// under it reads as standing still at any speed — and an airfield does
+    /// that with more conviction than a grid.
+    ///
+    /// The paint and the lights are each ONE mesh (the starfield's trick):
+    /// hundreds of quads, two draw calls, vertex colour carrying the
+    /// white/green/red/blue language real airfields use.
+    /// </summary>
     void BuildGround()
     {
         var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -103,25 +119,250 @@ public class DogfightSky : MonoBehaviour
         slab.GetComponent<MeshRenderer>().sharedMaterial =
             ArenaMaterials.Lit("dogfight-ground", GroundColor, 0.25f);
 
-        var lineMaterial = ArenaMaterials.Emissive("dogfight-grid", GridGlow, 1.5f);
-        const int lines = 9;
-        const float pitch = GroundSize / (lines + 1);
-        for (int axis = 0; axis < 2; axis++)
-            for (int i = 0; i < lines; i++)
+        // Runway slabs, a shade lighter than the tarmac around them.
+        var runwayMaterial = ArenaMaterials.Lit("dogfight-runway",
+            new Color(0.10f, 0.115f, 0.145f), 0.35f);
+        foreach (float x in RunwayX)
+        {
+            var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(strip.GetComponent<Collider>());
+            strip.name = "Runway";
+            strip.transform.SetParent(transform, false);
+            strip.transform.localScale = new Vector3(RunwayWidth, 0.16f, RunwayLength);
+            strip.transform.localPosition = new Vector3(x, 0f, 0f);
+            strip.GetComponent<MeshRenderer>().sharedMaterial = runwayMaterial;
+        }
+
+        // The apron the terminal district stands on, west of runway one.
+        var apron = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        Object.Destroy(apron.GetComponent<Collider>());
+        apron.name = "Apron";
+        apron.transform.SetParent(transform, false);
+        apron.transform.localScale = new Vector3(95f, 0.14f, 280f);
+        apron.transform.localPosition = new Vector3(-155f, 0f, 0f);
+        apron.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Lit("dogfight-apron", new Color(0.075f, 0.09f, 0.12f), 0.3f);
+
+        BuildAirfieldPaint();
+        BuildAirfieldLights();
+    }
+
+    /// <summary>One additive quad per vertex-coloured element, one mesh. The
+    /// hard-edged default texture is the paint; the glow sprite is the lamps.</summary>
+    GameObject FlatQuadMesh(string name, Texture2D texture, List<Vector3> vertices,
+        List<Vector2> uvs, List<Color> colors, List<int> triangles)
+    {
+        var mesh = new Mesh { name = name };
+        mesh.SetVertices(vertices);
+        mesh.SetUVs(0, uvs);
+        mesh.SetColors(colors);
+        mesh.SetTriangles(triangles, 0);
+
+        var go = new GameObject(name);
+        go.transform.SetParent(transform, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial =
+            VfxUtil.MakeAdditiveMaterial(texture, Color.white, 1f);
+        return go;
+    }
+
+    static void AddFlatQuad(List<Vector3> vertices, List<Vector2> uvs, List<Color> colors,
+        List<int> triangles, float x, float z, float width, float length, Color color, float y)
+    {
+        int v = vertices.Count;
+        vertices.Add(new Vector3(x - width * 0.5f, y, z - length * 0.5f));
+        vertices.Add(new Vector3(x - width * 0.5f, y, z + length * 0.5f));
+        vertices.Add(new Vector3(x + width * 0.5f, y, z + length * 0.5f));
+        vertices.Add(new Vector3(x + width * 0.5f, y, z - length * 0.5f));
+        uvs.Add(new Vector2(0f, 0f));
+        uvs.Add(new Vector2(0f, 1f));
+        uvs.Add(new Vector2(1f, 1f));
+        uvs.Add(new Vector2(1f, 0f));
+        color.a = 1f;
+        for (int i = 0; i < 4; i++)
+            colors.Add(color);
+        triangles.Add(v); triangles.Add(v + 1); triangles.Add(v + 2);
+        triangles.Add(v); triangles.Add(v + 2); triangles.Add(v + 3);
+    }
+
+    /// <summary>Runway markings: centreline dashes, edge lines, threshold
+    /// piano keys — plus the cyan taxi lines that tie runways to aprons,
+    /// keeping a thread of the old grid's glow language on the deck.</summary>
+    void BuildAirfieldPaint()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+        // Paint sits above the runway slab's top face (0.08); lights higher
+        // still. ZWrite is off on the additive shader, so the separations are
+        // what stand between these layers and a z-fight.
+        const float paintY = 0.15f;
+        Color paint = new Color(0.85f, 0.9f, 1f) * 0.5f;
+        Color taxi = GridGlow * 0.9f;
+
+        void Quad(float x, float z, float w, float l, Color c) =>
+            AddFlatQuad(vertices, uvs, colors, triangles, x, z, w, l, c, paintY);
+
+        foreach (float x in RunwayX)
+        {
+            // Centreline dashes.
+            for (float z = -240f; z <= 240f; z += 24f)
+                Quad(x, z, 1.1f, 12f, paint * 1.2f);
+            // Continuous edge lines.
+            Quad(x - RunwayWidth * 0.5f + 0.8f, 0f, 0.8f, RunwayLength - 16f, paint);
+            Quad(x + RunwayWidth * 0.5f - 0.8f, 0f, 0.8f, RunwayLength - 16f, paint);
+            // Threshold piano keys at both ends.
+            foreach (float end in new[] { -1f, 1f })
+                for (int i = 0; i < 8; i++)
+                    Quad(x - 14f + i * 4f, end * 262f, 2f, 14f, paint);
+        }
+
+        // Taxi lines: an apron lane, its connectors to runway one, crossings
+        // between the runways, and a spur to the east hangars.
+        Quad(-105f, 0f, 0.9f, 320f, taxi);
+        foreach (float z in new[] { -160f, 0f, 160f })
+            Quad(-78.5f, z, 53f, 0.9f, taxi);
+        foreach (float z in new[] { -220f, 220f })
+            Quad(0f, z, 104f, 0.9f, taxi);
+        Quad(129f, 0f, 82f, 0.9f, taxi);
+
+        FlatQuadMesh("AirfieldPaint", null, vertices, uvs, colors, triangles);
+    }
+
+    /// <summary>The lamps, in the real language: white runway edges, green
+    /// thresholds, red ends, blue taxiway edges.</summary>
+    void BuildAirfieldLights()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+        const float lightY = 0.2f;
+        // Intensities stay under the bloom whiteout; these are lamps seen
+        // from altitude, not flares.
+        Color edge = new Color(1f, 0.95f, 0.8f) * 1.6f;
+        Color threshold = new Color(0.25f, 1f, 0.5f) * 1.7f;
+        Color stop = new Color(1f, 0.3f, 0.25f) * 1.7f;
+        Color taxiBlue = new Color(0.35f, 0.55f, 1f) * 1.5f;
+
+        void Lamp(float x, float z, Color c, float size = 1.3f) =>
+            AddFlatQuad(vertices, uvs, colors, triangles, x, z, size, size, c, lightY);
+
+        foreach (float x in RunwayX)
+        {
+            for (float z = -270f; z <= 270f; z += 20f)
             {
-                var line = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                Object.Destroy(line.GetComponent<Collider>());
-                line.name = "GridLine";
-                line.transform.SetParent(transform, false);
-                float offset = (i - (lines - 1) * 0.5f) * pitch;
-                line.transform.localPosition = axis == 0
-                    ? new Vector3(offset, 0.08f, 0f)
-                    : new Vector3(0f, 0.08f, offset);
-                line.transform.localScale = axis == 0
-                    ? new Vector3(0.9f, 0.12f, GroundSize)
-                    : new Vector3(GroundSize, 0.12f, 0.9f);
-                line.GetComponent<MeshRenderer>().sharedMaterial = lineMaterial;
+                Lamp(x - RunwayWidth * 0.5f, z, edge);
+                Lamp(x + RunwayWidth * 0.5f, z, edge);
             }
+            foreach (float end in new[] { -1f, 1f })
+                for (int i = 0; i < 12; i++)
+                {
+                    float across = x - 16.5f + i * 3f;
+                    Lamp(across, end * 286f, threshold);
+                    Lamp(across, end * 274f, stop, 1.1f);
+                }
+        }
+
+        // Blue edge lights straddling the apron taxi lane.
+        for (float z = -156f; z <= 156f; z += 32f)
+        {
+            Lamp(-108f, z, taxiBlue, 1.1f);
+            Lamp(-102f, z, taxiBlue, 1.1f);
+        }
+
+        FlatQuadMesh("AirfieldLights", VfxUtil.GlowTexture, vertices, uvs, colors, triangles);
+    }
+
+    /// <summary>
+    /// The buildings, borrowed straight from Commander's Resources/Buildings
+    /// GLBs: the command center moonlights as the control tower, the factory
+    /// as the terminal hall, refineries as hangars. Everything stands outside
+    /// the flight fence (<see cref="Radius"/>), so nothing here needs a slot in
+    /// <see cref="KeepOffProps"/> — a jet close enough to clip a hangar is
+    /// already being turned around by the sky.
+    /// </summary>
+    void BuildTerminalDistrict()
+    {
+        // West side: the terminal district on the apron, facing the runways.
+        float towerTop = PlaceBuilding("command", -175f, 20f, 90f, 14f, 24f);
+        PlaceBuilding("factory", -190f, -55f, 90f, 26f, 11f);
+        PlaceBuilding("tech", -175f, -105f, 90f, 16f, 9f);
+        PlaceBuilding("refinery", -185f, 85f, 90f, 22f, 10f);
+        PlaceBuilding("power", -195f, 140f, 90f, 14f, 9f);
+        PlaceBuilding("turret", -142f, -60f, 90f, 3f, 5f);
+        PlaceBuilding("turret", -142f, 95f, 90f, 3f, 5f);
+
+        // East side: a pair of outlying hangars so the field reads from every
+        // camera heading.
+        PlaceBuilding("refinery", 185f, -70f, -90f, 22f, 10f);
+        PlaceBuilding("power", 190f, 40f, -90f, 13f, 8f);
+
+        // The obstruction beacon on the tower — the one red light every
+        // airport keeps lit.
+        if (towerTop > 0f)
+        {
+            var beacon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(beacon.GetComponent<Collider>());
+            beacon.name = "TowerBeacon";
+            beacon.transform.SetParent(transform, false);
+            beacon.transform.localScale = Vector3.one * 0.8f;
+            beacon.transform.localPosition = new Vector3(-175f, towerTop + 0.5f, 20f);
+            beacon.GetComponent<MeshRenderer>().sharedMaterial =
+                ArenaMaterials.Emissive("dogfight-beacon", new Color(1f, 0.3f, 0.25f), 1.8f);
+        }
+    }
+
+    /// <summary>
+    /// Instantiate one Commander building GLB and fit it to a footprint —
+    /// Building.BuildFromMeshyModel's sizing rules (uniform scale to the
+    /// tightest axis, multiplied into the prefab's own glTF unit scale, feet
+    /// on the ground) without the shield, collider or NavMesh carve, because
+    /// here they are scenery. Returns the fitted height, 0 if the model is
+    /// missing — set dressing must never break the mode.
+    /// </summary>
+    float PlaceBuilding(string key, float x, float z, float yaw,
+        float footprint, float height)
+    {
+        var prefab = Resources.Load<GameObject>($"Buildings/{key}-building");
+        if (prefab == null)
+            return 0f;
+
+        var holder = new GameObject($"Airport_{key}");
+        holder.transform.SetParent(transform, false);
+        holder.transform.localPosition = new Vector3(x, 0.08f, z);
+
+        var instance = Instantiate(prefab, holder.transform);
+        instance.name = "Model";
+        instance.transform.localPosition = Vector3.zero;
+        instance.transform.localRotation = Quaternion.identity;
+
+        float top = 0f;
+        var renderers = instance.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            var bounds = renderers[0].bounds;
+            foreach (var renderer in renderers)
+                bounds.Encapsulate(renderer.bounds);
+
+            float scale = Mathf.Min(
+                footprint / Mathf.Max(0.01f, bounds.size.x),
+                height / Mathf.Max(0.01f, bounds.size.y),
+                footprint / Mathf.Max(0.01f, bounds.size.z));
+            instance.transform.localScale *= scale;
+
+            Vector3 localCenter = holder.transform.InverseTransformPoint(bounds.center);
+            Vector3 localBottom = holder.transform.InverseTransformPoint(
+                new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
+            instance.transform.localPosition = new Vector3(
+                -localCenter.x * scale, -localBottom.y * scale, -localCenter.z * scale);
+            top = bounds.size.y * scale;
+        }
+
+        // Rotate last — the fit above measured the unrotated world AABB.
+        holder.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+        return top;
     }
 
     /// <summary>
