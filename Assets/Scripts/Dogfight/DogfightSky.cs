@@ -4,7 +4,8 @@ using UnityEngine;
 /// <summary>
 /// DOGFIGHT's set: the navy void the transformation clips were shot on, made a
 /// place — a glowing ground grid far below, a handful of rock spires and cloud
-/// puffs for the speed to read against, two suns, and the fly volume.
+/// puffs for the speed to read against, two suns, a starfield, and the fly
+/// volume.
 ///
 /// THE VOLUME IS SOFT. <see cref="SteerAssist"/> leans on the same steer values
 /// the drivers write, ramping in over the last stretch before an edge, so the
@@ -72,6 +73,7 @@ public class DogfightSky : MonoBehaviour
         BuildGround();
         BuildSpires();
         BuildClouds();
+        BuildStars();
 
         Sun("KeySun", new Vector3(48f, 42f, 0f), 1.05f, new Color(1f, 0.97f, 0.9f));
         Sun("FillSun", new Vector3(18f, 218f, 0f), 0.35f, new Color(0.5f, 0.7f, 1f));
@@ -191,6 +193,112 @@ public class DogfightSky : MonoBehaviour
             quad.GetComponent<MeshRenderer>().sharedMaterial = material;
             _clouds.Add(quad.transform);
         }
+    }
+
+    /// <summary>
+    /// The stars: one mesh, one draw call. Each star is a small glow-sprite
+    /// quad pinned to a dome inside the camera's far plane, facing the arena's
+    /// centre — the camera never strays far enough from centre for the flat
+    /// facing to read as anything but a point. Brightness and tint live in
+    /// vertex colour; the additive shader skips fog, which is what lets them
+    /// survive a fog density that swallows lit geometry long before the dome.
+    /// </summary>
+    void BuildStars()
+    {
+        // Far plane is 900 and the camera roams ~170 from centre at worst;
+        // 680 keeps every star inside the clip with margin.
+        const float dome = 680f;
+        const int count = 520;
+        var random = new System.Random(23);
+
+        var vertices = new Vector3[count * 4];
+        var uvs = new Vector2[count * 4];
+        var colors = new Color[count * 4];
+        var triangles = new int[count * 6];
+
+        // A tilted band gets a denser share of the stars — a cheap milky way.
+        Quaternion bandTilt = Quaternion.Euler(62f, 0f, 24f);
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 dir;
+            if (i % 5 < 2)
+            {
+                // Band star: along a tilted great circle, scattered off it.
+                float along = (float)random.NextDouble() * Mathf.PI * 2f;
+                Vector3 onCircle = new Vector3(Mathf.Cos(along), 0f, Mathf.Sin(along));
+                Vector3 jitter = new Vector3(
+                    (float)random.NextDouble() - 0.5f,
+                    (float)random.NextDouble() - 0.5f,
+                    (float)random.NextDouble() - 0.5f) * 0.5f;
+                dir = (bandTilt * onCircle + jitter).normalized;
+            }
+            else
+            {
+                // Uniform over the dome: y uniform is area uniform on a sphere.
+                float y = Mathf.Lerp(-0.05f, 1f, (float)random.NextDouble());
+                float azimuth = (float)random.NextDouble() * Mathf.PI * 2f;
+                float flat = Mathf.Sqrt(1f - y * y);
+                dir = new Vector3(Mathf.Cos(azimuth) * flat, y, Mathf.Sin(azimuth) * flat);
+            }
+            if (dir.y < -0.05f)
+                dir.y = -0.05f + ((float)random.NextDouble() * 0.3f);
+            dir = dir.normalized;
+
+            float roll = (float)random.NextDouble();
+            float size = Mathf.Lerp(1.6f, 3.4f, roll * roll);
+            float glow = Mathf.Lerp(0.35f, 1.1f, (float)random.NextDouble());
+            Color tint = Color.white;
+            float hue = (float)random.NextDouble();
+            if (hue < 0.18f)
+                tint = new Color(0.65f, 0.8f, 1f);
+            else if (hue < 0.28f)
+                tint = new Color(1f, 0.9f, 0.75f);
+            if (roll > 0.96f)
+            {
+                // A handful of standouts — bright but under the bloom whiteout.
+                size *= 1.8f;
+                glow = 1.7f;
+            }
+
+            Vector3 position = dir * dome;
+            Vector3 axis = Mathf.Abs(dir.y) > 0.98f ? Vector3.forward : Vector3.up;
+            Vector3 right = Vector3.Cross(axis, dir).normalized * size;
+            Vector3 up = Vector3.Cross(dir, right).normalized * size;
+
+            int v = i * 4;
+            vertices[v] = position - right - up;
+            vertices[v + 1] = position - right + up;
+            vertices[v + 2] = position + right + up;
+            vertices[v + 3] = position + right - up;
+            uvs[v] = new Vector2(0f, 0f);
+            uvs[v + 1] = new Vector2(0f, 1f);
+            uvs[v + 2] = new Vector2(1f, 1f);
+            uvs[v + 3] = new Vector2(1f, 0f);
+            Color c = tint * glow;
+            c.a = 1f;
+            colors[v] = colors[v + 1] = colors[v + 2] = colors[v + 3] = c;
+
+            int t = i * 6;
+            triangles[t] = v;
+            triangles[t + 1] = v + 1;
+            triangles[t + 2] = v + 2;
+            triangles[t + 3] = v;
+            triangles[t + 4] = v + 2;
+            triangles[t + 5] = v + 3;
+        }
+
+        var mesh = new Mesh { name = "DogfightStars" };
+        mesh.vertices = vertices;
+        mesh.uv = uvs;
+        mesh.colors = colors;
+        mesh.triangles = triangles;
+
+        var go = new GameObject("Stars");
+        go.transform.SetParent(transform, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial =
+            VfxUtil.MakeAdditiveMaterial(VfxUtil.GlowTexture, Color.white, 1f);
     }
 
     /// <summary>The intro pad one robot stands on. Handed back so the mode can
