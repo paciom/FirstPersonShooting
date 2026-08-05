@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Justice Armored Heroes — The Transforming Robot Battle League</title>
-<meta name="description" content="Nine transforming robot heroes, thirteen battle modes, one browser tab. Justice Armored Heroes is a free sci-fi battle league for ages 8–14 — no download, no account, nobody ever gets hurt.">
+<title>Jet Armor Heroes — Robot. Vehicle. Jet.</title>
+<meta name="description" content="Nine heroes, each of them a robot, a vehicle and a jet. Sixteen battle modes, one browser tab. Jet Armor Heroes is a free sci-fi battle league for ages 8–14 — no download, no account, nobody ever gets hurt.">
 <link rel="canonical" href="https://www.jah.cc/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Justice Armored Heroes">
-<meta property="og:title" content="Justice Armored Heroes — The Transforming Robot Battle League">
-<meta property="og:description" content="Nine transforming robot heroes, thirteen battle modes, one browser tab. Free to play, nothing to install.">
+<meta property="og:site_name" content="Jet Armor Heroes">
+<meta property="og:title" content="Jet Armor Heroes — Robot. Vehicle. Jet.">
+<meta property="og:description" content="Nine heroes, each of them a robot, a vehicle and a jet. Sixteen battle modes, one browser tab. Free to play, nothing to install.">
 <meta property="og:url" content="https://www.jah.cc/">
 <meta property="og:image" content="https://www.jah.cc/assets/og.jpg">
 <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
 <meta name="theme-color" content="#04121a">
 <link rel="icon" href="assets/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="preload" as="image" href="assets/keyart-1920.webp" imagesrcset="assets/keyart-800.webp 800w, assets/keyart-1280.webp 1280w, assets/keyart-1920.webp 1920w" imagesizes="100vw">
+<link rel="preload" as="image" href="assets/plate-1920.webp" imagesrcset="assets/plate-800.webp 800w, assets/plate-1280.webp 1280w, assets/plate-1920.webp 1920w" imagesizes="100vw">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,7 +29,7 @@
   <div class="nav__in">
     <a class="brand" href="#top">
       <img src="assets/emblem-256.webp" width="44" height="44" alt="" class="brand__mark">
-      <span class="brand__name"><b>JUSTICE</b> ARMORED HEROES</span>
+      <span class="brand__name"><b>JET</b> ARMOR HEROES</span>
     </a>
     <nav class="nav__links" aria-label="Main">
       <a href="#modes">Modes</a>
@@ -51,13 +51,18 @@
            srcset="assets/plate-800.webp 800w, assets/plate-1280.webp 1280w, assets/plate-1920.webp 1920w"
            sizes="100vw" width="1920" height="1080" alt="" fetchpriority="high" id="keyart">
     </div>
+    <div class="hero__jets" aria-hidden="true">
+      <img src="assets/jets-1920.webp"
+           srcset="assets/jets-1280.webp 1280w, assets/jets-1920.webp 1920w"
+           sizes="100vw" width="1920" height="1080" alt="" id="jets">
+    </div>
     <div class="hero__body">
       <img src="assets/emblem-256.webp" width="112" height="112" alt="" class="hero__crest">
       <h1 class="lockup">
-        <span class="lockup__small">JUSTICE</span>
-        <span class="lockup__big">ARMORED HEROES</span>
+        <span class="lockup__small">JET</span>
+        <span class="lockup__big">ARMOR HEROES</span>
       </h1>
-      <p class="hero__tag">THE TRANSFORMING ROBOT BATTLE LEAGUE</p>
+      <p class="hero__tag">ROBOT · VEHICLE · JET · ONE BATTLE LEAGUE</p>
     </div>
     <div class="hero__cast">
       <img src="assets/lineup-1600.webp"
@@ -68,7 +73,7 @@
     <div class="hero__foot">
       <div class="hero__cta">
         <a class="btn btn--big btn--play js-play" href="#">PLAY FREE IN YOUR BROWSER</a>
-        <a class="btn btn--big btn--ghost" href="#modes">SEE THE 13 MODES</a>
+        <a class="btn btn--big btn--ghost" href="#modes">SEE THE 16 MODES</a>
       </div>
       <p class="hero__fine">No download · No account · No purchases · Works on a school laptop</p>
     </div>
@@ -77,9 +82,9 @@
   <!-- ─────────────────────────────  NUMBERS  ───────────────────────── -->
   <section class="stats" aria-label="At a glance">
     <div class="wrap stats__grid">
-      <div class="stat"><b>13</b><span>Battle modes</span></div>
+      <div class="stat"><b>16</b><span>Battle modes</span></div>
       <div class="stat"><b>9</b><span>Transforming heroes</span></div>
-      <div class="stat"><b>54</b><span>Weapons in the arsenal</span></div>
+      <div class="stat"><b>9</b><span>Jets they fold into</span></div>
       <div class="stat"><b>0</b><span>Downloads, logins, prices</span></div>
     </div>
   </section>
@@ -90,10 +95,10 @@
     <h2 class="h2">A whole league of robots,<br>and one tab to run it in.</h2>
     <div class="pitch__grid">
       <article class="pillar">
-        <h3>Every hero is also a vehicle</h3>
-        <p>Tap <kbd>T</kbd> mid-fight and your robot folds down into a hovercraft, a
-           rail bike, a six-wheeled tank — whatever its build says it is. Drive it,
-           then stand back up shooting.</p>
+        <h3>Every hero is three machines</h3>
+        <p>Tap <kbd>T</kbd> mid-fight and your robot folds down into its vehicle — a
+           hovercraft, a rail bike, a six-wheeled tank. Take the fight into the sky
+           and the same robot folds into a <em>jet</em>. One hero, three shapes.</p>
       </article>
       <article class="pillar">
         <h3>The sky keeps dropping loot</h3>
@@ -113,7 +118,7 @@
   <!-- ─────────────────────────────  MODES  ─────────────────────────── -->
   <section class="modes" id="modes">
     <div class="wrap">
-      <p class="eyebrow reveal">Thirteen ways to play</p>
+      <p class="eyebrow reveal">Sixteen ways to play</p>
       <h2 class="h2 reveal">Pick a mode. They are all in the same box.</h2>
 
       <div class="deck reveal">
@@ -143,6 +148,10 @@
             <img src="assets/mode-brawlshow.webp" width="720" height="405" loading="lazy" alt="A robot posing in a spotlight">
             <div class="card__body"><h4>Martial Arts Show</h4><p>No opponent, no clock. Five robots run the entire move set as choreography under the lights.</p></div>
           </article>
+          <article class="card">
+            <img src="assets/mode-story.webp" width="720" height="361" loading="lazy" alt="Two robots talking in a training hall, subtitled">
+            <div class="card__body"><h4>Story: Training Day</h4><p>A written, voiced episode staged on the real cast — Bolt wants the Photon Spin Kick and Coach Ranger has opinions.</p></div>
+          </article>
         </div>
       </div>
 
@@ -164,6 +173,14 @@
           <article class="card">
             <img src="assets/mode-tankraid.webp" width="720" height="405" loading="lazy" alt="A tank speeding up a glowing highway">
             <div class="card__body"><h4>Tank Raid</h4><p>Your hero's chassis, a scrolling battlefield, and a great deal of incoming. Twin-stick, full throttle.</p></div>
+          </article>
+          <article class="card">
+            <img src="assets/mode-dogfight.webp" width="720" height="405" loading="lazy" alt="A white fighter jet climbing through a starlit sky">
+            <div class="card__body"><h4>Dogfight</h4><p>Your hero as its jet: throttle, flares, missiles that need a lock and a lane. Get on somebody's tail and stay there.</p></div>
+          </article>
+          <article class="card">
+            <img src="assets/mode-dogfightwar.webp" width="720" height="405" loading="lazy" alt="Two jets flying in formation">
+            <div class="card__body"><h4>Dogfight: AI War</h4><p>Squadron against squadron with nobody in a seat. The camera picks whoever is about to matter.</p></div>
           </article>
         </div>
       </div>
@@ -192,9 +209,10 @@
   <section class="heroes" id="heroes">
     <div class="wrap">
       <p class="eyebrow reveal">The roster</p>
-      <h2 class="h2 reveal">Nine heroes. Nine second forms.</h2>
-      <p class="lede reveal">Point at any of them to watch it transform. Every one of these
-         is the real in-game robot, rendered by the game itself.</p>
+      <h2 class="h2 reveal">Nine heroes. Two transformations each.</h2>
+      <p class="lede reveal">Point at any of them to watch it fold into its vehicle, or hit
+         <b>JET</b> to watch it go the other way. Every one of these is the real in-game
+         hero, rendered by the game itself.</p>
 
       <div class="roster reveal" id="roster">
         <!-- filled from ROSTER in site.js so the copy and the asset names live in one place -->
@@ -207,22 +225,31 @@
     <div class="wrap transform__in">
       <div class="transform__copy reveal">
         <p class="eyebrow">One button</p>
-        <h2 class="h2">Robot. Vehicle.<br>Back again, at speed.</h2>
+        <h2 class="h2">Robot. Vehicle. Jet.<br>Back again, at speed.</h2>
         <p>Transforming is not a cutscene — it happens where you are standing, in the
            middle of whatever you were doing. Chase somebody down as a speeder, unfold
            into a robot behind them, and finish the argument on foot.</p>
         <p>Every hero carries a vehicle shaped like its own build: Ranger's hovercraft
            is light and pointed, Titan's assault tank is six wheels of armour, Racer is
-           a formula car with a nose cone. Nine robots, nine vehicles, one key.</p>
+           a formula car with a nose cone.</p>
+        <p><b>And every one of them flies.</b> The second transformation folds the same
+           robot into a fighter jet — its own airframe, in its own colours — which is
+           what you take into DOGFIGHT: throttle, flares, missiles, and somebody on
+           your tail who has all three too.</p>
         <a class="btn btn--big btn--play js-play" href="#">TRY IT — IT'S FREE</a>
       </div>
       <div class="transform__stage reveal">
         <video class="transform__video" playsinline muted loop autoplay preload="none"
-               poster="assets/transform-titan.jpg" width="560" height="560"
-               aria-label="Titan folding down into a six-wheeled assault tank">
-          <source src="assets/transform-titan.mp4" type="video/mp4">
+               poster="assets/transform-jet-ranger.jpg" width="560" height="560"
+               aria-label="Ranger folding out of robot form into a fighter jet">
+          <source src="assets/transform-jet-ranger.mp4" type="video/mp4">
         </video>
       </div>
+    </div>
+
+    <div class="wrap reveal">
+      <h3 class="fleet__title">Nine heroes, nine airframes</h3>
+      <ul class="fleet" id="fleet"><!-- filled from ROSTER in site.js --></ul>
     </div>
   </section>
 
@@ -232,7 +259,7 @@
       <div>
         <p class="eyebrow">For parents and teachers</p>
         <h2 class="h2">Built for 8–14, and it shows.</h2>
-        <p class="lede">Justice Armored Heroes was made for a kid who wants robots and a
+        <p class="lede">Jet Armor Heroes was made for a kid who wants robots and a
            grown-up who would rather not supervise a shooter. Both of those are true at
            once here.</p>
       </div>
@@ -241,7 +268,7 @@
         <li><b>No strangers.</b> There is no public matchmaking and no chat. Online play needs a room code shared between two people who already know each other.</li>
         <li><b>No accounts, no data.</b> Nothing to sign up for, nothing to verify, no email asked for. Progress lives in the browser.</li>
         <li><b>No money.</b> No purchases, no currency, no loot boxes, no ads. The whole game is the whole game.</li>
-        <li><b>It teaches, if you want it to.</b> Two of the thirteen modes drill Chinese characters — 2,000 of them, with spaced repetition and real Mandarin pronunciation.</li>
+        <li><b>It teaches, if you want it to.</b> Two of the sixteen modes drill Chinese characters — 2,000 of them, with spaced repetition and real Mandarin pronunciation.</li>
         <li><b>It runs on the laptop you already have.</b> A browser is the only requirement.</li>
       </ul>
     </div>
@@ -251,10 +278,10 @@
   <section class="closer">
     <div class="wrap closer__in reveal">
       <h2 class="lockup lockup--small">
-        <span class="lockup__small">JUSTICE</span>
-        <span class="lockup__big">ARMORED HEROES</span>
+        <span class="lockup__small">JET</span>
+        <span class="lockup__big">ARMOR HEROES</span>
       </h2>
-      <p>Thirteen modes. Nine heroes. One tab. Nothing to install.</p>
+      <p>Sixteen modes. Nine heroes. Nine jets. One tab, nothing to install.</p>
       <a class="btn btn--big btn--play js-play" href="#">PLAY FREE IN YOUR BROWSER</a>
     </div>
   </section>
@@ -264,7 +291,7 @@
 <footer class="foot">
   <div class="wrap foot__in">
     <img src="assets/emblem-256.webp" width="36" height="36" alt="" class="foot__mark">
-    <p class="foot__legal">© <span id="year">2026</span> Justice Armored Heroes. An independent game, made with Unity.</p>
+    <p class="foot__legal">© <span id="year">2026</span> Jet Armor Heroes. An independent game, made with Unity.</p>
     <nav class="foot__links" aria-label="Footer">
       <a class="js-play" href="#">Play</a>
       <a href="#modes">Modes</a>

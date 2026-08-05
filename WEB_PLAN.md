@@ -1,4 +1,4 @@
-# WEB_PLAN — the Justice Armored Heroes home page at www.jah.cc
+# WEB_PLAN — the Jet Armor Heroes home page at www.jah.cc
 
 ## Should it be a separate site? Yes.
 
@@ -31,9 +31,8 @@ project memory). Two options, decided at deploy time, not now:
   the whole `jah.cc` zone moves to Cloudflare nameservers.
 - **Azure Front Door** — keeps DNS at the registrar, but the standard tier is
   ~$35/mo. Only worth it if the game ever earns money.
-Until one is chosen, the site's PLAY button points at the existing
-`https://photonarenaweb.z13.web.core.windows.net/` URL — one constant in one
-file (`Web/site.js`, `PLAY_URL`).
+Cloudflare is what shipped. The site's PLAY button points at
+`https://play.jah.cc/` — one constant in one file (`Web/site.js`, `PLAY_URL`).
 
 ## Where it lives
 
@@ -61,14 +60,25 @@ everything a home page needs:
 
 - `Assets/Resources/Menu/keyart.png` — 1920×1080 hero: five heroes standing in
   the light beams over a city at sunset. This is the fold.
-- `Assets/Resources/Menu/<mode>.png` ×13 — 1280×720 cards, each showing **real
+- `Assets/Resources/Menu/<mode>.png` ×15 — 1280×720 cards, each showing **real
   game robots in real poses** inside a painted room. These are the mode grid.
+  STORY is the sixteenth mode and has no plate — it is staged, not illustrated —
+  so its card is a frame lifted out of `Renders/pilot.mp4`, subtitle and all.
 - `Assets/Resources/Menu/emblem.png` — 1024² RGBA crest. Logo mark and favicon.
 - `PreviewCaptures/<HERO>_front.png` ×9 — 560² turntable renders on a flat
   (5,13,25) background, which un-mixes to true alpha exactly (colour minus
   background, divided by coverage). These are the hero roster cutouts.
-- `Assets/Video/<hero>-transform.mp4` ×9 — 960², 5 s, robot ↔ vehicle. These are
-  the "every hero transforms" section, playing on hover.
+- `Assets/Video/<hero>-transform.mp4` and `<hero>-jet-transform.mp4` ×9 each —
+  5 s, robot ↔ vehicle and robot ↔ jet. Both play in the roster, on the two
+  pills each card carries. Every one of these clips is stamped with a generator
+  watermark in the top-left corner, which `build_site_assets.py` paints out with
+  `delogo` — the game shows them small and moving, a home page shows them large
+  and looped.
+- `Assets/Models/Stages/<hero>-jet/stage8.glb` ×9 — the jet itself, the last
+  frame of the transformation and the aircraft DOGFIGHT flies.
+  `Tools/jetstills.py` renders it to a cutout with `previewglb`'s software
+  rasteriser (no Unity, ~1 s each) and lays three of them out as a sky layer
+  that BOTH the web hero and the game's title screen fly.
 
 `build_site_assets.py` converts, keys, resizes and re-encodes all of it into
 `Web/assets`, so a re-render of the game art is one command away from being live
@@ -81,22 +91,25 @@ Classic AAA beats, in the order those sites use them:
 
 1. **Sticky nav** — emblem, MODES / HEROES / TRANSFORM / PARENTS, and a PLAY
    FREE button that stays on screen the whole way down.
-2. **Hero** — keyart full-bleed, JUSTICE ARMORED HEROES lockup, the game's own
-   tagline "THE TRANSFORMING ROBOT BATTLE LEAGUE", two CTAs (PLAY FREE IN
-   BROWSER / SEE THE MODES), and the honesty line that converts: *no download,
-   no account, plays in any browser*.
-3. **Numbers strip** — 13 battle modes · 9 heroes · 54 weapons · 0 downloads.
+2. **Hero** — three layers deep: painted plate, jets, cast. JET ARMOR HEROES
+   lockup over the game's own tagline "ROBOT · VEHICLE · JET · ONE BATTLE
+   LEAGUE", two CTAs (PLAY FREE IN BROWSER / SEE THE 16 MODES), and the honesty
+   line that converts: *no download, no account, plays in any browser*.
+3. **Numbers strip** — 16 battle modes · 9 heroes · 9 jets · 0 downloads.
 4. **The pitch** — three columns: transform mid-fight, the airdrop scramble, and
    nobody ever dies (shields de-rez and re-materialize) — the last is the line
    that sells a parent, and it is true of the fiction, not a euphemism.
-5. **Modes** — all 13 cards in the game's own three decks: ARENA COMBAT (AI v AI,
-   Player v AI, Online PvP, Brawl, Brawl: AI War, Martial Arts Show), WAR ROOM
-   (Commander, Commander: AI War, Tower Defense, Tank Raid), ACADEMY · WORKSHOP
-   (Chinese Quest, Chinese Run, Arena Builder). Each card: art, name, one line.
+5. **Modes** — all 16 cards in the game's own three decks: ARENA COMBAT (AI v AI,
+   Player v AI, Online PvP, Brawl, Brawl: AI War, Martial Arts Show, Story),
+   WAR ROOM (Commander, Commander: AI War, Tower Defense, Tank Raid, Dogfight,
+   Dogfight: AI War), ACADEMY · WORKSHOP (Chinese Quest, Chinese Run, Arena
+   Builder). Each card: art, name, one line.
 6. **Heroes** — the nine cutouts in a row, each with name, class and a one-line
-   personality; click one and its transform clip plays in place.
-7. **Transform** — the big one: a hero clip at size with the line "every hero is
-   also a vehicle", set on a keyart-derived backdrop.
+   personality, and two pills: VEHICLE and JET. Hovering runs the vehicle
+   transformation; the pills are how the jet is asked for, and how any of it
+   works on a touch screen.
+7. **Transform** — the big one: a jet transformation at size, then the fleet
+   strip — nine airframes, one per hero, rendered off the stage GLBs.
 8. **For parents** — ages 8–14, no gore, no chat with strangers, no purchases,
    no account, runs on a school laptop. AAA sites put a rating block here; this
    is the equivalent and it is the block that gets forwarded.
@@ -115,8 +128,8 @@ keyart so a shared link unfurls into that image.
 3. ✅ Local check: served from `Web/`, driven at 1440 and 375 wide, console
    clean, no horizontal overflow, the hover-to-transform clips play.
 4. ✅ `robots.txt`, `sitemap.xml`, `404.html`, OG image, favicons.
-5. ⬜ `Tools/deploy_site.ps1` — written; not yet run. It creates the Static Web
-   App, uploads `Web/`, and prints the DNS records:
+5. ✅ `Tools/deploy_site.ps1` — creates the Static Web App, uploads `Web/`, and
+   prints the DNS records:
 
    ```
    powershell -ExecutionPolicy Bypass -File Tools/deploy_site.ps1

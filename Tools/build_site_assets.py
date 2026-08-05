@@ -41,11 +41,27 @@ CAP_BG = np.array([5, 13, 25], dtype=np.float32)
 MODES = [
     "aivai", "playervsai", "onlinepvp", "brawl", "brawlwar", "brawlshow",
     "commander", "commanderwar", "towerdefense", "tankraid",
+    "dogfight", "dogfightwar",
     "chinesequest", "chineserun", "arenabuilder",
 ]
 
 HEROES = ["RANGER", "TITAN", "SCOUT", "HAWK", "BOLT",
           "SAMURAI", "PANTHER", "KNIGHT", "RACER"]
+
+JETS = os.path.join(HERE, "jet_render")
+
+# STORY has no painted plate — it is staged, not illustrated — so its card comes
+# off the episode render itself, subtitle and all. The bars are the render's
+# own letterbox and have to come off or the card is mostly black.
+STORY_RENDER = os.path.join(ROOT, "Renders", "pilot.mp4")
+STORY_AT = "12"
+STORY_BARS = 0.055
+
+# Where the generator's watermark sits on the transformation clips, as a
+# fraction of the frame. The clips are the source those stages were built from
+# and every one of them is stamped in the top-left corner; the game shows them
+# small and in motion, but a marketing page shows them large and looped.
+LOGO_BOX = (0.012, 0.018, 0.108, 0.088)
 
 
 def webp(img, path, width=None, quality=80):
@@ -163,7 +179,14 @@ def clip(src, dst, size=560, crf=30):
     and a loose key eats them.
     """
     bg = backdrop(src)
-    chain = f"scale={size}:{size}:flags=lanczos"
+    # Scale first, then interpolate the watermark away — the box is in output
+    # pixels that way, and the clips come in at three different source sizes.
+    # delogo rather than a crop: cropping that corner off the jet clips would
+    # take a wingtip with it.
+    lx, ly, lw, lh = LOGO_BOX
+    chain = (f"scale={size}:{size}:flags=lanczos,"
+             f"delogo=x={max(1, int(size * lx))}:y={max(1, int(size * ly))}"
+             f":w={int(size * lw)}:h={int(size * lh)}")
     args = ["ffmpeg", "-y", "-loglevel", "error", "-i", src]
     if sum(bg) / 3 > 40:
         args += ["-f", "lavfi", "-i", f"color=c=0x071B26:s={size}x{size}"]
@@ -218,6 +241,17 @@ def main():
     cast = lineup()
     webp(cast, os.path.join(OUT, "lineup-1600.webp"), 1600, quality=84)
     webp(cast, os.path.join(OUT, "lineup-900.webp"), 900, quality=84)
+    # A third layer, and the reason the hero is layered at all now: the jets fly
+    # between the painted sky and the line-up, at their own parallax rate.
+    # Tools/jetstills.py lays them out once; the game's title screen bakes the
+    # same arrangement into Assets/Resources/Menu/keyart.png.
+    sky = os.path.join(JETS, "_flight.png")
+    if os.path.exists(sky):
+        fly = Image.open(sky).convert("RGBA")
+        webp(fly, os.path.join(OUT, "jets-1920.webp"), 1920, quality=82)
+        webp(fly, os.path.join(OUT, "jets-1280.webp"), 1280, quality=82)
+    else:
+        print("  !! no Tools/jet_render/_flight.png — run Tools/jetstills.py")
 
     print("emblem")
     em = Image.open(os.path.join(MENU, "emblem.png")).convert("RGBA")
@@ -234,6 +268,18 @@ def main():
         webp(Image.open(src).convert("RGB"),
              os.path.join(OUT, f"mode-{key_name}.webp"), 720, quality=74)
 
+    if os.path.exists(STORY_RENDER):
+        tmp = os.path.join(OUT, "_story.png")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", STORY_AT,
+                        "-i", STORY_RENDER, "-frames:v", "1", tmp], check=True)
+        shot = Image.open(tmp).convert("RGB")
+        bar = round(shot.height * STORY_BARS)
+        webp(shot.crop((0, bar, shot.width, shot.height - bar)),
+             os.path.join(OUT, "mode-story.webp"), 720, quality=76)
+        os.remove(tmp)
+    else:
+        print(f"  !! no {STORY_RENDER} — STORY card will 404")
+
     print("hero cut-outs")
     for name in HEROES:
         src = os.path.join(CAPS, f"{name}_front.png")
@@ -243,16 +289,30 @@ def main():
         webp(cutout(src), os.path.join(OUT, f"hero-{name.lower()}.webp"),
              420, quality=86)
 
-    print("transform clips")
+    print("jet cut-outs")
     for name in HEROES:
-        src = os.path.join(VIDEO, f"{name.lower()}-transform.mp4")
+        src = os.path.join(JETS, f"{name.lower()}.png")
         if not os.path.exists(src):
-            print(f"  !! missing {src}")
+            print(f"  !! missing {src} — run Tools/jetstills.py")
             continue
-        dst = os.path.join(OUT, f"transform-{name.lower()}.mp4")
-        clip(src, dst)
-        # Poster comes off the ENCODED clip, so a keyed backdrop is in it too.
-        poster(dst, os.path.join(OUT, f"transform-{name.lower()}.jpg"))
+        webp(Image.open(src).convert("RGBA"),
+             os.path.join(OUT, f"jet-{name.lower()}.webp"), 460, quality=86)
+
+    # Two transformations per hero now, so two clips: robot->vehicle, and the
+    # one the name of the game is about.
+    for kind, suffix in (("transform", ""), ("jet", "-jet")):
+        print(f"{kind} clips")
+        for name in HEROES:
+            src = os.path.join(VIDEO, f"{name.lower()}{suffix}-transform.mp4")
+            if not os.path.exists(src):
+                print(f"  !! missing {src}")
+                continue
+            stem = f"transform{suffix}-{name.lower()}"
+            dst = os.path.join(OUT, f"{stem}.mp4")
+            clip(src, dst)
+            # Poster comes off the ENCODED clip, so the keyed backdrop and the
+            # painted-out watermark are both in it.
+            poster(dst, os.path.join(OUT, f"{stem}.jpg"))
 
     total = sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT))
     print(f"\nWeb/assets: {total / 1024 / 1024:.1f} MB")

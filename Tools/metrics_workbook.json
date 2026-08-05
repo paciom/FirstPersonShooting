@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "# Justice Armored Heroes — metrics\nAll tiles filter to `env == 'prod'` (editor and dev builds report `dev`). Retention, cohorts and step-by-step funnels live under **Usage** on the `jah-metrics` resource — they work off the same user/session mapping. Events auto-delete after 90 days."
+        "json": "# Jet Armor Heroes — metrics\nAll tiles filter to `env == 'prod'` (editor and dev builds report `dev`). Retention, cohorts and step-by-step funnels live under **Usage** on the `jah-metrics` resource — they work off the same user/session mapping. Events auto-delete after 90 days."
       },
       "name": "header"
     },

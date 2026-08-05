@@ -25,6 +25,9 @@ import sys
 
 from PIL import Image, ImageChops, ImageFilter
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import jetstills  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 PLATES = os.path.join(HERE, "menu_plates")
 RENDERS = os.path.join(HERE, "menu_render")
@@ -147,9 +150,18 @@ def build_card(name):
 
 
 def build_keyart():
-    """The title screen: the roster line-up standing on the painted horizon."""
+    """The title screen: the line-up on the painted horizon, jets in the sky.
+
+    The jets come from Tools/jetstills.py — the last stage of each hero's
+    transformation, which is the aircraft DOGFIGHT actually flies. They go on
+    BEFORE the line-up so a robot always occludes a jet, never the other way
+    round, and they sit in the side skies the title lockup leaves empty.
+    """
     plate = Image.open(os.path.join(PLATES, "keyart.png")).convert("RGB").resize(
         HERO, Image.LANCZOS)
+    sky = plate.convert("RGBA")
+    sky.alpha_composite(jetstills.flight(HERO))
+    plate = sky.convert("RGB")
     colour, inverse = place(*cutout(HERO_TAKE, HERO), HERO, HERO_FEET, HERO_HEIGHT)
     over(grounded(plate, inverse, strength=0.5, blur=22), colour, inverse).save(
         os.path.join(OUT, "keyart.png"))

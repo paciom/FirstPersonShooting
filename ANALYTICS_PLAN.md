@@ -147,7 +147,7 @@ to `env=="prod"`); Chinese Quest learning events are a Phase-6+ taxonomy of thei
    Kids Category declaration; no ATT prompt anywhere.
 
 **Privacy-page draft (Phase 5):**
-> Justice Armored Heroes stores a randomly generated player code on your device and
+> Jet Armor Heroes stores a randomly generated player code on your device and
 > receives anonymous play events (which game mode was played, how long a match lasted,
 > whether an error happened). We use this only to run and improve the game — seeing which
 > modes are fun, finding bugs, and keeping the service secure. The code can't be used to

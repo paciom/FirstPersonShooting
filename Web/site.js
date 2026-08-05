@@ -1,4 +1,4 @@
-/* Justice Armored Heroes — www.jah.cc
+/* Jet Armor Heroes — www.jah.cc
    Everything the page does at runtime. No dependencies. */
 
 /* Where PLAY goes. The marketing site and the 257 MB player are deliberately
@@ -9,7 +9,8 @@ const PLAY_URL = 'https://play.jah.cc/';
 
 /* The roster: one row per hero, and the only place a hero's copy lives.
    `key` is also the asset name — Tools/build_site_assets.py writes
-   assets/hero-<key>.webp and assets/transform-<key>.{mp4,jpg} from the game's
+   assets/hero-<key>.webp, assets/jet-<key>.webp and both transformation clips
+   (assets/transform-<key>.* and assets/transform-jet-<key>.*) from the game's
    own renders, so adding a tenth robot is one row plus one asset run. */
 const ROSTER = [
   { key:'ranger',  name:'Ranger',  role:'Scout hovercraft',
@@ -70,56 +71,89 @@ document.getElementById('year').textContent = new Date().getFullYear();
 const roster = document.getElementById('roster');
 if (roster) {
   roster.innerHTML = ROSTER.map(h => `
-    <button class="unit" type="button" data-key="${h.key}" aria-pressed="false">
-      <span class="unit__stage">
+    <div class="unit" data-key="${h.key}">
+      <div class="unit__stage">
         <span class="unit__flash">Transform ▸</span>
         <img src="assets/hero-${h.key}.webp" alt="${h.name}, in robot form" loading="lazy">
-      </span>
-      <span class="unit__body">
+      </div>
+      <div class="unit__body">
         <h3>${h.name}</h3>
         <span class="unit__role">${h.role}</span>
         <p>${h.text}</p>
-      </span>
-    </button>`).join('');
+        <div class="unit__forms">
+          <button class="pill" type="button" data-form="" aria-pressed="false">Vehicle</button>
+          <button class="pill pill--jet" type="button" data-form="-jet" aria-pressed="false">Jet</button>
+        </div>
+      </div>
+    </div>`).join('');
 
-  /* The clip is only fetched when a hero is actually asked to transform —
-     nine 150 KB videos on load would cost more than the rest of the page. */
-  const play = unit => {
+  /* One <video> per card, its source swapped between the two transformations.
+     Clips are only fetched when a hero is actually asked to transform —
+     eighteen 150 KB videos on load would cost more than the rest of the page. */
+  const play = (unit, form) => {
     const key = unit.dataset.key;
     let video = unit.querySelector('video');
     if (!video) {
       video = document.createElement('video');
-      video.src = `assets/transform-${key}.mp4`;
-      video.poster = `assets/transform-${key}.jpg`;
       video.muted = true; video.loop = true; video.playsInline = true;
       video.setAttribute('aria-hidden', 'true');
       unit.querySelector('.unit__stage').appendChild(video);
     }
+    if (video.dataset.form !== form) {
+      video.dataset.form = form;
+      video.poster = `assets/transform${form}-${key}.jpg`;
+      video.src = `assets/transform${form}-${key}.mp4`;
+    }
     unit.classList.add('is-live');
-    unit.setAttribute('aria-pressed', 'true');
+    unit.classList.toggle('is-jet', form === '-jet');
+    for (const pill of unit.querySelectorAll('.pill'))
+      pill.setAttribute('aria-pressed', String(pill.dataset.form === form));
     video.play().catch(() => {});   /* autoplay refusal is not an error here */
   };
 
   const stop = unit => {
     const video = unit.querySelector('video');
     if (video) { video.pause(); video.currentTime = 0; }
-    unit.classList.remove('is-live');
-    unit.setAttribute('aria-pressed', 'false');
+    unit.classList.remove('is-live', 'is-jet');
+    for (const pill of unit.querySelectorAll('.pill'))
+      pill.setAttribute('aria-pressed', 'false');
   };
 
   const hoverable = window.matchMedia('(hover:hover)').matches;
   for (const unit of roster.querySelectorAll('.unit')) {
     if (hoverable) {
-      unit.addEventListener('pointerenter', () => play(unit));
+      /* Hovering the card shows the vehicle; the pills are how the jet is
+         asked for, and how any of this works without a mouse. */
+      unit.addEventListener('pointerenter', () => {
+        if (!unit.classList.contains('is-jet')) play(unit, '');
+      });
       unit.addEventListener('pointerleave', () => stop(unit));
-      unit.addEventListener('focus', () => play(unit));
-      unit.addEventListener('blur', () => stop(unit));
     }
-    /* Touch (and keyboard Enter) toggles instead, since there is no leave. */
-    unit.addEventListener('click', () => {
-      unit.classList.contains('is-live') ? stop(unit) : play(unit);
+    for (const pill of unit.querySelectorAll('.pill')) {
+      const form = pill.dataset.form;
+      pill.addEventListener('click', e => {
+        e.stopPropagation();
+        const live = unit.classList.contains('is-live') &&
+                     unit.querySelector('video')?.dataset.form === form;
+        live ? stop(unit) : play(unit, form);
+      });
+      pill.addEventListener('focus', () => play(unit, form));
+    }
+    /* Touch: tapping the picture itself still runs the vehicle transformation. */
+    unit.querySelector('.unit__stage').addEventListener('click', () => {
+      unit.classList.contains('is-live') ? stop(unit) : play(unit, '');
     });
   }
+}
+
+/* ── the fleet strip: nine jets, one line ────────────────────────── */
+const fleet = document.getElementById('fleet');
+if (fleet) {
+  fleet.innerHTML = ROSTER.map(h => `
+    <li class="fleet__jet">
+      <img src="assets/jet-${h.key}.webp" alt="${h.name}'s jet" loading="lazy" width="460">
+      <span>${h.name}</span>
+    </li>`).join('');
 }
 
 /* ── scroll reveal ───────────────────────────────────────────────── */
@@ -155,6 +189,7 @@ for (const link of nav.querySelectorAll('.nav__links a')) {
 /* ── hero parallax ───────────────────────────────────────────────── */
 const keyart = document.getElementById('keyart');
 const cast = document.getElementById('cast');
+const jets = document.getElementById('jets');
 if (keyart && !reduced) {
   let ticking = false;
   const move = () => {
@@ -163,6 +198,8 @@ if (keyart && !reduced) {
        layer and moves less, which is the whole reason for splitting them. */
     const s = Math.min(window.scrollY, 700);
     keyart.style.transform = `translate3d(0,${s * 0.18}px,0) scale(1.06)`;
+    /* Three rates, back to front: sky drifts down, jets hold, cast rises. */
+    if (jets) jets.style.transform = `translate3d(${s * 0.05}px,${s * 0.06}px,0)`;
     if (cast) cast.style.transform = `translate3d(0,${s * -0.06}px,0)`;
     ticking = false;
   };

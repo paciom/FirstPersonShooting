@@ -52,7 +52,12 @@ def texture_image(gltf, buf):
     return Image.open(BytesIO(buf[start:start + view["byteLength"]])).convert("RGB")
 
 
-def render(path, size=SIZE, yaw=YAW):
+def render(path, size=SIZE, yaw=YAW, alpha=False):
+    """Render one stage. With alpha=True the result is RGBA, coverage taken
+    straight from the z-buffer — which is exact, because a pixel is covered
+    if and only if a triangle ever won the depth test there. Callers that
+    downsample RGBA must premultiply first; the uncovered pixels still carry
+    BG, and LANCZOS over that leaves a navy fringe."""
     gltf, buf = S.parse(path)
     prim = gltf["meshes"][0]["primitives"][0]
     pos, _ = accessor(gltf, buf, prim["attributes"]["POSITION"], 3)
@@ -133,6 +138,16 @@ def render(path, size=SIZE, yaw=YAW):
                     r += cr * amt; g += cg * amt; bb += cb * amt
                 px[x, y] = (min(255, int(col[0] * r)), min(255, int(col[1] * g)),
                             min(255, int(col[2] * bb)))
+    if alpha:
+        mask = Image.new("L", (size, size), 0)
+        mp = mask.load()
+        for y in range(size):
+            row = zb[y]
+            for x in range(size):
+                if row[x] > -1e9:
+                    mp[x, y] = 255
+        img = img.convert("RGBA")
+        img.putalpha(mask)
     return img
 
 

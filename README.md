@@ -1,10 +1,10 @@
-# Photon Arena
+# Jet Armor Heroes
 
 A kid-friendly (ages 8–14) sci-fi first-person shooter built in Unity 6, designed for
 **Player vs AI** and **AI vs AI** modes with auto-recorded, YouTube-ready gameplay videos.
 See [PLAN.md](PLAN.md) for the full project plan.
 
-No one ever "dies" in Photon Arena: laser hits drain an **energy shield**, and characters
+No one ever "dies" in Jet Armor Heroes: laser hits drain an **energy shield**, and characters
 who lose their shield **de-rez** into light and re-materialize moments later.
 
 ## Game modes
