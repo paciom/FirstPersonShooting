@@ -278,15 +278,30 @@ public class Dogfight : MonoBehaviour
                 break;
 
             case Stage.Launch:
-                // The mode itself is the pilot for the climb-out: the whole
-                // formation gets the same gentle nose-up and full throttle,
-                // written through the same seams everyone else uses.
+                // The mode itself is the pilot for the climb-out, written
+                // through the same seams everyone else uses. But the pad rows
+                // FACE each other, and identical climbs met nose-to-nose
+                // ~1.4 s after wheels-up (0.4 m at the pass — Separate()
+                // shoved the formations through each other and it read as a
+                // mid-air pile-up). So the climb is split by THROTTLE: cyan
+                // takes the burner, magenta the brake, and the squadrons
+                // cross with ~23 m of sky between them at ANY team size,
+                // because the offset is vertical and the wing rows only
+                // overlap laterally. A pitch split cannot do this — the
+                // floor assist pitches every low jet toward 1 and erases it.
                 var climb = new Vector2(0f, Mathf.Lerp(0.55f, 0.1f, elapsed / LaunchSeconds));
-                ForEachPawn(pawn =>
-                {
-                    pawn.Steer = climb;
-                    pawn.Throttle = 1f;
-                });
+                foreach (var slot in _cyanTeam)
+                    if (slot.pawn != null)
+                    {
+                        slot.pawn.Steer = climb;
+                        slot.pawn.Throttle = 1f;
+                    }
+                foreach (var slot in _magentaTeam)
+                    if (slot.pawn != null)
+                    {
+                        slot.pawn.Steer = climb;
+                        slot.pawn.Throttle = -1f;
+                    }
                 if (elapsed >= LaunchSeconds)
                 {
                     Advance(Stage.Fight);
