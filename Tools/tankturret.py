@@ -47,6 +47,10 @@ STAGE_DIR = "Assets/Models/Stages"
 #: The tank is the last stage of the transformation -- see VehicleSkin.
 STAGE_FILE = "stage8.glb"
 
+#: Stage sets that fold into an aircraft rather than a tank (Dogfight's jet
+#: form). Skipped: no ring, no turret, nothing to elevate.
+JET_SUFFIX = "-jet"
+
 #: A cross-section this much narrower than the widest one is the turret ring.
 RING_FRACTION = 0.72
 
@@ -141,16 +145,33 @@ def find_cut(verts, tris, samples=40):
     return lo + (hi - lo) * 0.5
 
 
-def slice_mesh(verts, tris, cut):
-    """
-    Split the triangle soup at y = cut, cutting the ones that straddle it.
+def plane_at(point, normal):
+    """A cut plane as (point, unit normal). Positive side is along the normal."""
+    length = math.sqrt(sum(c * c for c in normal)) or 1.0
+    return (tuple(point), tuple(c / length for c in normal))
 
-    Returns (above, below) triangle lists; `verts` grows with the vertices the
-    cut creates, which both sides share -- the seam is the same ring of points
-    on both parts, so the caps line up exactly.
+
+def height(plane, v):
+    """Signed distance from the plane -- positive on the normal's side."""
+    point, normal = plane
+    return sum((v[i] - point[i]) * normal[i] for i in range(3))
+
+
+def slice_mesh(verts, tris, plane):
     """
-    above, below = [], []
+    Split the triangle soup at a plane, cutting the ones that straddle it.
+
+    Returns (front, back) triangle lists -- front being the normal's side;
+    `verts` grows with the vertices the cut creates, which both sides share, so
+    the seam is the same ring of points on both parts and the caps line up
+    exactly.
+
+    Takes a plane rather than a height because the same cut serves twice: level
+    for the turret ring, and standing on end across the barrel for the gun.
+    """
+    front, back = [], []
     made = {}
+    normal = plane[1]
 
     def crossing(p, q):
         """Vertex where edge p->q meets the plane, one per edge for the whole mesh."""
@@ -158,24 +179,26 @@ def slice_mesh(verts, tris, cut):
         if key in made:
             return made[key]
         a, b = verts[p], verts[q]
-        f = (cut - a[1]) / (b[1] - a[1])
+        ha, hb = height(plane, a), height(plane, b)
+        f = ha / (ha - hb)
         made[key] = len(verts)
-        verts.append(tuple(a[i] + (b[i] - a[i]) * f for i in range(8)))
+        cut_vert = [a[i] + (b[i] - a[i]) * f for i in range(8)]
         # Exactly on the plane, whatever the arithmetic rounded to: the cap
         # hunts for edges lying in the plane and a float short of it is a hole.
-        v = list(verts[-1])
-        v[1] = cut
-        verts[-1] = tuple(v)
+        drift = height(plane, cut_vert)
+        for i in range(3):
+            cut_vert[i] -= drift * normal[i]
+        verts.append(tuple(cut_vert))
         return made[key]
 
     for t in range(0, len(tris), 3):
         tri = (tris[t], tris[t + 1], tris[t + 2])
-        up = [verts[v][1] > cut for v in tri]
+        up = [height(plane, verts[v]) > 0 for v in tri]
         if all(up):
-            above.extend(tri)
+            front.extend(tri)
             continue
         if not any(up):
-            below.extend(tri)
+            back.extend(tri)
             continue
 
         # Rotate the triangle so the vertex on its own is first, which keeps the
@@ -184,10 +207,10 @@ def slice_mesh(verts, tris, cut):
         l, m, n = tri[lone], tri[(lone + 1) % 3], tri[(lone + 2) % 3]
         p, q = crossing(l, m), crossing(n, l)
 
-        (above if up[lone] else below).extend((l, p, q))
-        (below if up[lone] else above).extend((p, m, n, p, n, q))
+        (front if up[lone] else back).extend((l, p, q))
+        (back if up[lone] else front).extend((p, m, n, p, n, q))
 
-    return above, below
+    return front, back
 
 
 # ------------------------------------------------------------------ components
@@ -238,7 +261,7 @@ def largest_island(tris, rep):
 
 # ----------------------------------------------------------------------- caps
 
-def boundary_loops(verts, tris, cut, rep):
+def boundary_loops(verts, tris, plane, rep):
     """
     The open rings the cut left, walked in the winding direction of the
     triangles that own them. An edge is on the boundary when it lies in the cut
@@ -254,7 +277,7 @@ def boundary_loops(verts, tris, cut, rep):
     for a, b in directed:
         if (b, a) in directed:
             continue
-        if abs(verts[a][1] - cut) > 1e-9 or abs(verts[b][1] - cut) > 1e-9:
+        if abs(height(plane, verts[a])) > 1e-9 or abs(height(plane, verts[b])) > 1e-9:
             continue
         nxt.setdefault(a, []).append(b)
 
@@ -278,37 +301,43 @@ def boundary_loops(verts, tris, cut, rep):
     return loops
 
 
-def cap(verts, loops, up):
+def cap(verts, loops, plane, outward):
     """
     Close each ring with a fan from its own centre. The lid is flat, so its
     normals are stated rather than interpolated, and it takes the ring's texture
     coordinates -- it is only ever glimpsed through the gap a turned turret
     opens, and reading as more tank is the whole requirement.
+
+    <paramref name="outward"/> is which way the lid faces: along the plane's
+    normal for the piece sitting behind it, against for the piece in front.
     """
+    normal = plane[1]
+    face = tuple(c * (1.0 if outward else -1.0) for c in normal)
     tris = []
     for loop in loops:
-        cx = sum(verts[v][0] for v in loop) / len(loop)
-        cy = verts[loop[0]][1]
-        cz = sum(verts[v][2] for v in loop) / len(loop)
+        centre_pos = tuple(sum(verts[v][i] for v in loop) / len(loop) for i in range(3))
         cu = sum(verts[v][6] for v in loop) / len(loop)
         cv = sum(verts[v][7] for v in loop) / len(loop)
-        ny = 1.0 if up else -1.0
 
         centre = len(verts)
-        verts.append((cx, cy, cz, 0.0, ny, 0.0, cu, cv))
+        verts.append(centre_pos + face + (cu, cv))
         ring = []
         for v in loop:
             ring.append(len(verts))
             s = verts[v]
-            verts.append((s[0], s[1], s[2], 0.0, ny, 0.0, s[6], s[7]))
+            verts.append((s[0], s[1], s[2]) + face + (s[6], s[7]))
 
         for i, a in enumerate(ring):
             b = ring[(i + 1) % len(ring)]
-            # Wind so the lid faces the way it was asked to: for points in a
-            # horizontal plane the cross product is a single term.
-            area = ((verts[a][0] - cx) * (verts[b][2] - cz) -
-                    (verts[b][0] - cx) * (verts[a][2] - cz))
-            tris.extend((centre, b, a) if (area > 0) == up else (centre, a, b))
+            # Wind so the lid faces the way it was asked to: the fan triangle's
+            # own normal, read against the face direction.
+            ea = tuple(verts[a][i] - centre_pos[i] for i in range(3))
+            eb = tuple(verts[b][i] - centre_pos[i] for i in range(3))
+            cross = (ea[1] * eb[2] - ea[2] * eb[1],
+                     ea[2] * eb[0] - ea[0] * eb[2],
+                     ea[0] * eb[1] - ea[1] * eb[0])
+            tris.extend((centre, b, a) if sum(cross[i] * face[i] for i in range(3)) > 0
+                        else (centre, a, b))
     return tris
 
 
@@ -335,6 +364,69 @@ def barrel_tip(model, turret):
     front = min(v[axis] for v in turret)
     edge = [v for v in turret if v[axis] <= front + span[axis] * 0.02]
     return tuple(sum(v[i] for v in edge) / len(edge) for i in range(3))
+
+
+def find_gun_cut(verts, tris, pivot, tip, axis, steps=60):
+    """
+    Where the barrel stops being a barrel: the deepest plane across the gun that
+    still cuts nothing but the gun.
+
+    Scanned from the muzzle backwards, one plane at a time, measuring how far
+    the cut edges stray from the barrel's own axis. A plane through open barrel
+    crosses a thin ring around that line; the first plane that also catches the
+    mantlet, a roof box or the turret's own shoulders picks up points far off
+    it, and the scan stops one step short. That is the trunnion.
+
+    Returns the distance along the axis from the pivot, or None for a turret
+    with no gun to speak of -- Panther's is a visored wedge, and there is
+    nothing on it to elevate but the whole block.
+    """
+    reach = sum((tip[i] - pivot[i]) * axis[i] for i in range(3))
+    if reach < 0.25:
+        return None
+
+    def stray(s):
+        """How far the cut edges at this plane sit from the barrel's axis."""
+        plane = plane_at([pivot[i] + axis[i] * s for i in range(3)], axis)
+        worst = 0.0
+        hit = False
+        for t in range(0, len(tris), 3):
+            tri = (tris[t], tris[t + 1], tris[t + 2])
+            hs = [height(plane, verts[v]) for v in tri]
+            if min(hs) > 0 or max(hs) < 0:
+                continue
+            for i in range(3):
+                p, q = tri[i], tri[(i + 1) % 3]
+                if hs[i] * hs[(i + 1) % 3] > 0 or hs[i] == hs[(i + 1) % 3]:
+                    continue
+                f = hs[i] / (hs[i] - hs[(i + 1) % 3])
+                point = [verts[p][j] + (verts[q][j] - verts[p][j]) * f for j in range(3)]
+                # Distance from the line through the muzzle along the axis.
+                off = [point[j] - tip[j] for j in range(3)]
+                slide = sum(off[j] * axis[j] for j in range(3))
+                worst = max(worst, math.sqrt(sum(
+                    (off[j] - slide * axis[j]) ** 2 for j in range(3))))
+                hit = True
+        return worst if hit else None
+
+    best, bore = None, None
+    for k in range(steps):
+        s = reach - 0.04 - (reach * 0.85) * k / steps
+        if s < reach * 0.1:
+            break
+        radius = stray(s)
+        if radius is None:
+            continue
+        if bore is None:
+            bore = radius
+        elif radius > max(bore * 1.9, bore + 0.03):
+            break     # the plane has reached the mantlet
+        bore = min(bore, radius)
+        best = s
+
+    # A stub is not a gun: too short to read as elevating, and cutting one off
+    # only buys a seam.
+    return best if best is not None and reach - best > 0.22 else None
 
 
 def compact(verts, tris):
@@ -393,11 +485,12 @@ def rig(path, out_path, name):
 
     verts, tris = read_mesh(gltf, buf)
     ys = [v[1] for v in verts]
-    height = max(ys) - min(ys)
-    cut = (min(ys) + height * CUT_OVERRIDE[name]) if name in CUT_OVERRIDE \
+    tall = max(ys) - min(ys)
+    cut = (min(ys) + tall * CUT_OVERRIDE[name]) if name in CUT_OVERRIDE \
         else find_cut(verts, tris)
 
-    above, below = slice_mesh(verts, tris, cut)
+    ring_plane = plane_at((0.0, cut, 0.0), (0.0, 1.0, 0.0))
+    above, below = slice_mesh(verts, tris, ring_plane)
     rep = weld_map(verts)
     turret, strays = largest_island(above, rep)
     hull = below + strays
@@ -405,8 +498,8 @@ def rig(path, out_path, name):
     # Both sets of rings are found BEFORE either lid goes on: a capped part has
     # no boundary left to find, and the weld map does not cover the vertices a
     # cap adds.
-    hull_loops = boundary_loops(verts, hull, cut, rep)
-    turret_loops = boundary_loops(verts, turret, cut, rep)
+    hull_loops = boundary_loops(verts, hull, ring_plane, rep)
+    turret_loops = boundary_loops(verts, turret, ring_plane, rep)
     if not turret_loops:
         print(f"  {name}: no closed ring at the cut — skipped")
         return None
@@ -418,13 +511,42 @@ def rig(path, out_path, name):
     pivot = (sum(verts[v][0] for v in ring) / len(ring), cut,
              sum(verts[v][2] for v in ring) / len(ring))
 
-    hull += cap(verts, hull_loops, up=True)
-    turret += cap(verts, turret_loops, up=False)
+    hull += cap(verts, hull_loops, ring_plane, outward=True)
+    turret += cap(verts, turret_loops, ring_plane, outward=False)
+
+    tip = barrel_tip(verts, [verts[i] for i in set(turret)])
+
+    # ---- the gun: cut again, across the barrel, so it can elevate on its own
+    flat = [tip[0] - pivot[0], 0.0, tip[2] - pivot[2]]
+    reach = math.hypot(flat[0], flat[2])
+    gun, trunnion = [], None
+    if reach > 1e-3:
+        axis = [flat[0] / reach, 0.0, flat[2] / reach]
+        s = find_gun_cut(verts, turret, pivot, tip, axis)
+        if s is not None:
+            gun_plane = plane_at([pivot[i] + axis[i] * s for i in range(3)], axis)
+            front, rest = slice_mesh(verts, turret, gun_plane)
+            rep = weld_map(verts)
+            gun, leftovers = largest_island(front, rep)
+            turret = rest + leftovers
+
+            mantlet = boundary_loops(verts, turret, gun_plane, rep)
+            breech = boundary_loops(verts, gun, gun_plane, rep)
+            if breech:
+                # The trunnion is the centre of the bore the gun was cut at, so
+                # it elevates around its own mounting and the barrel's back end
+                # stays inside the mantlet however far it rises.
+                bore = [v for loop in breech for v in loop]
+                trunnion = tuple(sum(verts[v][i] for v in bore) / len(bore) for i in range(3))
+                turret += cap(verts, mantlet, gun_plane, outward=True)
+                gun += cap(verts, breech, gun_plane, outward=False)
+            else:
+                turret, gun = turret + gun, []
+
 
     turret_verts, turret_tris = compact(verts, turret)
     hull_verts, hull_tris = compact(verts, hull)
-
-    tip = barrel_tip(verts, turret_verts)
+    gun_verts, gun_tris = compact(verts, gun) if gun else ([], [])
 
     # Rebuild the buffer around the texture, which is the only thing kept.
     image_view = gltf["bufferViews"][gltf["images"][0]["bufferView"]]
@@ -441,56 +563,119 @@ def rig(path, out_path, name):
     hull_mesh = pack(gltf, blob, hull_verts, hull_tris, (0.0, 0.0, 0.0))
     turret_mesh = pack(gltf, blob, turret_verts, turret_tris, pivot)
 
+    # The muzzle marker hangs off whichever part actually swings it: the gun
+    # when there is one, the turret when the whole block has to do the
+    # elevating. Either way TankTurret reads the barrel from pivot to marker.
     gltf["nodes"] = [
         {"name": "Hull", "mesh": hull_mesh},
         {"name": "TurretPivot", "mesh": turret_mesh,
          "translation": list(pivot), "children": [2]},
-        {"name": "TurretMuzzle",
-         "translation": [tip[0] - pivot[0], tip[1] - pivot[1], tip[2] - pivot[2]]},
     ]
+    if trunnion is not None:
+        gun_mesh = pack(gltf, blob, gun_verts, gun_tris, trunnion)
+        gltf["nodes"].append({"name": "GunPivot", "mesh": gun_mesh,
+                              "translation": [trunnion[i] - pivot[i] for i in range(3)],
+                              "children": [3]})
+        gltf["nodes"].append({"name": "TurretMuzzle",
+                              "translation": [tip[i] - trunnion[i] for i in range(3)]})
+    else:
+        gltf["nodes"].append({"name": "TurretMuzzle",
+                              "translation": [tip[i] - pivot[i] for i in range(3)]})
+
     gltf["scenes"] = [{"nodes": [0, 1]}]
     gltf["buffers"] = [{"byteLength": len(blob)}]
 
     with open(out_path, "wb") as handle:
         handle.write(S.build(gltf, bytes(blob)))
 
-    print(f"  {name}: cut at y={cut:+.3f} ({(cut - min(ys)) / height:.0%} of height), "
-          f"turret {len(turret_tris) // 3} tris, hull {len(hull_tris) // 3} tris, "
-          f"pivot ({pivot[0]:+.2f}, {pivot[2]:+.2f}), barrel {math.dist(tip[:3], pivot):.2f} long")
+    barrel = (f"gun {len(gun_tris) // 3} tris, "
+              f"{math.dist(tip[:3], trunnion):.2f} long from its trunnion"
+              if trunnion is not None else "no separable gun — the turret elevates whole")
+    print(f"  {name}: ring at y={cut:+.3f} ({(cut - min(ys)) / tall:.0%} of height), "
+          f"turret {len(turret_tris) // 3} tris, hull {len(hull_tris) // 3} tris, {barrel}")
     return cut
 
 
 # --------------------------------------------------------------------- preview
 
-def preview(path, degrees, tilt=0.0):
+def preview(path, degrees, tilt=0.0, elevation=0.0):
     """
-    Merge the rigged model back into one mesh with the turret turned, so the
-    existing single-mesh renderer can show what a turned turret looks like.
+    Merge the rigged model back into one mesh with the turret turned and the gun
+    raised, so the existing single-mesh renderer can show what the rig does.
     Written to a temporary file next to the source and returned.
 
     <paramref name="tilt"/> pitches the whole tank nose-down afterwards, which
     is the only way to see the deck -- and so the only way to catch a seam that
     a turned turret has left open.
+
+    The transform chain is walked the way the runtime walks it: the gun rides
+    the turret, so it takes the elevation about its trunnion FIRST and the
+    turret's yaw afterwards, exactly as parenting would apply them.
     """
     gltf, buf = S.parse(path)
+    turn = math.radians(degrees)
+    rise = math.radians(elevation)
+
+    # Whichever part carries the muzzle marker is the part that elevates —
+    # the gun where the rig found one, the whole turret where it did not.
+    muzzle = next(n for n in gltf["nodes"] if n.get("name") == "TurretMuzzle")
+    barrel = muzzle.get("translation", [1.0, 0.0, 0.0])
+    riser = "GunPivot" if any(n.get("name") == "GunPivot" for n in gltf["nodes"]) \
+        else "TurretPivot"
+    hinge_node = next((n for n in gltf["nodes"] if n.get("name") == "TurretHinge"), None)
+    hinge = hinge_node.get("translation", [0.0, 0.0, 0.0]) if hinge_node else [0.0, 0.0, 0.0]
+
     parts = []
     for node in gltf["nodes"]:
         if "mesh" not in node:
             continue
+        name = node.get("name")
         offset = node.get("translation", [0.0, 0.0, 0.0])
-        turn = math.radians(degrees) if node.get("name") == "TurretPivot" else 0.0
         prim = gltf["meshes"][node["mesh"]]["primitives"][0]
         pos = accessor(gltf, buf, prim["attributes"]["POSITION"], 3)
         nrm = accessor(gltf, buf, prim["attributes"]["NORMAL"], 3)
         uv = accessor(gltf, buf, prim["attributes"]["TEXCOORD_0"], 2)
         idx = accessor(gltf, buf, prim["indices"], 1)
-        c, s = math.cos(turn), math.sin(turn)
+
+        # Which stage of the chain this mesh sits at. A gun's own translation is
+        # relative to the turret pivot, so it needs the pivot added back.
+        gun = name == "GunPivot"
+        turret = gun or name == "TurretPivot"
+        raises = name == riser
+        base = [0.0, 0.0, 0.0]
+        if gun:
+            pivot = next(n for n in gltf["nodes"] if n.get("name") == "TurretPivot")
+            base = pivot.get("translation", [0.0, 0.0, 0.0])
+
+        # The trunnion axis: horizontal, across the barrel.
+        span = math.hypot(barrel[0], barrel[2]) or 1.0
+        ax, az = barrel[0] / span, barrel[2] / span
+
         verts = []
         for i in range(len(pos) // 3):
-            x, y, z = pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]
-            nx, ny, nz = nrm[3 * i], nrm[3 * i + 1], nrm[3 * i + 2]
-            verts.append((x * c + z * s + offset[0], y + offset[1], -x * s + z * c + offset[2],
-                          nx * c + nz * s, ny, -nx * s + nz * c, uv[2 * i], uv[2 * i + 1]))
+            p = [pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]]
+            n = [nrm[3 * i], nrm[3 * i + 1], nrm[3 * i + 2]]
+            if raises and rise:
+                # Raise about the horizontal axis across the barrel, through
+                # the hinge: the component along the barrel trades with height.
+                for k, v in enumerate((p, n)):
+                    o = hinge if k == 0 else (0.0, 0.0, 0.0)
+                    d = [v[j] - o[j] for j in range(3)]
+                    along = d[0] * ax + d[2] * az
+                    lift = along * math.sin(rise) + d[1] * math.cos(rise)
+                    slide = along * math.cos(rise) - d[1] * math.sin(rise)
+                    v[0] = o[0] + d[0] + (slide - along) * ax
+                    v[2] = o[2] + d[2] + (slide - along) * az
+                    v[1] = o[1] + lift
+            if gun:
+                p = [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]]
+            if turret:
+                c, s = math.cos(turn), math.sin(turn)
+                p = [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c]
+                n = [n[0] * c + n[2] * s, n[1], -n[0] * s + n[2] * c]
+                p = [p[0] + base[0], p[1] + base[1], p[2] + base[2]] if gun \
+                    else [p[0] + offset[0], p[1] + offset[1], p[2] + offset[2]]
+            verts.append(tuple(p) + tuple(n) + (uv[2 * i], uv[2 * i + 1]))
         parts.append((verts, idx))
 
     verts, tris = [], []
@@ -531,8 +716,13 @@ if __name__ == "__main__":
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
     out_dir = next((f.split("=", 1)[1] for f in flags if f.startswith("--out=")), None)
 
+    # The jet sets share this directory and must be left alone: an aircraft has
+    # no turret ring, and cutting one anyway would hand TankTurret a piece of
+    # somebody's wing to spin. Named explicitly rather than detected, because
+    # "the front half of this is narrower than the back" is true of a jet too.
     robots = args or sorted(d for d in os.listdir(STAGE_DIR)
-                            if os.path.isfile(f"{STAGE_DIR}/{d}/{STAGE_FILE}"))
+                            if os.path.isfile(f"{STAGE_DIR}/{d}/{STAGE_FILE}")
+                            and not d.endswith(JET_SUFFIX))
     print(f"rigging {len(robots)} tank(s)")
     for robot in robots:
         source = f"{STAGE_DIR}/{robot}/{STAGE_FILE}"
