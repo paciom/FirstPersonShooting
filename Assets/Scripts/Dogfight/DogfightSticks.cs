@@ -46,6 +46,28 @@ public class DogfightSticks : MonoBehaviour
     public static bool FlaresTapped { get; private set; }
     public static bool TransformTapped { get; private set; }
     public static bool CameraTapped { get; private set; }
+    public static bool JumpTapped { get; private set; }
+
+    /// <summary>A thumb is down on either FIRE button — the deck's manual
+    /// trigger. Only ever true in the ground layout; in the air the guns
+    /// still fire themselves.</summary>
+    public static bool GunHeld { get; private set; }
+
+    /// <summary>
+    /// Asserted by the mode every frame, the WeaponsFree way (statics die in
+    /// a mid-Play recompile): while the hero stands on the deck as a robot or
+    /// tank, the glass folds into the GUNFIGHT game's hand — the aim stick
+    /// fixed at TouchControls' spot, twin held FIRE buttons over each thumb,
+    /// and JUMP where the gunfight puts it (robots only; a tank has no legs).
+    /// </summary>
+    public static void SetGroundLayout(bool ground, bool canJump)
+    {
+        _groundWanted = ground;
+        _jumpWanted = canJump;
+    }
+
+    static bool _groundWanted;
+    static bool _jumpWanted;
 
     /// <summary>A tap on the WORLD — a touch that ended quickly without ever
     /// really moving, anywhere that is not a button. The mode spends it on
@@ -92,14 +114,40 @@ public class DogfightSticks : MonoBehaviour
     {
         public RectTransform rect;
         public Image face;
+        public Text label;
         public float flash;
         public System.Action tapped;
+        /// <summary>Held rather than tapped (the FIRE pair): the finger that
+        /// landed on it is this button's until it lifts.</summary>
+        public bool hold;
+        public int finger = int.MinValue;
+        /// <summary>Resting spot, so a layout that slides the button can put
+        /// it back.</summary>
+        public Vector2 home;
+        public bool Held => finger != int.MinValue;
+    }
+
+    /// <summary>A touch neither stick wanted (the fixed ground-layout aim
+    /// stick refuses grabs far from its ring) — tracked only so a quick,
+    /// still touch can still become a WORLD tap for target locking.</summary>
+    class FreeTouch
+    {
+        public int id;
+        public float at;
+        public Vector2 start;
+        public bool travelled;
     }
 
     GameObject _canvas;
     RectTransform _canvasRect;
     Stick _left, _right;
     readonly List<TapButton> _buttons = new List<TapButton>();
+    TapButton _missile, _fireLeft, _fireRight, _jump;
+    /// <summary>The right-edge verb column, which slides up one slot in the
+    /// ground layout to clear JUMP at the gunfight's own spot.</summary>
+    readonly List<TapButton> _column = new List<TapButton>();
+    bool _ground;
+    readonly List<FreeTouch> _free = new List<FreeTouch>();
     static Sprite _disc, _ring;
 
     readonly List<int> _seen = new List<int>();
@@ -116,11 +164,14 @@ public class DogfightSticks : MonoBehaviour
         Steer = AimStick = Vector2.zero;
         Showing = false;
         MissileTapped = FlaresTapped = TransformTapped = CameraTapped = false;
+        JumpTapped = false;
+        GunHeld = false;
     }
 
     void Update()
     {
         MissileTapped = FlaresTapped = TransformTapped = CameraTapped = false;
+        JumpTapped = false;
         WorldTapped = false;
 
         bool wanted = TouchControls.Active;
@@ -134,20 +185,73 @@ public class DogfightSticks : MonoBehaviour
         {
             Release(_left);
             Release(_right);
+            foreach (var button in _buttons)
+                button.finger = int.MinValue;
+            _free.Clear();
             Steer = AimStick = Vector2.zero;
+            GunHeld = false;
             return;
         }
 
+        ApplyGroundLayout();
         ReadPointers();
         Steer = _left.value;
         AimStick = _right.value;
+        GunHeld = _ground && (_fireLeft.Held || _fireRight.Held);
         Paint(_left);
-        Paint(_right);
+        // In the ground layout the aim ring is a fixed target the thumb
+        // returns to blind, so it stays visible even with no finger on it.
+        Paint(_right, _ground);
         foreach (var button in _buttons)
         {
             button.flash = Mathf.MoveTowards(button.flash, 0f, Time.deltaTime * 3.5f);
-            button.face.color = Color.Lerp(ButtonFace, ButtonHot, button.flash);
+            float hot = button.hold && button.Held ? 1f : button.flash;
+            button.face.color = Color.Lerp(ButtonFace, ButtonHot, hot);
         }
+    }
+
+    /// <summary>
+    /// Fold the layout to match the hero's footing. Runs every frame: the
+    /// fixed aim centre depends on the live canvas size, and the mode's
+    /// wanted-state is a static that must be re-read anyway.
+    /// </summary>
+    void ApplyGroundLayout()
+    {
+        _ground = _groundWanted;
+        SetButtonActive(_fireLeft, _ground);
+        SetButtonActive(_fireRight, _ground);
+        SetButtonActive(_jump, _ground && _jumpWanted);
+        // On the deck the twin FIRE buttons are the guns, so the verb column's
+        // missile button says what it always meant.
+        if (_missile.label != null)
+            _missile.label.text = _ground ? "MISSILE" : "FIRE";
+        // And the column steps up one slot so JUMP fits beneath it.
+        float lift = _ground ? ButtonSize + 16f : 0f;
+        foreach (var verb in _column)
+            verb.rect.anchoredPosition = verb.home + Vector2.up * lift;
+        if (!_ground)
+            return;
+
+        // TouchControls' aim-stick corner, translated into this canvas's
+        // centre-based units.
+        Vector2 half = _canvasRect.rect.size * 0.5f;
+        var center = new Vector2(half.x - 370f, -half.y + 280f);
+        if (!_right.Held && _right.center != center)
+        {
+            _right.center = center;
+            _right.baseRect.anchoredPosition = center;
+            _right.knob.anchoredPosition = center;
+        }
+    }
+
+    static void SetButtonActive(TapButton button, bool active)
+    {
+        if (button == null)
+            return;
+        if (!active)
+            button.finger = int.MinValue;
+        if (button.rect.gameObject.activeSelf != active)
+            button.rect.gameObject.SetActive(active);
     }
 
     void ReadPointers()
@@ -171,28 +275,62 @@ public class DogfightSticks : MonoBehaviour
 
         if (_left.Held && !_seen.Contains(_left.finger)) Release(_left);
         if (_right.Held && !_seen.Contains(_right.finger)) Release(_right);
+        foreach (var button in _buttons)
+            if (button.Held && !_seen.Contains(button.finger))
+                button.finger = int.MinValue;
+        _free.RemoveAll(touch => !_seen.Contains(touch.id));
     }
 
     void Feed(int id, Vector2 screenPoint, bool began, bool ended)
     {
+        // A finger parked on a held button is that button's until it lifts.
+        foreach (var button in _buttons)
+            if (button.finger == id)
+            {
+                if (ended)
+                    button.finger = int.MinValue;
+                return;
+            }
+
         var stick = _left.finger == id ? _left : _right.finger == id ? _right : null;
 
         if (stick == null)
         {
             if (!began)
+            {
+                FeedFree(id, screenPoint, ended);
                 return;
+            }
             // Buttons and the MENU corner claim first — a tap must never
             // double as a planted stick.
             if (TouchControls.PointOver(screenPoint))
                 return;
-            if (TapButtonAt(screenPoint))
+            if (TapButtonAt(id, screenPoint))
                 return;
             stick = screenPoint.x < Screen.width * 0.5f ? _left : _right;
-            if (stick.Held)
+            // In the ground layout the aim stick is FIXED, the gunfight rule:
+            // only a grab near its ring steers (a little outside still counts
+            // — mid-fight thumbs are not precise), and the centre never moves
+            // to the thumb. Everything the sticks refuse falls through to the
+            // free-touch tracker so a tap can still lock a target.
+            bool fixedStick = _ground && stick == _right;
+            if (stick.Held
+                || (fixedStick && (ToCanvas(screenPoint) - stick.center).magnitude > Radius * 1.35f))
+            {
+                _free.Add(new FreeTouch
+                {
+                    id = id,
+                    at = Time.unscaledTime,
+                    start = screenPoint,
+                });
                 return;
+            }
             stick.finger = id;
-            stick.center = ToCanvas(screenPoint);
-            stick.baseRect.anchoredPosition = stick.center;
+            if (!fixedStick)
+            {
+                stick.center = ToCanvas(screenPoint);
+                stick.baseRect.anchoredPosition = stick.center;
+            }
             stick.claimedAt = Time.unscaledTime;
             stick.claimedScreen = screenPoint;
             stick.travelled = false;
@@ -227,17 +365,50 @@ public class DogfightSticks : MonoBehaviour
             : raw.normalized * ((magnitude - DeadZone) / (1f - DeadZone));
     }
 
-    bool TapButtonAt(Vector2 screenPoint)
+    bool TapButtonAt(int id, Vector2 screenPoint)
     {
         foreach (var button in _buttons)
         {
+            if (!button.rect.gameObject.activeSelf)
+                continue;
             if (!RectTransformUtility.RectangleContainsScreenPoint(button.rect, screenPoint))
                 continue;
-            button.flash = 1f;
-            button.tapped();
+            if (button.hold)
+            {
+                button.finger = id;
+            }
+            else
+            {
+                button.flash = 1f;
+                button.tapped();
+            }
             return true;
         }
         return false;
+    }
+
+    /// <summary>Ride an unclaimed touch to its end; a quick, still one is a
+    /// WORLD tap, same test the sticks apply to their own.</summary>
+    void FeedFree(int id, Vector2 screenPoint, bool ended)
+    {
+        foreach (var touch in _free)
+        {
+            if (touch.id != id)
+                continue;
+            float drift = TapDriftPixels * (Screen.height / 1080f);
+            if ((screenPoint - touch.start).sqrMagnitude > drift * drift)
+                touch.travelled = true;
+            if (ended)
+            {
+                if (!touch.travelled && Time.unscaledTime - touch.at < TapSeconds)
+                {
+                    WorldTapped = true;
+                    WorldTapPoint = screenPoint;
+                }
+                _free.Remove(touch);
+            }
+            return;
+        }
     }
 
     void Release(Stick stick)
@@ -257,9 +428,10 @@ public class DogfightSticks : MonoBehaviour
         return local;
     }
 
-    void Paint(Stick stick)
+    void Paint(Stick stick, bool persistent = false)
     {
-        stick.fade = Mathf.MoveTowards(stick.fade, stick.Held ? 1f : 0f, Time.deltaTime * 6f);
+        stick.fade = Mathf.MoveTowards(stick.fade,
+            stick.Held || persistent ? 1f : 0f, Time.deltaTime * 6f);
         stick.baseRect.GetComponent<Image>().color = Fade(stick.ringColor, stick.ringColor.a * stick.fade);
         stick.knob.GetComponent<Image>().color = Fade(stick.knobColor, stick.knobColor.a * stick.fade);
     }
@@ -289,10 +461,28 @@ public class DogfightSticks : MonoBehaviour
         // always faintly there, because a button that only appears sometimes
         // is a button nobody learns. Order: the pair you tap in a panic on
         // top, the pair you tap on purpose below.
-        MakeButton("FLARES", new Vector2(-96f, 560f), () => FlaresTapped = true);
-        MakeButton("FIRE", new Vector2(-96f, 452f), () => MissileTapped = true);
-        MakeButton("MORPH", new Vector2(-96f, 344f), () => TransformTapped = true);
-        MakeButton("CAM", new Vector2(-96f, 236f), () => CameraTapped = true);
+        _column.Add(MakeButton("FLARES", new Vector2(1f, 0f), new Vector2(-96f, 560f), ButtonSize,
+            () => FlaresTapped = true));
+        _missile = MakeButton("FIRE", new Vector2(1f, 0f), new Vector2(-96f, 452f), ButtonSize,
+            () => MissileTapped = true);
+        _column.Add(_missile);
+        _column.Add(MakeButton("MORPH", new Vector2(1f, 0f), new Vector2(-96f, 344f), ButtonSize,
+            () => TransformTapped = true));
+        _column.Add(MakeButton("CAM", new Vector2(1f, 0f), new Vector2(-96f, 236f), ButtonSize,
+            () => CameraTapped = true));
+
+        // The gunfight hand, shown only while the hero stands on the deck:
+        // twin held FIRE buttons and JUMP, each at TouchControls' own spot,
+        // so landing drops the thumbs onto the layout they already know.
+        _fireRight = MakeButton("FIRE", new Vector2(1f, 0f), new Vector2(-370f, 545f), 180f,
+            null, hold: true);
+        _fireLeft = MakeButton("FIRE", new Vector2(0f, 0f), new Vector2(300f, 620f), 180f,
+            null, hold: true);
+        _jump = MakeButton("JUMP", new Vector2(1f, 0f), new Vector2(-150f, 150f), 170f,
+            () => JumpTapped = true);
+        SetButtonActive(_fireRight, false);
+        SetButtonActive(_fireLeft, false);
+        SetButtonActive(_jump, false);
     }
 
     Stick MakeStick(string name, Color ringColor, Color knobColor)
@@ -306,17 +496,18 @@ public class DogfightSticks : MonoBehaviour
         };
     }
 
-    void MakeButton(string label, Vector2 cornerOffset, System.Action tapped)
+    TapButton MakeButton(string label, Vector2 anchor, Vector2 cornerOffset, float size,
+        System.Action tapped, bool hold = false)
     {
-        var rect = MakeCircle($"Tap{label}", DiscSprite(), ButtonFace, ButtonSize, false);
-        rect.anchorMin = rect.anchorMax = new Vector2(1f, 0f);
+        var rect = MakeCircle($"Tap{label}", DiscSprite(), ButtonFace, size, false);
+        rect.anchorMin = rect.anchorMax = anchor;
         rect.anchoredPosition = cornerOffset;
 
         var text = new GameObject("Label").AddComponent<Text>();
         text.transform.SetParent(rect, false);
         text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.text = label;
-        text.fontSize = 17;
+        text.fontSize = Mathf.RoundToInt(size * 0.185f);
         text.fontStyle = FontStyle.Bold;
         text.color = new Color(1f, 1f, 1f, 0.8f);
         text.alignment = TextAnchor.MiddleCenter;
@@ -325,12 +516,17 @@ public class DogfightSticks : MonoBehaviour
         text.rectTransform.anchorMax = Vector2.one;
         text.rectTransform.offsetMin = text.rectTransform.offsetMax = Vector2.zero;
 
-        _buttons.Add(new TapButton
+        var button = new TapButton
         {
             rect = rect,
             face = rect.GetComponent<Image>(),
+            label = text,
             tapped = tapped,
-        });
+            hold = hold,
+            home = cornerOffset,
+        };
+        _buttons.Add(button);
+        return button;
     }
 
     RectTransform MakeCircle(string name, Sprite sprite, Color color, float size, bool startHidden)

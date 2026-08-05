@@ -312,6 +312,17 @@ public class Dogfight : MonoBehaviour
         // pacifist would be a quiet bug nobody files.
         DogfightTurret.WeaponsFree = _stage == Stage.Fight || _stage == Stage.Over;
 
+        // Same discipline for the glass: the gunfight ground layout exists
+        // exactly while the player's hero stands on the deck as a robot or
+        // tank, and folds back to the flight layout the moment that stops
+        // being true — death, take-off, or the end of the sortie included.
+        var heroNow = Hero;
+        bool deck = _playerControls && _stage == Stage.Fight
+            && heroNow != null && !heroNow.IsDown && !heroNow.Morphing
+            && heroNow.Grounded && heroNow.CurrentForm != JetPawn.Form.Jet;
+        DogfightSticks.SetGroundLayout(deck,
+            heroNow != null && heroNow.CurrentForm == JetPawn.Form.Robot);
+
         // '?' is Shift+Slash on most boards; the bare key counts too.
         if (Input.GetKeyDown(KeyCode.Slash))
             _hud.ToggleHelp();
@@ -409,6 +420,12 @@ public class Dogfight : MonoBehaviour
 
         bool glass = DogfightSticks.Showing;
 
+        // On the deck as a robot or tank the controls ARE the gunfight
+        // game's: FIRE becomes a held button, SHIFT or the stick's rim runs,
+        // and SPACE or JUMP hops (robots only). The glass layout itself is
+        // asserted from Update, which outlives this method's early returns.
+        bool landed = hero.Grounded && hero.CurrentForm != JetPawn.Form.Jet;
+
         // The tap verbs land before the morph gate so CAM answers mid-fold;
         // the pawn refuses what it must (a fold during a fold, an unlocked
         // missile) on its own.
@@ -453,6 +470,12 @@ public class Dogfight : MonoBehaviour
         {
             hero.Steer = new Vector2(Input.GetAxisRaw("Horizontal"),
                 Input.GetAxisRaw("Vertical")) + DogfightSticks.Steer;
+            // The gunfight gait on the deck: SHIFT runs on keys; on glass the
+            // rim of the stick runs, TouchControls' own sprint rule.
+            hero.Sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)
+                || DogfightSticks.Steer.sqrMagnitude > 0.85f;
+            if (landed && (Input.GetKeyDown(KeyCode.Space) || DogfightSticks.JumpTapped))
+                hero.RequestJump();
             if (glass)
             {
                 AimByThumb(hero);
@@ -464,11 +487,13 @@ public class Dogfight : MonoBehaviour
             }
         }
 
-        // On glass the guns fire themselves — a thumb that must hold FIRE is
-        // a thumb that cannot steer. Keys and mouse keep the trigger.
+        // In the AIR the glass guns fire themselves — a thumb that must hold
+        // FIRE is a thumb that cannot steer. On the deck FIRE is a held
+        // button and SPACE belongs to the jump, both the gunfight game's
+        // rules; keys keep the mouse trigger everywhere.
         hero.Firing = glass
-            ? _stage == Stage.Fight
-            : Input.GetMouseButton(0) || Input.GetKey(KeyCode.Space);
+            ? (landed ? DogfightSticks.GunHeld : _stage == Stage.Fight)
+            : Input.GetMouseButton(0) || (!landed && Input.GetKey(KeyCode.Space));
 
         UpdatePlayerLock();
         if ((Input.GetMouseButtonDown(1) || DogfightSticks.MissileTapped)

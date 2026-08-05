@@ -158,11 +158,19 @@ public class JetPawn : MonoBehaviour
     /// ceremony; a chained tank-to-jet spends two of these.</summary>
     const float MorphSeconds = 0.8f;
 
-    /// <summary>The chute: how fast a robot under canopy falls and drifts,
-    /// and how fast it walks once the canopy is cut.</summary>
+    /// <summary>The chute: how fast a robot under canopy falls and drifts.</summary>
     const float ChuteFallSpeed = 4.5f;
     const float ChuteDriftSpeed = 8f;
-    const float WalkSpeed = 3.5f;
+
+    /// <summary>The deck gait — CharacterMotor's walkSpeed/sprintSpeed, so a
+    /// landed robot moves exactly like the gunfight game's.</summary>
+    const float WalkSpeed = 6f;
+    const float RunSpeed = 9f;
+
+    /// <summary>The hop: launch speed and its own gravity. Apex ≈ 3.2 m,
+    /// about the gunfight motor's body-height leap for these robots.</summary>
+    const float JumpSpeed = 13f;
+    const float JumpGravity = 26f;
 
     const float TankDriveSpeed = 9f;
     const float TankTurnSpeed = 110f;
@@ -192,6 +200,15 @@ public class JetPawn : MonoBehaviour
     public float Throttle { get; set; }
 
     public bool Firing { get; set; }
+
+    /// <summary>Run instead of walk — the gunfight game's sprint, read by the
+    /// grounded robot. Cleared after use like Steer.</summary>
+    public bool Sprint { get; set; }
+
+    /// <summary>Ask for a hop. Only a robot standing on the deck obliges —
+    /// the gunfight motor's "a tank does not jump" rule; everyone else lets
+    /// the request die at the end of the frame.</summary>
+    public void RequestJump() => _jumpQueued = true;
 
     /// <summary>Metres per second along the nose, jet form.</summary>
     public float Speed { get; private set; } = SpeedCruise;
@@ -335,6 +352,12 @@ public class JetPawn : MonoBehaviour
     Vector3 _airVelocity;
     float _verticalSpeed;
     float _tankDrive;
+
+    // The hop rides its own little arc over the ride height, so Grounded
+    // stays true and the chute/landing logic never hears about it.
+    bool _jumpQueued;
+    float _hop;
+    float _hopSpeed;
 
     void OnEnable()
     {
@@ -857,6 +880,8 @@ public class JetPawn : MonoBehaviour
         Separate(dt);
         PullTrigger();
         Firing = false;
+        Sprint = false;
+        _jumpQueued = false;
         _hasAim = false;
     }
 
@@ -967,8 +992,18 @@ public class JetPawn : MonoBehaviour
         }
         else
         {
-            transform.position += drift * (WalkSpeed * dt);
-            transform.position = new Vector3(transform.position.x, GroundY + 1.7f,
+            // The gunfight gait: walk, run when told to, hop on request.
+            if (_jumpQueued && _hop <= 0f)
+                _hopSpeed = JumpSpeed;
+            if (_hop > 0f || _hopSpeed > 0f)
+            {
+                _hopSpeed -= JumpGravity * dt;
+                _hop = Mathf.Max(0f, _hop + _hopSpeed * dt);
+                if (_hop <= 0f)
+                    _hopSpeed = 0f;
+            }
+            transform.position += drift * ((Sprint ? RunSpeed : WalkSpeed) * dt);
+            transform.position = new Vector3(transform.position.x, GroundY + 1.7f + _hop,
                 transform.position.z);
         }
         transform.position = DogfightSky.KeepOffProps(transform.position, 0.9f);

@@ -563,9 +563,9 @@ public class DogfightHud : MonoBehaviour
 
         string body = playerControls
             ? "JET   —   Mouse steers (the jet chases your cursor)   ·   W boost   ·   S brake\n" +
-              "ROBOT / TANK   —   Mouse aims   ·   WASD moves\n" +
+              "ROBOT / TANK   —   Mouse aims   ·   WASD moves   ·   SHIFT runs   ·   SPACE jumps\n" +
               "\n" +
-              "Hold Click or SPACE   —   guns\n" +
+              "Hold Click   —   guns   (SPACE too, in the air)\n" +
               "Right Click   —   missile (hold the ring on a target until it locks)\n" +
               "F   —   flares, when INCOMING flashes\n" +
               "T   —   transform:  jet  →  robot  →  tank  →  jet\n" +
