@@ -49,9 +49,10 @@ public static class RobotSelectMenu
     // How the stop-motion is sized: the standing robot at one size, everything
     // it turns into at another.
     //
-    // Stage one is fitted to PreviewRobotHeight, exactly as every non-staged
-    // card is, so a robot with stages stands the same height as its neighbours
-    // in the row. EVERY later stage shares StageVehicleDiagonal.
+    // Stage one is fitted to RobotHeightFor(robot), so a robot with stages
+    // stands the same height as its neighbours in the row — bar the one
+    // deliberate outlier that helper documents. EVERY later stage shares
+    // StageVehicleDiagonal.
     //
     // Sharing one size across the transforming stages rather than tapering into
     // it, because the mid-fold stages are the bulkiest boxes of the whole set —
@@ -70,8 +71,26 @@ public static class RobotSelectMenu
     // Internal because TransformCast's corner panel builds the same stop motion
     // from the same stages: a robot that folds at one set of proportions on its
     // card and another in the HUD reads as two different robots.
-    internal const float PreviewRobotHeight = 1.6f;
-    internal const float StageVehicleDiagonal = 1.45f;
+    // Tuned 2026-08-05: robots down 15% from the 1.6 they launched at and
+    // vehicles up 15% from 1.45 — at equal prominence the tall robots read
+    // fine and the low hulls read like toys.
+    internal const float PreviewRobotHeight = 1.36f;
+    internal const float StageVehicleDiagonal = 1.67f;
+
+    // Ranger runs the other way, 15% up from the old 1.6: the thinnest
+    // silhouette in the fleet reads smaller than every teammate when fitted
+    // to the same height.
+    const float RangerRobotHeight = 1.84f;
+
+    /// <summary>
+    /// Height the standing robot stage is fitted to on a card — and in
+    /// TransformCast's corner panel, which must agree with the cards (see
+    /// StageVehicleDiagonal's note there).
+    /// </summary>
+    internal static float RobotHeightFor(string robotName) =>
+        robotName != null && robotName.Equals("ranger", System.StringComparison.OrdinalIgnoreCase)
+            ? RangerRobotHeight
+            : PreviewRobotHeight;
 
     // Generated stages come out of the image-to-3D pipeline nose-down -Z, so
     // they face away from the camera the robot faces. Stage one is the real rig
@@ -291,7 +310,6 @@ public static class RobotSelectMenu
                 // Spread the fleet evenly around the cycle so the row always has
                 // something mid-transformation rather than all nine snapping at once.
                 spinner.phaseDegrees = n > 1 ? i * (360f / n) : 0f;
-                spinner.burstColor = teamColor;
                 if (roster.robots[i].modelPrefab != null)
                 {
                     var model = Object.Instantiate(roster.robots[i].modelPrefab, spin.transform);
@@ -374,24 +392,58 @@ public static class RobotSelectMenu
 
     /// <summary>
     /// Instantiates every transformation stage under one holder and drives them
-    /// as stop motion. See <see cref="StageTargetDiagonal"/> for how they are
-    /// sized against each other.
+    /// as stop motion — the tank set, then the jet set for robots that have
+    /// one, so a card runs robot, tank, robot, jet, robot. See
+    /// <see cref="StageVehicleDiagonal"/> for how stages are sized against
+    /// each other.
     /// </summary>
     static void BuildStopMotion(Transform holder, RobotRoster.Entry entry, int index, int count,
         Color teamColor)
     {
-        var stages = new GameObject[entry.transformStages.Length];
+        float robotHeight = RobotHeightFor(entry.displayName);
+        var stages = BuildStageSet(holder, entry, entry.transformStages, teamColor, robotHeight,
+            // Generated tank stages come out of the pipeline nose-down -Z, so
+            // every stage past the real rig takes the same 180.
+            _ => StageYawOffset);
+
+        GameObject[] jets = null;
+        if (entry.HasJetStages)
+        {
+            // The jet set splits differently: its early stages are still
+            // robot-framed (yaw 0, like the rig) and only the aircraft-framed
+            // tail takes the jet yaw. The split is JetPawn's own table, so the
+            // card turns exactly the stages the DOGFIGHT sky turns.
+            int robotFrames = JetPawn.JetRobotFramesFor(entry.displayName);
+            jets = BuildStageSet(holder, entry, entry.jetStages, teamColor, robotHeight,
+                s => s < robotFrames ? 0f : JetPawn.StageYaw);
+        }
+
+        var player = holder.gameObject.AddComponent<StopMotionTransformer>();
+        player.stages = stages;
+        player.jetStages = jets;
+        // Spread the fleet across the cycle so the row is never in step.
+        player.phaseSeconds = count > 1 ? index * (player.CycleSeconds / count) : 0f;
+    }
+
+    /// <summary>One stage set, instantiated, fitted and painted: the standing
+    /// robot to <paramref name="robotHeight"/>, everything after it to
+    /// <see cref="StageVehicleDiagonal"/>.</summary>
+    static GameObject[] BuildStageSet(Transform holder, RobotRoster.Entry entry,
+        GameObject[] sources, Color teamColor, float robotHeight,
+        System.Func<int, float> yawFor)
+    {
+        var stages = new GameObject[sources.Length];
         for (int s = 0; s < stages.Length; s++)
-            if (entry.transformStages[s] != null)
-                stages[s] = Object.Instantiate(entry.transformStages[s], holder);
+            if (sources[s] != null)
+                stages[s] = Object.Instantiate(sources[s], holder);
 
         // Derive stage one's target from its own proportions rather than a fixed
-        // number, so it lands on PreviewRobotHeight for any robot regardless of
-        // how tall or wide that particular rig happens to be.
+        // number, so it lands on robotHeight for any robot regardless of how
+        // tall or wide that particular rig happens to be.
         float robotDiagonal = StageVehicleDiagonal;
         var first = MeasureBounds(stages.Length > 0 ? stages[0] : null);
         if (first.size.y > 0.01f)
-            robotDiagonal = first.size.magnitude * (PreviewRobotHeight / first.size.y);
+            robotDiagonal = first.size.magnitude * (robotHeight / first.size.y);
 
         for (int s = 0; s < stages.Length; s++)
         {
@@ -399,17 +451,12 @@ public static class RobotSelectMenu
                 continue;
             NormalizeByDiagonal(stages[s], holder,
                 s == 0 ? robotDiagonal : StageVehicleDiagonal,
-                s == 0 ? 0f : StageYawOffset);
+                s == 0 ? 0f : yawFor(s));
             // Every stage, not just the robot: a fold that starts cyan and ends
             // in the other team's tank would be worse than no paint at all.
             TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize, false, entry.paintAnchorHue);
         }
-
-        var player = holder.gameObject.AddComponent<StopMotionTransformer>();
-        player.stages = stages;
-        // Spread the fleet across the cycle so the row is never in step.
-        float cycle = 2f * (player.holdSeconds + player.transformSeconds);
-        player.phaseSeconds = count > 1 ? index * (cycle / count) : 0f;
+        return stages;
     }
 
     /// <summary>Combined renderer bounds of an instance, or an empty box.</summary>
@@ -822,9 +869,6 @@ public class RobotPreviewSpinner : MonoBehaviour
              "framing aid — the vehicle sits on the floor in the actual game.")]
     public float vehicleLift = 0.35f;
 
-    [Tooltip("Colour of the swap burst; the select screen sets it per team row.")]
-    public Color burstColor = new Color(0.2f, 0.9f, 1f);
-
     Animator _animator;
     VehicleSkin _skin;
     bool _canTransform;
@@ -875,7 +919,6 @@ public class RobotPreviewSpinner : MonoBehaviour
         if (_swapAt > 0f && Time.time >= _swapAt)
         {
             _swapAt = -1f;
-            VfxUtil.Explosion(transform.position, burstColor, 0.7f);
             _skin.SetVehicle(_swapTo);
         }
 

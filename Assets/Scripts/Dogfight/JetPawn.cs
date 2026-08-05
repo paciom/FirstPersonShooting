@@ -124,6 +124,12 @@ public class JetPawn : MonoBehaviour
             ? frames
             : fallback;
 
+    /// <summary>Where the jet set's robot frames end for one robot. Public
+    /// because the select cards replay the same stage set and have to turn
+    /// the same stages the same way.</summary>
+    public static int JetRobotFramesFor(string robotName) =>
+        FramesFor(JetRobotFrames, robotName, JetRobotFramesDefault);
+
     /// <summary>Yaw for robot-framed stages: the Meshy-humanoid canonical
     /// through glTFast, probe-confirmed at ~0 across both sets' robot frames.</summary>
     const float RobotStageYaw = 0f;
@@ -134,8 +140,9 @@ public class JetPawn : MonoBehaviour
     /// set does not use this — its vehicle yaw is measured live off the
     /// stage-8 barrel markers and shared by its whole vehicle frame group.
     /// If a future set flies backwards, flip 180 and trust the screenshot.
+    /// Public for the same reason JetRobotFramesFor is.
     /// </summary>
-    const float StageYaw = -90f;
+    public const float StageYaw = -90f;
 
     // The gun, in TankArsenal's vocabulary: coloured by TEAM, because "whose
     // shot is that" has to be answerable at a glance in a two-jet furball.

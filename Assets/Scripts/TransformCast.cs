@@ -53,10 +53,9 @@ public class TransformCast : MonoBehaviour
     const float FoldSpinDegrees = 85f;
 
     /// <summary>
-    /// How fast the swap flash fades, in units of alpha per second. The same
-    /// trick StopMotionTransformer's light burst plays: consecutive stages share
-    /// no topology, so every change is a pop, and the films cut around a pop
-    /// with light.
+    /// How fast the swap flash fades, in units of alpha per second. Consecutive
+    /// stages share no topology, so every change is a pop, and the films cut
+    /// around a pop with light.
     /// </summary>
     const float FlashFade = 5.5f;
 
@@ -338,7 +337,7 @@ public class TransformCast : MonoBehaviour
             var first = RobotSelectMenu.MeasureBounds(built[0]);
             if (first.size.y > 0.01f)
                 robotDiagonal = first.size.magnitude
-                              * (RobotSelectMenu.PreviewRobotHeight / first.size.y);
+                              * (RobotSelectMenu.RobotHeightFor(entry.displayName) / first.size.y);
 
             // Generated stages come out of the image-to-3D pipeline nose-down -Z.
             // The separately generated vehicle models do not — the same split
