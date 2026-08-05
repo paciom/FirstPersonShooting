@@ -427,10 +427,14 @@ public static class RobotSelectMenu
 
     /// <summary>One stage set, instantiated, fitted and painted: the standing
     /// robot to <paramref name="robotHeight"/>, everything after it to
-    /// <see cref="StageVehicleDiagonal"/>.</summary>
-    static GameObject[] BuildStageSet(Transform holder, RobotRoster.Entry entry,
+    /// <see cref="StageVehicleDiagonal"/>. <paramref name="paintSize"/> is the
+    /// repaint budget for the FINISHED form; the in-between frames never take
+    /// more than <see cref="TeamPaint.StageSize"/>, VehicleSkin's split, for
+    /// VehicleSkin's reason — full-size copies of seven blink-long frames
+    /// would cost more texture memory than the fleet.</summary>
+    internal static GameObject[] BuildStageSet(Transform holder, RobotRoster.Entry entry,
         GameObject[] sources, Color teamColor, float robotHeight,
-        System.Func<int, float> yawFor)
+        System.Func<int, float> yawFor, int paintSize = TeamPaint.CardSize)
     {
         var stages = new GameObject[sources.Length];
         for (int s = 0; s < stages.Length; s++)
@@ -454,7 +458,11 @@ public static class RobotSelectMenu
                 s == 0 ? 0f : yawFor(s));
             // Every stage, not just the robot: a fold that starts cyan and ends
             // in the other team's tank would be worse than no paint at all.
-            TeamPaint.Apply(stages[s], teamColor, TeamPaint.CardSize, false, entry.paintAnchorHue);
+            TeamPaint.Apply(stages[s], teamColor,
+                s == stages.Length - 1
+                    ? paintSize
+                    : Mathf.Min(TeamPaint.Resolve(paintSize), TeamPaint.StageSize),
+                false, entry.paintAnchorHue);
         }
         return stages;
     }
@@ -953,8 +961,12 @@ public class RobotPreviewSpinner : MonoBehaviour
 /// It carries its own copy of the shared three-point rig, placed 60 units below
 /// the thumbnail rigs so neither set of lights reaches the other.
 ///
-/// No VehicleSkin and no transformation cycle: this is for studying one form
-/// while it holds still, so the fold showcase stays on the cards.
+/// No VehicleSkin and no self-running transformation cycle — this is for
+/// studying a form while it holds still. Instead the transformation is YOURS
+/// to drive: a scrub bar under the turntable steps through every stage of
+/// robot, tank, robot, jet, robot, holding whichever one you stop on. The
+/// right pane plays the same journey as film: the generated forward clips and
+/// their reversed twins chained end to end.
 /// </summary>
 public class RobotInspector : MonoBehaviour
 {
@@ -982,6 +994,27 @@ public class RobotInspector : MonoBehaviour
     bool _isCyan;
     float _pendingDrag;
 
+    // The scrub bar's world: stage instances under the turntable, and the
+    // display list the slider steps through. A state is just "these renderers
+    // on, everything else off"; the rig's renderer set opens, punctuates and
+    // closes the list, so every robot pause is the live animated rig.
+    GameObject[] _tankStages;
+    GameObject[] _jetStages;
+    System.Collections.Generic.List<Renderer[]> _scrubStates;
+    Renderer[] _scrubShown;
+    Slider _slider;
+    Image _sliderFill;
+    Image _sliderHandle;
+
+    // The right pane's playlist: forward clip and reversed twin per form, so
+    // the film runs robot, tank, robot, jet, robot and hands back to the top.
+    // A null clip means "streamed by name from StreamingAssets", which is
+    // where the reversed twins live — matched by name rather than serialized
+    // so the roster does not have to be rebuilt into the scene to gain them.
+    readonly System.Collections.Generic.List<(UnityEngine.Video.VideoClip clip, string file)>
+        _videoChain = new System.Collections.Generic.List<(UnityEngine.Video.VideoClip, string)>();
+    int _segment;
+
     public static RobotInspector Create(GameObject root, RobotRoster roster, RobotSelectState state)
     {
         var inspector = root.AddComponent<RobotInspector>();
@@ -1003,18 +1036,26 @@ public class RobotInspector : MonoBehaviour
 
         _texture = new RenderTexture(TextureSize, TextureSize, 24) { antiAliasing = 4 };
 
-        // Square, matching the generated clips. Muted and looping: this is a
-        // silent illustration sitting next to a turntable, not a cutscene.
+        // Square, matching the generated clips. Muted: this is a silent
+        // illustration sitting next to a turntable, not a cutscene. Not
+        // looping — the player runs a PLAYLIST (robot to tank, back, to jet,
+        // back), so the end of each clip hands off to the next and the last
+        // hands back to the first.
         _videoTexture = new RenderTexture(768, 768, 0);
         var videoGo = new GameObject("TransformVideo");
         videoGo.transform.SetParent(root, false);
         _video = videoGo.AddComponent<UnityEngine.Video.VideoPlayer>();
         _video.playOnAwake = false;
-        _video.isLooping = true;
+        _video.isLooping = false;
         _video.renderMode = UnityEngine.Video.VideoRenderMode.RenderTexture;
         _video.targetTexture = _videoTexture;
         _video.audioOutputMode = UnityEngine.Video.VideoAudioOutputMode.None;
         _video.waitForFirstFrame = true;
+        _video.loopPointReached += _ =>
+        {
+            if (_videoChain.Count > 0 && _dialog != null && _dialog.activeSelf)
+                PlaySegment((_segment + 1) % _videoChain.Count);
+        };
 
         var camGo = new GameObject("InspectCam");
         camGo.transform.SetParent(rig.transform, false);
@@ -1097,9 +1138,15 @@ public class RobotInspector : MonoBehaviour
             "NO  TRANSFORMATION  CLIP", 22, new Color(1f, 1f, 1f, 0.30f), FontStyle.Normal,
             new Vector2(0.5f, 0.5f), new Vector2(305f, 55f), new Vector2(520f, 40f));
 
-        RobotSelectMenu.MakeText(panel.transform, "LeftCaption", "DRAG  TO  ROTATE", 22,
+        // The scrub bar, tucked between the turntable and its caption: one
+        // notch per stage of robot, tank, robot, jet, robot. Hidden in Open()
+        // for robots with no stages.
+        BuildScrubSlider(panel.transform, new Vector2(-305f, -212f), new Vector2(540f, 22f));
+
+        RobotSelectMenu.MakeText(panel.transform, "LeftCaption",
+            "DRAG  TO  ROTATE   ·   SLIDE  TO  TRANSFORM", 22,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
-            new Vector2(0.5f, 0.5f), new Vector2(-305f, -225f), new Vector2(560f, 30f));
+            new Vector2(0.5f, 0.5f), new Vector2(-305f, -248f), new Vector2(560f, 30f));
         RobotSelectMenu.MakeText(panel.transform, "RightCaption", "TRANSFORMATION", 22,
             new Color(1f, 1f, 1f, 0.45f), FontStyle.Normal,
             new Vector2(0.5f, 0.5f), new Vector2(305f, -225f), new Vector2(560f, 30f));
@@ -1141,14 +1188,32 @@ public class RobotInspector : MonoBehaviour
         _title.text = entry.displayName;
         _title.color = teamColor;
         _accent.color = teamColor;
+        _sliderFill.color = new Color(teamColor.r, teamColor.g, teamColor.b, 0.55f);
+        _sliderHandle.color = Color.Lerp(Color.white, teamColor, 0.35f);
 
-        // Robots that have not been through the transformation pipeline yet get
-        // the placeholder rather than a frozen frame of the previous robot's clip.
-        bool hasClip = entry.transformVideo != null;
+        BuildScrubStages(entry, teamColor);
+
+        // The playlist: each form's forward clip and its reversed twin, so the
+        // film runs the same journey as the slider — robot, tank, robot, jet,
+        // robot. A robot not yet through a pipeline just plays the pairs it
+        // has; one through neither gets the placeholder rather than a frozen
+        // frame of the previous robot's clip.
+        _videoChain.Clear();
+        if (entry.transformVideo != null)
+        {
+            _videoChain.Add((entry.transformVideo, entry.transformVideo.name));
+            _videoChain.Add((null, entry.transformVideo.name + "-back"));
+        }
+        if (entry.jetVideo != null)
+        {
+            _videoChain.Add((entry.jetVideo, entry.jetVideo.name));
+            _videoChain.Add((null, entry.jetVideo.name + "-back"));
+        }
+        bool hasClip = _videoChain.Count > 0;
         _clipView.enabled = hasClip;
         _clipMissing.enabled = !hasClip;
         if (hasClip)
-            PlayTransformClip(entry.transformVideo);
+            PlaySegment(0);
         else
             _video.Stop();
 
@@ -1157,26 +1222,171 @@ public class RobotInspector : MonoBehaviour
     }
 
     /// <summary>
-    /// Starts the clip in whichever way the current player supports.
+    /// Starts one playlist entry in whichever way the current player supports.
     ///
     /// WebGL cannot play VideoClip assets at all — the build strips the file to a
     /// stub and the player renders black, with the asset reference still non-null
     /// so nothing here looks wrong. The browser has to stream the same mp4 by URL
-    /// instead, which is why a copy lives in StreamingAssets. Everywhere else the
-    /// embedded clip is the simpler thing and stays.
+    /// instead, which is why a copy lives in StreamingAssets. Everywhere else an
+    /// embedded clip is the simpler thing and stays — except the reversed clips,
+    /// which have no serialized field ANYWHERE and stream by name on every
+    /// platform, so the roster does not have to be rebuilt into the scene to
+    /// gain them. Their files sit in StreamingAssets beside the forward copies.
     /// </summary>
-    void PlayTransformClip(UnityEngine.Video.VideoClip clip)
+    void PlaySegment(int index)
     {
+        _segment = index;
+        var segment = _videoChain[index];
 #if UNITY_WEBGL && !UNITY_EDITOR
-        // Matched by name rather than a second serialized field so the roster does
-        // not have to be rebuilt into the scene just to deploy the web build.
         _video.source = UnityEngine.Video.VideoSource.Url;
-        _video.url = $"{Application.streamingAssetsPath}/{clip.name}.mp4";
+        _video.url = $"{Application.streamingAssetsPath}/{segment.file}.mp4";
 #else
-        _video.source = UnityEngine.Video.VideoSource.VideoClip;
-        _video.clip = clip;
+        if (segment.clip != null)
+        {
+            _video.source = UnityEngine.Video.VideoSource.VideoClip;
+            _video.clip = segment.clip;
+        }
+        else
+        {
+            _video.source = UnityEngine.Video.VideoSource.Url;
+            _video.url = $"{Application.streamingAssetsPath}/{segment.file}.mp4";
+        }
 #endif
         _video.Play();
+    }
+
+    /// <summary>
+    /// The stage scrub bar: a uGUI Slider built from plain coloured images the
+    /// way everything on this canvas is, one whole number per display state.
+    /// The fill and handle take the team's colour in Open(), like the title.
+    /// </summary>
+    void BuildScrubSlider(Transform parent, Vector2 position, Vector2 size)
+    {
+        var track = RobotSelectMenu.MakeImage(parent, "ScrubBar",
+            new Color(0.03f, 0.07f, 0.12f, 0.95f));
+        var rect = track.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+
+        // Fill and handle runs are inset by half the handle so the handle's
+        // CENTRE spans the track and its ends never hang past the corners.
+        var fillArea = new GameObject("FillArea").AddComponent<RectTransform>();
+        fillArea.SetParent(track.transform, false);
+        fillArea.anchorMin = Vector2.zero;
+        fillArea.anchorMax = Vector2.one;
+        fillArea.offsetMin = new Vector2(11f, 5f);
+        fillArea.offsetMax = new Vector2(-11f, -5f);
+
+        _sliderFill = RobotSelectMenu.MakeImage(fillArea, "Fill", RobotSelectMenu.HoloCyan);
+        var fillRect = _sliderFill.rectTransform;
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
+
+        var handleArea = new GameObject("HandleArea").AddComponent<RectTransform>();
+        handleArea.SetParent(track.transform, false);
+        handleArea.anchorMin = Vector2.zero;
+        handleArea.anchorMax = Vector2.one;
+        handleArea.offsetMin = new Vector2(11f, 0f);
+        handleArea.offsetMax = new Vector2(-11f, 0f);
+
+        _sliderHandle = RobotSelectMenu.MakeImage(handleArea, "Handle", Color.white);
+        _sliderHandle.rectTransform.sizeDelta = new Vector2(22f, 32f);
+
+        _slider = track.gameObject.AddComponent<Slider>();
+        _slider.targetGraphic = _sliderHandle;
+        _slider.fillRect = fillRect;
+        _slider.handleRect = _sliderHandle.rectTransform;
+        _slider.minValue = 0f;
+        _slider.maxValue = 1f;
+        _slider.wholeNumbers = true;
+        _slider.onValueChanged.AddListener(value => ApplyScrub(Mathf.RoundToInt(value)));
+    }
+
+    /// <summary>
+    /// Instantiates one robot's scrub stages and rebuilds the display list the
+    /// slider walks: rig, tank fold out and back, rig, jet fold out and back,
+    /// rig. Hidden entirely for robots that have no stages.
+    /// </summary>
+    void BuildScrubStages(RobotRoster.Entry entry, Color teamColor)
+    {
+        bool hasStages = entry.HasStages && _model != null;
+        _slider.gameObject.SetActive(hasStages);
+        if (!hasStages)
+            return;
+
+        // Fitted against the SAME height the rig is normalised to, so the
+        // first notch off the rig changes pose, not size. Full paint budget
+        // for the finished forms — this is the pane you open to judge paint.
+        _tankStages = RobotSelectMenu.BuildStageSet(_turntable, entry, entry.transformStages,
+            teamColor, 1.6f, _ => RobotSelectMenu.StageYawOffset, TeamPaint.DefaultSize);
+        if (entry.HasJetStages)
+        {
+            // The jet set's frame split and craft yaw are JetPawn's own — the
+            // same stages turn the same way here as in the DOGFIGHT sky.
+            int robotFrames = JetPawn.JetRobotFramesFor(entry.displayName);
+            _jetStages = RobotSelectMenu.BuildStageSet(_turntable, entry, entry.jetStages,
+                teamColor, 1.6f, s => s < robotFrames ? 0f : JetPawn.StageYaw,
+                TeamPaint.DefaultSize);
+        }
+
+        var rig = _model.GetComponentsInChildren<Renderer>(true);
+        _scrubStates = new System.Collections.Generic.List<Renderer[]> { rig };
+        AppendFold(_tankStages, rig);
+        if (_jetStages != null)
+            AppendFold(_jetStages, rig);
+
+        // Value first, silently, THEN the range: the maxValue setter re-clamps
+        // and re-Sets the current value, and a leftover value from the last
+        // robot would fire ApplyScrub into a half-built display list.
+        _slider.SetValueWithoutNotify(0f);
+        _slider.maxValue = _scrubStates.Count - 1;
+        _scrubShown = rig;
+    }
+
+    /// <summary>
+    /// Appends one set's out-and-back walk: its stages forward to the finished
+    /// form, back down again, then the rig. The set's own stage one — a static
+    /// copy of the robot — is switched off here and never listed; every robot
+    /// pause on the bar is the live rig.
+    /// </summary>
+    void AppendFold(GameObject[] stages, Renderer[] rig)
+    {
+        var renderers = new Renderer[stages.Length][];
+        for (int s = 0; s < stages.Length; s++)
+        {
+            renderers[s] = stages[s] != null
+                ? stages[s].GetComponentsInChildren<Renderer>(true)
+                : new Renderer[0];
+            foreach (var r in renderers[s])
+                r.enabled = false;
+        }
+        for (int s = 1; s < stages.Length; s++)
+            _scrubStates.Add(renderers[s]);
+        for (int s = stages.Length - 2; s >= 1; s--)
+            _scrubStates.Add(renderers[s]);
+        _scrubStates.Add(rig);
+    }
+
+    void ApplyScrub(int state)
+    {
+        if (_scrubStates == null || _scrubStates.Count == 0)
+            return;
+        var target = _scrubStates[Mathf.Clamp(state, 0, _scrubStates.Count - 1)];
+        // Reference compare on purpose: a stage sits in the list twice (out and
+        // back) and the rig three times, all as the same array.
+        if (target == _scrubShown)
+            return;
+        if (_scrubShown != null)
+            foreach (var r in _scrubShown)
+                if (r != null)
+                    r.enabled = false;
+        foreach (var r in target)
+            if (r != null)
+                r.enabled = true;
+        _scrubShown = target;
     }
 
     public void Close()
@@ -1204,6 +1414,13 @@ public class RobotInspector : MonoBehaviour
 
     void ClearModel()
     {
+        DestroySet(_tankStages);
+        DestroySet(_jetStages);
+        _tankStages = null;
+        _jetStages = null;
+        _scrubStates = null;
+        _scrubShown = null;
+
         if (_model == null)
             return;
         // Deactivate as well as destroy: Destroy only takes effect at the end of
@@ -1211,6 +1428,19 @@ public class RobotInspector : MonoBehaviour
         _model.SetActive(false);
         Destroy(_model);
         _model = null;
+    }
+
+    static void DestroySet(GameObject[] stages)
+    {
+        if (stages == null)
+            return;
+        foreach (var stage in stages)
+            if (stage != null)
+            {
+                // Same deactivate-then-destroy the model gets, same reason.
+                stage.SetActive(false);
+                Destroy(stage);
+            }
     }
 
     void Update()
