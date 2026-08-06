@@ -26,6 +26,7 @@ stand is a gun with a stand welded to its barrel.
   python meshyweapons.py thumbs <dir>
   python meshyweapons.py refine <name> [name ...]
   python meshyweapons.py download [name ...]
+  python meshyweapons.py redo <name> [name ...]  # forget, so preview buys again
 """
 import json
 import os
@@ -43,10 +44,18 @@ API = "https://api.meshy.ai/openapi"
 
 STYLE = ("chunky stylised low-poly toy look, clean flat panels, glowing light strips, "
          "friendly sci-fi, held weapon with a pistol grip and trigger, barrel pointing "
-         "along its length, floating in empty space, no base, no pedestal, no stand, "
-         "no hands, no arms")
-NEGATIVE = ("base, pedestal, stand, platform, ground plane, shadow plane, text, logo, "
-            "hand, arm, human, soldier, gore, realistic military, rust, dirt")
+         "along its length, ONE single connected object and nothing else in frame, "
+         "floating in empty space, no base, no pedestal, no stand, no hands, no arms")
+
+# The ground disc is the failure mode worth naming ten different ways. The first
+# run came back with a stand or a floating coin under one weapon in six, and it
+# is the one defect that cannot be lived with: WeaponArt sizes a prop by its
+# BOUNDS, so a disc a hand's width below the grip shrinks the gun to make room
+# for it and hangs it off-centre in front of the camera.
+NEGATIVE = ("base, pedestal, stand, tripod, plinth, mount, display base, ground disc, "
+            "floor disc, coin, puck, platform, ground plane, shadow plane, "
+            "second object, separate object, floating debris, loose parts, "
+            "text, logo, hand, arm, human, soldier, gore, realistic military, rust, dirt")
 
 # (shape, colours). Shape goes in the preview prompt and decides the geometry;
 # colours go in the refine texture_prompt and decide nothing but the paint.
@@ -85,8 +94,8 @@ WEAPONS = {
     "mirror-ricochet": ("boxy rifle with angled mirror plates folded along the barrel and "
                         "a reflective muzzle wedge",
                         "polished silver panels with pale blue reflections"),
-    "halo-ring-gun": ("ring launcher with a large open circular muzzle hoop and a thin "
-                      "body underneath",
+    "halo-ring-gun": ("pistol with a thin open ring hoop standing at the muzzle like a "
+                      "bubble wand, nothing filling the ring",
                       "white body with a glowing gold ring"),
     "blacklight-marker": ("slim marker pistol with a stubby UV lamp head and a small side "
                           "canister",
@@ -119,8 +128,8 @@ WEAPONS = {
     "ember-gatling": ("compact gatling gun with six short rotating barrels and a side "
                       "ammo drum",
                       "soot black barrels glowing ember orange, brass drum"),
-    "magma-mortar": ("squat mortar with a thick flared tube angled upward and a chunky "
-                     "base plate",
+    "magma-mortar": ("squat handheld mortar with a thick flared tube angled upward and a "
+                     "heavy pistol grip below it",
                      "charcoal iron with cracked glowing lava seams"),
     "phoenix-dart": ("sleek dart rifle with swept feather-like fins along the barrel",
                      "crimson and gold plumage plating with a fiery muzzle"),
@@ -135,8 +144,8 @@ WEAPONS = {
     "icicle-flechette": ("needle gun with a cluster of long thin ice spikes fanned at the "
                          "muzzle",
                          "frosted white body with translucent pale blue spikes"),
-    "snowglobe-grenade": ("stubby launcher with a clear round globe chamber holding "
-                          "swirling snow",
+    "snowglobe-grenade": ("stubby grenade pistol with a clear round snow globe loaded into "
+                          "the top of the barrel",
                           "white and silver casing with a clear glass globe"),
     "glacier-wall": ("broad projector with a flat wide emitter plate like a shield and "
                      "two side cylinders",
@@ -222,7 +231,8 @@ WEAPONS = {
                       "chrome disc with cyan edge glow on a dark grey thrower"),
     "shrink-ray": ("bulbous ray gun with a tapering coil barrel and a big dial on the side",
                    "retro mint green shell with a pink coil and chrome dial"),
-    "mimic-cube": ("boxy launcher with a small floating cube held in an open front frame",
+    "mimic-cube": ("blocky ray gun with a small checkered cube socketed into the top of "
+                   "the barrel",
                    "matte white frame with a glossy checkered cube"),
     "fireworks-finale": ("bundle of five short firework tubes strapped together over a "
                          "simple grip",
@@ -283,6 +293,28 @@ def save(data):
 
 def balance():
     return call("GET", "/v1/balance")["balance"]
+
+
+def redo(names):
+    """
+    Forget the tasks for named weapons so preview will buy them again.
+
+    Needed because `preview` deliberately skips anything already generated —
+    which is what makes a re-run after a dropped connection safe, and also what
+    makes re-rolling a bad model impossible without this. Separate command
+    rather than a flag on preview: forgetting is the destructive half, and it
+    should be something you typed on purpose.
+
+    The old task ids are printed on the way out. Meshy keeps them, so a re-roll
+    that comes out worse than what it replaced is recoverable.
+    """
+    if not names:
+        raise SystemExit("redo takes names — it throws away task ids")
+    data = state()
+    for name in pick(names):
+        old = data.pop(name, {})
+        print(f"{name:22s} forgot {old.get('preview', '-')} / {old.get('refine', '-')}")
+    save(data)
 
 
 def pick(names):
@@ -423,6 +455,8 @@ if __name__ == "__main__":
         refine(rest)
     elif command == "download":
         download(rest)
+    elif command == "redo":
+        redo(rest)
     elif command == "thumbs":
         thumbs(rest[0] if rest else f"{ROOT}/Tools/weapon_thumbs")
     else:
