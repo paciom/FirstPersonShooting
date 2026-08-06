@@ -83,12 +83,105 @@ public static class WebGLBuilder
         {
             var mb = summary.totalSize / (1024f * 1024f);
             Debug.Log($"[WebGLBuilder] SUCCESS — {mb:F1} MB in {summary.totalTime.TotalMinutes:F1} min at {outPath}");
+            StampBuildFolder(outPath);
             if (exitWhenDone) EditorApplication.Exit(0);
         }
         else
         {
             Debug.LogError($"[WebGLBuilder] FAILED: {summary.result}, {summary.totalErrors} error(s).");
             if (exitWhenDone) EditorApplication.Exit(1);
+        }
+    }
+
+    /// <summary>
+    /// Renames the player's Build folder to Build-&lt;hash&gt; and points index.html
+    /// at it, so every deploy publishes its payload under a URL nobody has ever
+    /// cached.
+    ///
+    /// The player is four files whose names never change, served with a long
+    /// max-age. A returning visitor therefore reuses whatever they already have:
+    /// index.html is no-cache so it is always current, but the data file beside
+    /// it can be a build old. New code against old data does not fail cleanly --
+    /// it produces garbage that floods stderr until the JS stack gives out
+    /// ("Maximum call stack size exceeded" inside Object.write). Purging the CDN
+    /// does not help; the stale copy is on the player's own disk, and Unity's
+    /// dataCaching keeps a second copy in IndexedDB keyed by the same URL.
+    ///
+    /// Hashing the payload rather than stamping the clock means an unchanged
+    /// rebuild keeps its URL, so returning players stay on their cached copy.
+    /// </summary>
+    static void StampBuildFolder(string outPath)
+    {
+        string buildDir = Path.Combine(outPath, "Build");
+        string indexPath = Path.Combine(outPath, "index.html");
+
+        if (!Directory.Exists(buildDir) || !File.Exists(indexPath))
+        {
+            Debug.LogWarning($"[WebGLBuilder] No Build folder or index.html under {outPath} — " +
+                             "skipping the cache-busting rename.");
+            return;
+        }
+
+        string hash = HashPayload(buildDir);
+        string stamped = "Build-" + hash;
+        string stampedDir = Path.Combine(outPath, stamped);
+
+        // Clear out any previous build's folder: the deploy uploads whatever is
+        // here, and shipping several hundred MB of superseded payload is worse
+        // than the problem this fixes.
+        foreach (string dir in Directory.GetDirectories(outPath, "Build-*"))
+            if (dir != stampedDir) Directory.Delete(dir, recursive: true);
+
+        if (Directory.Exists(stampedDir)) Directory.Delete(stampedDir, recursive: true);
+        Directory.Move(buildDir, stampedDir);
+
+        // One reference to rewrite: the template derives loader, data, framework
+        // and code URLs from this single variable.
+        string html = File.ReadAllText(indexPath);
+        string replaced = html.Replace("var buildUrl = \"Build\";", $"var buildUrl = \"{stamped}\";");
+        if (replaced == html)
+        {
+            // Fail loudly rather than deploy an index.html pointing at a folder
+            // that no longer exists — that is a blank page, not a stale one.
+            Directory.Move(stampedDir, buildDir);
+            Debug.LogError("[WebGLBuilder] Could not find `var buildUrl = \"Build\";` in index.html. " +
+                           "The template changed; the rename has been undone.");
+            return;
+        }
+        File.WriteAllText(indexPath, replaced);
+
+        Debug.Log($"[WebGLBuilder] Payload published as {stamped}/ — every file now sits at a URL " +
+                  "no browser has cached.");
+    }
+
+    /// <summary>
+    /// Short content hash over the payload. Reads the files rather than trusting
+    /// timestamps so that a rebuild producing identical bytes keeps its URL.
+    /// </summary>
+    static string HashPayload(string buildDir)
+    {
+        var files = Directory.GetFiles(buildDir);
+        System.Array.Sort(files, System.StringComparer.Ordinal);   // stable across machines
+
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+        {
+            foreach (string file in files)
+            {
+                byte[] name = System.Text.Encoding.UTF8.GetBytes(Path.GetFileName(file));
+                sha.TransformBlock(name, 0, name.Length, null, 0);
+                using (var stream = File.OpenRead(file))
+                {
+                    var buffer = new byte[1 << 20];
+                    int read;
+                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        sha.TransformBlock(buffer, 0, read, null, 0);
+                }
+            }
+            sha.TransformFinalBlock(System.Array.Empty<byte>(), 0, 0);
+
+            var text = new System.Text.StringBuilder(12);
+            for (int i = 0; i < 6; i++) text.Append(sha.Hash[i].ToString("x2"));
+            return text.ToString();
         }
     }
 

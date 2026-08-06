@@ -95,8 +95,23 @@ foreach ($file in $files) {
     $contentType = $ContentTypes[$ext]
     if (-not $contentType) { $contentType = 'application/octet-stream' }
 
-    # index.html must never be cached or players keep loading the previous build.
-    $cache = if ($rel -eq 'index.html') { 'no-cache' } else { 'public, max-age=86400' }
+    # index.html is the only mutable file and must never be cached: it is what
+    # tells a browser which Build-<hash> folder is current.
+    #
+    # Everything under Build-<hash>/ is immutable by construction -- change the
+    # payload and the hash changes with it -- so it can be cached for a year.
+    # That is the point of the hashed folder: returning players reuse their copy
+    # with no network at all, and can never pair it with a newer index.html.
+    #
+    # StreamingAssets keeps a modest TTL. Those names are stable across builds,
+    # so a long cache there would strand players on last build's video clips.
+    if ($rel -eq 'index.html') {
+        $cache = 'no-cache'
+    } elseif ($rel -like 'Build-*') {
+        $cache = 'public, max-age=31536000, immutable'
+    } else {
+        $cache = 'public, max-age=86400'
+    }
 
     $args = @(
         'storage', 'blob', 'upload',
