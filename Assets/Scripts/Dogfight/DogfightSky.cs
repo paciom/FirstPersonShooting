@@ -387,6 +387,7 @@ public class DogfightSky : MonoBehaviour
             float height = Mathf.Lerp(4f, FloorY * 0.65f, (float)random.NextDouble());
             float width = Mathf.Lerp(3f, 7f, (float)random.NextDouble());
             Vector3 at = Quaternion.Euler(0f, azimuth, 0f) * Vector3.forward * distance;
+            at = KeepOffPavement(at, width * 0.5f + 2f);
 
             var spire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             spire.name = "Spire";
@@ -407,6 +408,31 @@ public class DogfightSky : MonoBehaviour
             Spires.Add(spire.transform);
             SpireRadii.Add(width * 0.5f);
         }
+    }
+
+    /// <summary>A spire footprint may not stand on the airfield's paved
+    /// rectangles — rock through the runway centreline reads as a mistake,
+    /// not scenery. Pushed sideways to the nearer shoulder, which keeps the
+    /// ring shape while clearing the pavement.</summary>
+    static Vector3 KeepOffPavement(Vector3 at, float clearance)
+    {
+        foreach (float runwayX in RunwayX)
+            at = PushOutX(at, runwayX, RunwayWidth * 0.5f, RunwayLength * 0.5f, clearance);
+        // The apron under the terminal district (see BuildGround).
+        at = PushOutX(at, -155f, 47.5f, 140f, clearance);
+        return at;
+    }
+
+    static Vector3 PushOutX(Vector3 at, float centerX, float halfWidth,
+        float halfLength, float clearance)
+    {
+        if (Mathf.Abs(at.z) > halfLength + clearance)
+            return at;
+        float offset = at.x - centerX;
+        float want = halfWidth + clearance;
+        if (Mathf.Abs(offset) >= want)
+            return at;
+        return new Vector3(centerX + Mathf.Sign(offset) * want, at.y, at.z);
     }
 
     /// <summary>Soft puffs drifting through the fight band. Pure speed cues —
