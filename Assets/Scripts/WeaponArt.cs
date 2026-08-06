@@ -117,8 +117,12 @@ public static class WeaponArt
     /// Generated models do not agree on which way they point — the same problem
     /// VehicleSkin.FitToRobot solves for tanks — and a gun is by far longest
     /// along its barrel, so the long axis IS the barrel. Which END is the muzzle
-    /// is still a coin flip; the generator is asked for barrel-forward models,
-    /// and a weapon that comes out backwards is one 180 in its own prefab.
+    /// is NOT a coin flip in practice: Meshy puts the muzzle at the same end on
+    /// 54 of the 60 (measured by Tools/weaponorient.py — thin end = muzzle),
+    /// and the -90 yaw here is the sign that sends it forward, the same sign
+    /// ArenaBuilder.BuildBlaster uses on the imported blaster. The handful of
+    /// files that came out the other way round carry a baked 180 in the GLB
+    /// itself (Tools/weaponflip.py), so every file obeys this one convention.
     /// </summary>
     static void NormalizeAlongZ(GameObject instance)
     {
@@ -130,7 +134,7 @@ public static class WeaponArt
         // Rotate BEFORE measuring again: turning a model afterwards moves it off
         // the centring solved for its old orientation.
         if (size.x > size.z && size.x > size.y)
-            instance.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+            instance.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
         else if (size.y > size.z && size.y > size.x)
             instance.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
@@ -138,17 +142,49 @@ public static class WeaponArt
         float longest = Mathf.Max(0.01f, bounds.size.z);
         instance.transform.localScale *= PropLength / longest;
 
+        // Measure returns parent-space bounds, so the centre IS the offset.
         bounds = Measure(instance);
-        Vector3 centre = instance.transform.parent != null
-            ? instance.transform.parent.InverseTransformPoint(bounds.center)
-            : bounds.center;
-        instance.transform.localPosition -= centre;
+        instance.transform.localPosition -= bounds.center;
     }
 
+    /// <summary>
+    /// Bounds in the PARENT's frame, not the world's. World-axis bounds only
+    /// match while the parent happens to face world +Z; a prop built on a bot
+    /// facing east — or under a camera mid-turn — would measure a rotated
+    /// AABB, pick the wrong "longest" axis and scale against an inflated
+    /// length. Mesh bounds are metadata, so this needs no readable geometry.
+    /// </summary>
     static Bounds Measure(GameObject instance)
     {
-        var renderers = instance.GetComponentsInChildren<Renderer>(true);
-        return RobotFactory.MeasureWorldBounds(renderers);
+        Transform parent = instance.transform.parent;
+        Matrix4x4 toParent = parent != null ? parent.worldToLocalMatrix : Matrix4x4.identity;
+
+        bool any = false;
+        var total = new Bounds();
+        foreach (var renderer in instance.GetComponentsInChildren<Renderer>(true))
+        {
+            Bounds local;
+            var filter = renderer.GetComponent<MeshFilter>();
+            if (filter != null && filter.sharedMesh != null)
+                local = filter.sharedMesh.bounds;
+            else if (renderer is SkinnedMeshRenderer skinned)
+                local = skinned.localBounds;
+            else
+                continue;
+
+            Matrix4x4 matrix = toParent * renderer.transform.localToWorldMatrix;
+            Vector3 c = local.center, e = local.extents;
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = matrix.MultiplyPoint3x4(c + Vector3.Scale(e,
+                    new Vector3((i & 1) == 0 ? -1f : 1f,
+                                (i & 2) == 0 ? -1f : 1f,
+                                (i & 4) == 0 ? -1f : 1f)));
+                if (!any) { total = new Bounds(corner, Vector3.zero); any = true; }
+                else total.Encapsulate(corner);
+            }
+        }
+        return total;
     }
 
     /// <summary>

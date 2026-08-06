@@ -231,6 +231,13 @@ public class AIBrain : MonoBehaviour
     }
 
     /// <summary>
+    /// What the bot is firing right now. Read by HeldWeaponMount so the gun in
+    /// its hands is the gun in the fight — the same contract PlayerBrain's
+    /// ActiveWeapon() gives the first-person viewmodel.
+    /// </summary>
+    public Weapon ActiveWeapon() => _active;
+
+    /// <summary>
     /// Debug lock: force this bot onto one slot of its usable set (-1 releases
     /// it). The console grants the weapon through the loadout first, so pick up
     /// that change before validating the index.

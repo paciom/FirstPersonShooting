@@ -19,6 +19,14 @@ using UnityEngine;
 ///
 /// Vehicle form hides it outright: the tank has its own mounted siege kit, so a
 /// hand blaster hanging in the air above a tank is just a floating prop.
+///
+/// ON A BOT THIS ALSO SWAPS THE PROP. The blaster the arsenal is bolted to is
+/// only the DEFAULT look; when the bot's AIBrain switches to a weapon that has
+/// a generated model, the blaster's renderers go dark and that weapon's prop
+/// rides the bone instead — the same swap WeaponViewModel performs for the
+/// player's hands, driven by the same has-a-model test, so a bot visibly
+/// carries what it is firing. The player's own mount never does this: it has
+/// no AIBrain above it, and WeaponViewModel owns that job in first person.
 /// </summary>
 public class HeldWeaponMount : MonoBehaviour
 {
@@ -39,10 +47,20 @@ public class HeldWeaponMount : MonoBehaviour
     [Tooltip("Hide the prop while transformed. The tank carries its own guns.")]
     public bool hideInVehicleForm = true;
 
+    /// <summary>Name of the child the swapped-in prop hangs under.</summary>
+    const string PropAnchorName = "WeaponProp";
+
     Transform _bone;
     TransformMode _transformMode;
     Renderer[] _renderers;
     bool _hidden;
+
+    // Bot-only prop swap state; all of it stays null on the player.
+    AIBrain _brain;
+    Transform _propAnchor;
+    GameObject _prop;
+    Weapon _shownWeapon;
+    bool _blasterShown = true;
 
     /// <summary>
     /// The prop's own build-time rotation, which is what turns the imported
@@ -58,14 +76,24 @@ public class HeldWeaponMount : MonoBehaviour
         if (modelHolder == null)
             modelHolder = transform.parent;
         _transformMode = GetComponentInParent<TransformMode>();
+
+        // A reinforcement clone copies the donor's anchor and prop along with
+        // everything else. Immediate, not deferred: the renderer cache below
+        // must not sweep up a doomed prop as part of the blaster.
+        var stale = transform.Find(PropAnchorName);
+        if (stale != null)
+            DestroyImmediate(stale.gameObject);
+
         _renderers = GetComponentsInChildren<Renderer>(true);
         _modelAlignment = transform.localRotation;
+        _brain = GetComponentInParent<AIBrain>();
     }
 
     // LateUpdate, so the Animator has already posed the skeleton this frame;
     // reading a bone in Update lags the robot by a frame and the gun swims.
     void LateUpdate()
     {
+        UpdateProp();
         UpdateVisibility();
 
         // No bones listed means "just handle visibility" — that is the player's
@@ -87,21 +115,71 @@ public class HeldWeaponMount : MonoBehaviour
         transform.rotation = character.rotation * Quaternion.Euler(mountEuler) * _modelAlignment;
     }
 
-    void UpdateVisibility()
+    /// <summary>
+    /// Swap the visible prop to the bot's active weapon, exactly as
+    /// WeaponViewModel does for the player: only weapons that really have a
+    /// model displace the blaster, so the arsenal improves one gun at a time
+    /// instead of most of it degrading to the fallback silhouette.
+    /// </summary>
+    void UpdateProp()
     {
-        if (!hideInVehicleForm || _transformMode == null)
+        if (_brain == null)
             return;
 
+        var wanted = _brain.ActiveWeapon();
+        var show = wanted != null && WeaponArt.HasModel(wanted) ? wanted : null;
+        if (show == _shownWeapon)
+            return;
+        _shownWeapon = show;
+
+        if (_prop != null)
+            Destroy(_prop);
+        _prop = show != null ? WeaponArt.BuildProp(show, PropAnchor()) : null;
+    }
+
+    /// <summary>
+    /// Where swapped-in props live: a child that cancels the blaster's own
+    /// alignment spin — the mount's rotation ends in <see cref="_modelAlignment"/>,
+    /// which turns the BLASTER model barrel-forward and would turn an
+    /// already-normalized prop sideways — and cancels its scale, so the prop
+    /// normalizes against honest metres rather than the blaster's shrink
+    /// factor. Built on demand: the player's mount never needs one.
+    /// </summary>
+    Transform PropAnchor()
+    {
+        if (_propAnchor != null)
+            return _propAnchor;
+
+        var go = new GameObject(PropAnchorName);
+        go.transform.SetParent(transform, false);
+        _propAnchor = go.transform;
+        _propAnchor.localRotation = Quaternion.Inverse(_modelAlignment);
+        Vector3 lossy = transform.lossyScale;
+        _propAnchor.localScale = new Vector3(
+            1f / Mathf.Max(1e-4f, lossy.x),
+            1f / Mathf.Max(1e-4f, lossy.y),
+            1f / Mathf.Max(1e-4f, lossy.z));
+        return _propAnchor;
+    }
+
+    void UpdateVisibility()
+    {
         // Hidden for the whole fold as well as the vehicle itself: the prop has
         // nowhere sensible to sit once the robot stops being humanoid.
-        bool hide = _transformMode.IsVehicle || _transformMode.IsBusy;
-        if (hide == _hidden)
+        bool hide = hideInVehicleForm && _transformMode != null
+            && (_transformMode.IsVehicle || _transformMode.IsBusy);
+        // The blaster additionally stands down while a real prop is shown.
+        bool blasterOn = !hide && _prop == null;
+        if (hide == _hidden && blasterOn == _blasterShown)
             return;
         _hidden = hide;
+        _blasterShown = blasterOn;
 
         foreach (var renderer in _renderers)
             if (renderer != null)
-                renderer.enabled = !hide;
+                renderer.enabled = blasterOn;
+        if (_propAnchor != null)
+            _propAnchor.gameObject.SetActive(!hide);
     }
 
     /// <summary>
