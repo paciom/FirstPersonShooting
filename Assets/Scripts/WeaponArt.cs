@@ -40,12 +40,18 @@ public static class WeaponArt
     /// including the misses — a Resources.Load that fails is not free, and this
     /// is asked once per weapon per icon and once per weapon swap.
     /// </summary>
-    public static GameObject ModelFor(Weapon weapon)
-    {
-        if (weapon == null)
-            return null;
+    public static GameObject ModelFor(Weapon weapon) =>
+        weapon != null ? ModelForType(weapon.GetType()) : null;
 
-        var type = weapon.GetType();
+    /// <summary>
+    /// The same lookup by type, for callers with no instance to hand — the
+    /// editor audit walks the catalogue, where the weapons are types and
+    /// nothing has been spawned yet.
+    /// </summary>
+    public static GameObject ModelForType(System.Type type)
+    {
+        if (type == null)
+            return null;
         if (Loaded.TryGetValue(type, out var cached))
             return cached;
 
