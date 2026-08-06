@@ -232,6 +232,12 @@ public class PlayerBrain : MonoBehaviour
                     SetActiveWeapon(i);
         }
 
+        // TAB opens the same rack the ARMS button does. In Player v AI the
+        // whole catalogue is carried, and nine number keys and a pair of cycle
+        // arrows are no way to find one gun in sixty.
+        if (Input.GetKeyDown(KeyCode.Tab))
+            TouchControls.ToggleWeaponRack();
+
         // A slot tapped in the on-screen weapon panel is an absolute choice,
         // so it wins over any cycling in the same frame.
         if (touch != null)
@@ -272,6 +278,11 @@ public class PlayerBrain : MonoBehaviour
         _activeWeapon = Mathf.Clamp(index, 0, weapons.Length - 1);
     }
 
-    Weapon ActiveWeapon() =>
+    /// <summary>
+    /// The gun in hand. Public because the first-person viewmodel is built on
+    /// it — the prop hanging off the camera has to be whichever weapon this is,
+    /// and the muzzle light it flashes is what shakes it.
+    /// </summary>
+    public Weapon ActiveWeapon() =>
         (weapons != null && weapons.Length > 0) ? weapons[_activeWeapon] : null;
 }

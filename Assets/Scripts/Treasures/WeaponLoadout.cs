@@ -45,11 +45,47 @@ public class WeaponLoadout : MonoBehaviour
     /// <summary>Basics first (stable slots), then the granted treasure weapon if any.</summary>
     public Weapon[] Available { get { EnsureBuilt(); return _available; } }
 
+    /// <summary>
+    /// Whether this match arms everyone with everything.
+    ///
+    /// STATIC, not a field per character, because characters are BORN mid-match:
+    /// TeamRoster sizes the teams by cloning, and RobotReinforcements buys more
+    /// robots out of the team bank. A flag set on each loadout at match start
+    /// would be missed by every one of them — Unity does not serialize
+    /// auto-property backing fields, so a clone would not even inherit its
+    /// template's. Read at <see cref="Rebuild"/> time instead, which every
+    /// loadout runs from its own Awake, so a robot built five minutes in comes
+    /// up armed the same as one that started the match.
+    /// </summary>
+    public static bool FullArsenalMatch { get; private set; }
+
+    /// <summary>
+    /// Turn the whole arsenal on or off for the match, and re-arm everyone
+    /// already standing. Called by GameModeController on the way into a mode.
+    /// </summary>
+    public static void SetFullArsenalMatch(bool on)
+    {
+        if (FullArsenalMatch == on)
+            return;
+        FullArsenalMatch = on;
+
+        foreach (var loadout in FindObjectsByType<WeaponLoadout>(FindObjectsInactive.Include,
+                                                                 FindObjectsSortMode.None))
+            if (loadout != null)
+                loadout.Rebuild();
+    }
+
     /// <summary>The treasure weapon currently equipped, or null.</summary>
     public Weapon Special { get; private set; }
 
-    /// <summary>Index of the treasure weapon inside <see cref="Available"/>, or -1.</summary>
-    public int SpecialSlot => Special != null ? Available.Length - 1 : -1;
+    /// <summary>
+    /// Index of the treasure weapon inside <see cref="Available"/>, or -1.
+    ///
+    /// Searched rather than assumed to be last: that only holds when the usable
+    /// set is "basics plus the grant", and a full-arsenal match carries every
+    /// weapon in catalogue order.
+    /// </summary>
+    public int SpecialSlot => Special != null ? SlotOf(Special) : -1;
 
     /// <summary>Seconds of treasure weapon left; infinite while the debug console holds it.</summary>
     public float SpecialSecondsLeft =>
@@ -138,6 +174,11 @@ public class WeaponLoadout : MonoBehaviour
             return null;
         if (IsBasic(index))
             return all[index];
+        // Already carrying it, along with everything else. Handed back without
+        // becoming the Special, so the HUD doesn't start a countdown on a gun
+        // that cannot expire.
+        if (FullArsenalMatch)
+            return all[index];
 
         Special = all[index];
         _specialUntil = Time.time + duration;
@@ -205,6 +246,28 @@ public class WeaponLoadout : MonoBehaviour
         if (VehicleMode)
         {
             _available = HasVehicleWeapons ? vehicleWeapons : FirstBasic();
+            _version++;
+            return;
+        }
+
+        // Everything, in catalogue order — which is also the order the picker's
+        // tabs walk, so slot numbers and the rack agree.
+        if (FullArsenalMatch)
+        {
+            int carried = 0;
+            if (all != null)
+                foreach (var weapon in all)
+                    if (weapon != null)
+                        carried++;
+
+            var everything = new Weapon[carried];
+            int next = 0;
+            if (all != null)
+                foreach (var weapon in all)
+                    if (weapon != null)
+                        everything[next++] = weapon;
+
+            _available = everything;
             _version++;
             return;
         }

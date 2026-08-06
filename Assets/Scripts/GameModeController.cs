@@ -132,6 +132,10 @@ public class GameModeController : MonoBehaviour
             // is first person.
             if (_player.GetComponent<FirstPersonBody>() == null)
                 _player.AddComponent<FirstPersonBody>();
+            // ...and the gun in front of it becomes whichever one is selected,
+            // rather than the laser blaster the whole arsenal happens to be
+            // bolted to.
+            WeaponViewModel.Ensure(_playerBrain, _player.transform.Find("Head"));
         }
         _deRezEffects = FindObjectsByType<DeRezEffect>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         _blockManager = GetComponent<ArenaBlockManager>();
@@ -294,6 +298,10 @@ public class GameModeController : MonoBehaviour
     /// </summary>
     void ResetMatchState()
     {
+        // Back to basics-plus-treasure. Cleared for every mode entry, so the
+        // one mode that wants the whole arsenal turns it on afterwards and no
+        // other mode can inherit it.
+        WeaponLoadout.SetFullArsenalMatch(false);
         _treasureSpawner?.EndMatch();
         RobotReinforcements.DespawnAll();
         // Puts the scene's own cast back the way it was found — the robots a
@@ -728,6 +736,12 @@ public class GameModeController : MonoBehaviour
         // three allies. Before the brains come on and after the arena loaded:
         // slots are read off the live arena's spawn lines.
         TeamRoster.Apply(TeamSize.PerTeam, playerPlays: true);
+
+        // Everyone gets everything here — the player picks from the ARMS rack,
+        // the bots roll the whole catalogue. Only this mode: elsewhere a Weapon
+        // Pod is worth crossing the arena for, and a mode where you already own
+        // every gun has nothing to airdrop.
+        WeaponLoadout.SetFullArsenalMatch(true);
 
         if (_player != null)
         {

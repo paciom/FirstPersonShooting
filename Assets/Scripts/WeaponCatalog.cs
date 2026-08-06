@@ -14,79 +14,153 @@ using UnityEngine;
 public static class WeaponCatalog
 {
     /// <summary>
-    /// Every expanded weapon, in canonical order. A list of types rather than a
-    /// list of AddComponent calls so that <see cref="TopUp"/> can tell what a
-    /// character is missing without a second copy of the list to keep in step.
+    /// A named family of weapons — one tab in the arsenal picker.
+    ///
+    /// The families are not new: they were the comment headings that had always
+    /// separated the catalogue. Sixty guns in one flat list is unusable in a
+    /// picker and unmemorable in the hand, and the headings were already the
+    /// grouping a player would guess at.
     /// </summary>
-    public static readonly System.Type[] Types =
+    public sealed class Group
     {
-        // Light & photon
-        typeof(PrismSplitter),
-        typeof(StrobeBurst),
-        typeof(SunflareCannon),
-        typeof(GlowwormLauncher),
-        typeof(MirrorRicochet),
-        typeof(HaloRingGun),
-        typeof(BlacklightMarker),
-        // Electric & magnetic
-        typeof(ArcWhip),
-        typeof(TeslaTurretThrower),
-        typeof(MagnetRam),
-        typeof(StaticShotgun),
-        typeof(VoltBoomerang),
-        typeof(IonRain),
-        // Plasma & heat
-        typeof(CometSling),
-        typeof(EmberGatling),
-        typeof(MagmaMortar),
-        typeof(PhoenixDart),
-        typeof(HeatHazeProjector),
-        // Cryo & ice
-        typeof(FrostbiteBeam),
-        typeof(IcicleFlechette),
-        typeof(SnowglobeGrenade),
-        typeof(GlacierWall),
-        // Sound & waves
-        typeof(BassDropper),
-        typeof(SonicScreech),
-        typeof(EchoLocator),
-        typeof(DrumlineCannon),
-        typeof(WaveRider),
-        // Gravity & force
-        typeof(BlackHoleYoyo),
-        typeof(RepulsorPalm),
-        typeof(MoonbootsBeam),
-        typeof(MeteorCaller),
-        typeof(OrbitLauncher),
-        // Goo, bubbles & slime
-        typeof(BubbleBlower),
-        typeof(GooGusher),
-        typeof(BouncyBallCannon),
-        typeof(GlueGrenade),
-        typeof(PaintBomber),
-        // Nature & elemental
-        typeof(TornadoTube),
-        typeof(VineSnare),
-        typeof(ThundercloudPet),
-        typeof(SandstormSprayer),
-        typeof(GeyserRod),
-        // Gadgets & exotic
-        typeof(PortalPistol),
-        typeof(CloneDecoyCaster),
-        typeof(TimeBubbleBomb),
-        typeof(SwarmHive),
-        typeof(RicochetDisc),
-        typeof(ShrinkRay),
-        typeof(MimicCube),
-        typeof(FireworksFinale),
-        // Missiles — real rocket bodies from the Missiles Pack (MissileModels)
-        typeof(SeekerMissile),
-        typeof(HornetSwarm),
-        typeof(ClusterMissile),
-        typeof(SkyStriker),
-        typeof(SkimmerRocket),
-        typeof(SiegeTorpedo),
+        public readonly string name;
+        public readonly System.Type[] types;
+
+        public Group(string name, params System.Type[] types)
+        {
+            this.name = name;
+            this.types = types;
+        }
+    }
+
+    /// <summary>
+    /// The four guns every character has carried since before the catalogue
+    /// existed. ArenaBuilder attaches these itself, ahead of everything here, so
+    /// they are NOT in <see cref="Types"/> — they are listed only so the picker
+    /// has a tab for them.
+    /// </summary>
+    public static readonly Group Core = new Group("CORE",
+        typeof(LaserBlaster), typeof(PhotonBeam), typeof(PlasmaLobber), typeof(RailZapper));
+
+    /// <summary>
+    /// The expanded arsenal, by family. <see cref="Types"/> is this flattened,
+    /// in this order — so ORDER IS STILL THE CONTRACT: a character's
+    /// WeaponLoadout indexes into it by position and those indices are
+    /// serialized into the arena scene. New weapons go on the END of a family,
+    /// and a new family goes on the END of this list. Reordering the families
+    /// renumbers every weapon after the one that moved.
+    /// </summary>
+    public static readonly Group[] Families =
+    {
+        new Group("LIGHT",
+            typeof(PrismSplitter),
+            typeof(StrobeBurst),
+            typeof(SunflareCannon),
+            typeof(GlowwormLauncher),
+            typeof(MirrorRicochet),
+            typeof(HaloRingGun),
+            typeof(BlacklightMarker)),
+        new Group("ELECTRIC",
+            typeof(ArcWhip),
+            typeof(TeslaTurretThrower),
+            typeof(MagnetRam),
+            typeof(StaticShotgun),
+            typeof(VoltBoomerang),
+            typeof(IonRain)),
+        new Group("PLASMA",
+            typeof(CometSling),
+            typeof(EmberGatling),
+            typeof(MagmaMortar),
+            typeof(PhoenixDart),
+            typeof(HeatHazeProjector)),
+        new Group("CRYO",
+            typeof(FrostbiteBeam),
+            typeof(IcicleFlechette),
+            typeof(SnowglobeGrenade),
+            typeof(GlacierWall)),
+        new Group("SOUND",
+            typeof(BassDropper),
+            typeof(SonicScreech),
+            typeof(EchoLocator),
+            typeof(DrumlineCannon),
+            typeof(WaveRider)),
+        new Group("GRAVITY",
+            typeof(BlackHoleYoyo),
+            typeof(RepulsorPalm),
+            typeof(MoonbootsBeam),
+            typeof(MeteorCaller),
+            typeof(OrbitLauncher)),
+        new Group("GOO",
+            typeof(BubbleBlower),
+            typeof(GooGusher),
+            typeof(BouncyBallCannon),
+            typeof(GlueGrenade),
+            typeof(PaintBomber)),
+        new Group("NATURE",
+            typeof(TornadoTube),
+            typeof(VineSnare),
+            typeof(ThundercloudPet),
+            typeof(SandstormSprayer),
+            typeof(GeyserRod)),
+        new Group("GADGETS",
+            typeof(PortalPistol),
+            typeof(CloneDecoyCaster),
+            typeof(TimeBubbleBomb),
+            typeof(SwarmHive),
+            typeof(RicochetDisc),
+            typeof(ShrinkRay),
+            typeof(MimicCube),
+            typeof(FireworksFinale)),
+        // Real rocket bodies from the Missiles Pack (MissileModels)
+        new Group("MISSILES",
+            typeof(SeekerMissile),
+            typeof(HornetSwarm),
+            typeof(ClusterMissile),
+            typeof(SkyStriker),
+            typeof(SkimmerRocket),
+            typeof(SiegeTorpedo)),
     };
+
+    /// <summary>Every tab the picker shows: the core four, then each family.</summary>
+    public static readonly Group[] Tabs;
+
+    /// <summary>
+    /// Every expanded weapon, in canonical order — <see cref="Families"/>
+    /// flattened. A list of types rather than a list of AddComponent calls so
+    /// that <see cref="TopUp"/> can tell what a character is missing without a
+    /// second copy of the list to keep in step.
+    /// </summary>
+    public static readonly System.Type[] Types;
+
+    static readonly Dictionary<System.Type, Group> GroupByType = new Dictionary<System.Type, Group>();
+
+    static WeaponCatalog()
+    {
+        Tabs = new Group[Families.Length + 1];
+        Tabs[0] = Core;
+        Families.CopyTo(Tabs, 1);
+
+        var types = new List<System.Type>();
+        foreach (var family in Families)
+            types.AddRange(family.types);
+        Types = types.ToArray();
+
+        foreach (var tab in Tabs)
+            foreach (var type in tab.types)
+                GroupByType[type] = tab;
+    }
+
+    /// <summary>
+    /// Which tab a live weapon belongs to, or null for one the catalogue has
+    /// never heard of — the vehicle siege kit, which is mounted rather than
+    /// carried and never appears in the picker.
+    /// </summary>
+    public static Group GroupOf(Weapon weapon)
+    {
+        if (weapon == null)
+            return null;
+        return GroupByType.TryGetValue(weapon.GetType(), out var group) ? group : null;
+    }
 
     /// <summary>Attach every expanded weapon to a host (blaster viewmodel) and return them.</summary>
     public static Weapon[] AttachAll(GameObject host, Transform muzzle, Transform owner)

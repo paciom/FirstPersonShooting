@@ -54,11 +54,16 @@ public class TouchControls : MonoBehaviour
     const int RoleNone = -4;
 
     /// <summary>
-    /// Rows the weapon panel can show. The usable set is two basics plus an
-    /// airdropped weapon today; the pool is deep enough that growing it doesn't
-    /// mean rebuilding this.
+    /// Cells in the weapon grid, as 4 across by 3 down.
+    ///
+    /// Twelve because the rack shows ONE FAMILY at a time and the largest family
+    /// is eight (GADGETS) — the tabs are what make sixty weapons fit on a phone.
+    /// The four spare are headroom: a family that outgrew the grid would drop
+    /// its last weapons silently, which is the kind of bug nobody reports
+    /// because the gun that vanished is the one you never knew existed.
     /// </summary>
-    const int WeaponRows = 10;
+    const int WeaponCells = 12;
+    const int WeaponCellColumns = 4;
 
     public Availability availability = Availability.Auto;
 
@@ -133,6 +138,8 @@ public class TouchControls : MonoBehaviour
 
     bool _active;
     bool _forced;                 // '=' override — show the controls on any device
+    bool _forcedForRack;          // ...and whether it was the keyboard rack that forced it
+    bool _rackWanted;             // rack asked for before the layout existed
     bool _sawTouch;
     bool _mouseWasSimulated = true;
 
@@ -153,7 +160,11 @@ public class TouchControls : MonoBehaviour
     Button _weapons, _weaponClose;
 
     RectTransform _weaponPanel;
-    readonly List<Button> _weaponRows = new List<Button>();
+    readonly List<Button> _weaponTabs = new List<Button>();
+    readonly List<Button> _weaponCells = new List<Button>();
+    /// <summary>Slot in the player's usable set behind each grid cell, or -1 for an empty one.</summary>
+    readonly int[] _cellSlot = new int[WeaponCells];
+    int _weaponTab;
     bool _weaponPanelOpen;
     int _weaponPick = -1;
 
@@ -191,6 +202,8 @@ public class TouchControls : MonoBehaviour
         public Image image;
         public Image rim;
         public Text label;
+        /// <summary>The weapon's picture, on grid cells only.</summary>
+        public RawImage icon;
         public bool held;
         public bool dimmed;
         // activeInHierarchy, not activeSelf: a hidden canvas leaves its children
@@ -238,6 +251,9 @@ public class TouchControls : MonoBehaviour
     void OnDestroy()
     {
         if (Instance == this) Instance = null;
+        // The rack's pictures are render textures — native memory, which does
+        // not go with the managed objects that referenced it.
+        WeaponIcons.Release();
         // Leave the mouse the way we found it — a stale false here would kill
         // menu clicking for the rest of the session.
         Input.simulateMouseWithTouches = true;
@@ -272,6 +288,37 @@ public class TouchControls : MonoBehaviour
 
     /// <summary>True while the weapon panel is covering the screen.</summary>
     public static bool WeaponPanelOpen => Instance != null && Instance._weaponPanelOpen;
+
+    /// <summary>
+    /// Open or close the rack from the keyboard — the desktop half of the ARMS
+    /// button.
+    ///
+    /// Desktop needs its own way in: the number keys reach the first nine
+    /// weapons and the cycle arrows walk them one at a time, which is no way to
+    /// find one gun in sixty. Rather than build a second rack for mouse and
+    /// keyboard, this switches the on-screen controls on for as long as the rack
+    /// is up — it is modal and covers the screen anyway, so the widgets behind
+    /// it are never seen, and the mouse already stands in for a finger.
+    ///
+    /// The controls are only switched back off if WE turned them on: a player
+    /// who pressed '=' to look at the phone layout keeps it after closing.
+    /// </summary>
+    public static void ToggleWeaponRack()
+    {
+        var controls = Ensure();
+        if (controls._weaponPanelOpen || controls._rackWanted)
+        {
+            controls._rackWanted = false;
+            controls.ToggleWeaponPanel(false);
+            return;
+        }
+
+        controls._forcedForRack = !controls._forced;
+        controls._forced = true;
+        // Not opened here: the panel lives under a root that this frame may not
+        // even have built yet. Update opens it once the layout is up.
+        controls._rackWanted = true;
+    }
 
     public bool ConsumeMorph()
     {
@@ -310,6 +357,14 @@ public class TouchControls : MonoBehaviour
         {
             ClearState();
             return;
+        }
+
+        // Deferred from ToggleWeaponRack, which can be called on a frame where
+        // there is no layout to open the rack over yet.
+        if (_rackWanted)
+        {
+            _rackWanted = false;
+            ToggleWeaponPanel(true);
         }
 
         GatherPointers();
@@ -676,17 +731,30 @@ public class TouchControls : MonoBehaviour
     }
 
     bool IsWeaponPanelButton(Button button) =>
-        button != null && (button == _weaponClose || _weaponRows.Contains(button));
+        button != null && (button == _weaponClose
+                           || _weaponCells.Contains(button)
+                           || _weaponTabs.Contains(button));
 
     void OnButtonDown(Button button)
     {
-        int row = _weaponRows.IndexOf(button);
-        if (row >= 0)
+        int cell = _weaponCells.IndexOf(button);
+        if (cell >= 0)
         {
-            // The row's position IS the slot: RefreshWeaponPanel fills them
-            // straight down the usable set.
-            _weaponPick = row;
-            ToggleWeaponPanel(false);
+            // An empty cell is a miss, not a dismissal: fat-thumbing the gap in
+            // a short family should not close the rack you just opened.
+            if (_cellSlot[cell] >= 0)
+            {
+                _weaponPick = _cellSlot[cell];
+                ToggleWeaponPanel(false);
+            }
+            return;
+        }
+
+        int tab = _weaponTabs.IndexOf(button);
+        if (tab >= 0)
+        {
+            _weaponTab = tab;
+            RefreshWeaponPanel();
             return;
         }
 
@@ -783,9 +851,10 @@ public class TouchControls : MonoBehaviour
         {
             if (button.image == null)
                 continue;
-            // Weapon rows paint themselves in their gun's own colour; the
-            // standard idle/held wash would just erase that every frame.
-            if (_weaponRows.Contains(button))
+            // The rack paints itself — cells in their gun's own colour, tabs by
+            // which one is open — and the standard idle/held wash would just
+            // erase that every frame.
+            if (_weaponCells.Contains(button) || _weaponTabs.Contains(button))
                 continue;
             Color target = button.dimmed ? ButtonDim : (button.held ? ButtonHeld : ButtonIdle);
             button.image.color = Color.Lerp(button.image.color, target, blend);
@@ -847,12 +916,24 @@ public class TouchControls : MonoBehaviour
     }
 
     /// <summary>
-    /// The weapon rack: what this robot can shoot right now, one tap per gun.
+    /// The weapon rack: what this robot can shoot right now, as a tab per family
+    /// and a grid of pictures.
     ///
-    /// Built once and hidden, never built on demand — the rows are registered in
-    /// <see cref="_buttons"/> and fingers hold an INDEX into that list, so a
-    /// panel that added and removed rows would renumber the buttons under a
-    /// thumb that was already down on one.
+    /// WHY TABS. Player v AI arms everyone with the whole catalogue — sixty
+    /// weapons — and a flat list of sixty is not a rack, it is a spreadsheet.
+    /// The families were already there as headings in WeaponCatalog, and they
+    /// are how a player thinks about the arsenal: you go looking for "something
+    /// icy", not for weapon forty-one.
+    ///
+    /// WHY PICTURES. The names alone are no help the first time you meet them —
+    /// nothing in "Glowworm Launcher" tells a seven-year-old what comes out of
+    /// it. The picture is the weapon itself, rendered from the same prop the
+    /// hands hold (see WeaponIcons), so what you pick is what you get.
+    ///
+    /// Built once and hidden, never built on demand — the tabs and cells are
+    /// registered in <see cref="_buttons"/> and fingers hold an INDEX into that
+    /// list, so a panel that added and removed them would renumber the buttons
+    /// under a thumb that was already down on one.
     /// </summary>
     void BuildWeaponPanel()
     {
@@ -877,13 +958,36 @@ public class TouchControls : MonoBehaviour
         backdropRect.offsetMin = Vector2.zero;
         backdropRect.offsetMax = Vector2.zero;
 
-        MakeLabel(_weaponPanel, "Title", "WEAPONS", 52, new Vector2(0f, 330f), new Vector2(900f, 70f));
+        MakeLabel(_weaponPanel, "Title", "WEAPONS", 46, new Vector2(0f, 450f), new Vector2(900f, 62f));
 
-        for (int i = 0; i < WeaponRows; i++)
-            _weaponRows.Add(MakeBarButton($"WeaponRow{i}", _weaponPanel));
+        // One tab per family, laid out across the top. Built from the catalogue
+        // rather than a list here, so a new family shows up in the rack the day
+        // it is added and never has to be registered twice.
+        var tabs = WeaponCatalog.Tabs;
+        float tabSpan = Mathf.Min(1720f, tabs.Length * 158f);
+        float tabStep = tabs.Length > 1 ? tabSpan / tabs.Length : 0f;
+        for (int i = 0; i < tabs.Length; i++)
+        {
+            var tab = MakeTabButton($"WeaponTab{i}", tabs[i].name, _weaponPanel);
+            tab.rect.anchoredPosition =
+                new Vector2((i - (tabs.Length - 1) * 0.5f) * tabStep, 360f);
+            tab.rect.sizeDelta = new Vector2(tabStep - 10f, 62f);
+            _weaponTabs.Add(tab);
+        }
+
+        for (int i = 0; i < WeaponCells; i++)
+        {
+            var cell = MakeWeaponCell($"WeaponCell{i}", _weaponPanel);
+            int column = i % WeaponCellColumns;
+            int row = i / WeaponCellColumns;
+            cell.rect.anchoredPosition = new Vector2(
+                (column - (WeaponCellColumns - 1) * 0.5f) * 320f,
+                175f - row * 230f);
+            _weaponCells.Add(cell);
+        }
 
         _weaponClose = MakeRoundButton("WeaponClose", "CLOSE", new Vector2(0.5f, 0.5f),
-            new Vector2(0f, -420f), 150);
+            new Vector2(0f, -465f), 130);
         // Round buttons parent themselves to the canvas; this one belongs to the
         // panel, so it hides and shows with it.
         _weaponClose.rect.SetParent(_weaponPanel, false);
@@ -891,8 +995,8 @@ public class TouchControls : MonoBehaviour
         _weaponPanel.gameObject.SetActive(false);
     }
 
-    /// <summary>A full-width row in the weapon rack: name on the left, slot number in the corner.</summary>
-    Button MakeBarButton(string name, RectTransform parent)
+    /// <summary>One family tab across the top of the rack.</summary>
+    Button MakeTabButton(string name, string caption, RectTransform parent)
     {
         var go = new GameObject($"Touch_{name}");
         go.transform.SetParent(parent, false);
@@ -903,7 +1007,6 @@ public class TouchControls : MonoBehaviour
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(900f, 96f);
 
         var rim = new GameObject("Rim");
         rim.transform.SetParent(rect, false);
@@ -913,20 +1016,76 @@ public class TouchControls : MonoBehaviour
         var rimRect = rimImage.rectTransform;
         // A four-pixel underline rather than a border: the project has no
         // nine-sliced frame sprite, and a stretched ring reads as an ellipse.
+        // On a tab it doubles as the "you are here" mark.
         rimRect.anchorMin = new Vector2(0f, 0f);
         rimRect.anchorMax = new Vector2(1f, 0f);
         rimRect.offsetMin = Vector2.zero;
         rimRect.offsetMax = new Vector2(0f, 4f);
 
-        var text = MakeLabel(rect, "Label", "", 38, Vector2.zero, Vector2.zero);
-        text.alignment = TextAnchor.MiddleLeft;
+        var text = MakeLabel(rect, "Label", caption, 22, Vector2.zero, Vector2.zero);
         var textRect = text.rectTransform;
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(40f, 0f);
-        textRect.offsetMax = new Vector2(-40f, 0f);
+        textRect.offsetMin = new Vector2(6f, 0f);
+        textRect.offsetMax = new Vector2(-6f, 0f);
 
         var button = new Button { rect = rect, image = image, rim = rimImage, label = text };
+        _buttons.Add(button);
+        return button;
+    }
+
+    /// <summary>
+    /// One weapon in the grid: its picture, its name under it, and its slot
+    /// number in the corner so the keyboard shortcut and the rack agree.
+    /// </summary>
+    Button MakeWeaponCell(string name, RectTransform parent)
+    {
+        var go = new GameObject($"Touch_{name}");
+        go.transform.SetParent(parent, false);
+        var image = go.AddComponent<Image>();
+        image.color = ButtonIdle;
+        image.raycastTarget = false;
+
+        var rect = image.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(296f, 210f);
+
+        var iconGo = new GameObject("Icon");
+        iconGo.transform.SetParent(rect, false);
+        var icon = iconGo.AddComponent<RawImage>();
+        icon.raycastTarget = false;
+        var iconRect = icon.rectTransform;
+        iconRect.anchorMin = iconRect.anchorMax = new Vector2(0.5f, 1f);
+        iconRect.pivot = new Vector2(0.5f, 1f);
+        iconRect.anchoredPosition = new Vector2(0f, -8f);
+        iconRect.sizeDelta = new Vector2(140f, 140f);
+
+        var rim = new GameObject("Rim");
+        rim.transform.SetParent(rect, false);
+        var rimImage = rim.AddComponent<Image>();
+        rimImage.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.5f);
+        rimImage.raycastTarget = false;
+        var rimRect = rimImage.rectTransform;
+        rimRect.anchorMin = new Vector2(0f, 0f);
+        rimRect.anchorMax = new Vector2(1f, 0f);
+        rimRect.offsetMin = Vector2.zero;
+        rimRect.offsetMax = new Vector2(0f, 4f);
+
+        // Two lines of room: several weapons have names that will not fit a
+        // 296-wide cell on one, and a clipped name is no name at all.
+        var text = MakeLabel(rect, "Label", "", 21, Vector2.zero, Vector2.zero);
+        var textRect = text.rectTransform;
+        textRect.anchorMin = new Vector2(0f, 0f);
+        textRect.anchorMax = new Vector2(1f, 0f);
+        textRect.pivot = new Vector2(0.5f, 0f);
+        textRect.offsetMin = new Vector2(8f, 8f);
+        textRect.offsetMax = new Vector2(-8f, 60f);
+
+        var button = new Button
+        {
+            rect = rect, image = image, rim = rimImage, label = text, icon = icon,
+        };
         _buttons.Add(button);
         return button;
     }
@@ -959,60 +1118,142 @@ public class TouchControls : MonoBehaviour
         if (_weaponPanel != null)
             _weaponPanel.gameObject.SetActive(open);
         if (open)
+        {
             RefreshWeaponPanel();
+            return;
+        }
+
+        // Hand the screen back to mouse and keyboard if the rack was the only
+        // reason the on-screen controls were up. Also covers ClearState closing
+        // it on the way out of a match.
+        if (_forcedForRack)
+        {
+            _forcedForRack = false;
+            _forced = false;
+        }
+        _rackWanted = false;
     }
 
     /// <summary>
-    /// Re-read the usable set into the rows. Runs every frame the panel is up,
-    /// not just on open: an airdropped weapon is on a countdown, and it can
-    /// expire out of the rack while the player is looking straight at it.
+    /// Re-read the usable set into the tabs and the grid. Runs every frame the
+    /// panel is up, not just on open: an airdropped weapon is on a countdown,
+    /// and it can expire out of the rack while the player is looking straight
+    /// at it.
     /// </summary>
     void RefreshWeaponPanel()
     {
         var player = PlayerBrain.Local;
         var carried = player != null ? player.weapons : null;
-        int count = carried != null ? Mathf.Min(carried.Length, _weaponRows.Count) : 0;
-        if (count == 0)
+        if (carried == null || carried.Length == 0)
         {
             ToggleWeaponPanel(false);
             return;
         }
 
+        var tabs = WeaponCatalog.Tabs;
         var loadout = player.GetComponent<WeaponLoadout>();
         int active = player.ActiveSlot;
-        float spacing = 112f;
-        float top = (count - 1) * 0.5f * spacing;
 
-        for (int i = 0; i < _weaponRows.Count; i++)
+        // A tab with nothing behind it is dimmed rather than hidden: which
+        // families exist is worth knowing even in a mode that only hands out
+        // two guns, and a strip that changes length between modes is harder to
+        // learn than one that greys out.
+        //
+        // The open tab is corrected FIRST, so the grid below is never filled
+        // from a tab that has since emptied — which is what happens when the
+        // airdropped weapon behind the open tab expires.
+        int chosen = _weaponTab;
+        if (!TabHasWeapons(carried, chosen))
         {
-            var row = _weaponRows[i];
-            SetVisible(row.rect, i < count);
-            if (i >= count)
+            chosen = 0;
+            for (int t = 0; t < tabs.Length; t++)
+                if (TabHasWeapons(carried, t)) { chosen = t; break; }
+            _weaponTab = chosen;
+        }
+
+        for (int t = 0; t < _weaponTabs.Count; t++)
+        {
+            var tab = _weaponTabs[t];
+            bool populated = TabHasWeapons(carried, t);
+            bool open = t == chosen;
+            tab.dimmed = !populated;
+            tab.image.color = open ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                                   : ButtonIdle;
+            tab.rim.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b,
+                                      open ? 0.95f : populated ? 0.4f : 0.12f);
+            tab.label.color = open ? HoloCyan
+                                   : new Color(1f, 1f, 1f, populated ? 0.75f : 0.3f);
+        }
+
+        int next = 0;
+        for (int slot = 0; slot < carried.Length && next < _weaponCells.Count; slot++)
+        {
+            if (TabOf(carried[slot]) != chosen)
                 continue;
 
-            row.rect.anchoredPosition = new Vector2(0f, top - i * spacing);
+            var cell = _weaponCells[next];
+            _cellSlot[next] = slot;
+            next++;
 
-            var weapon = carried[i];
+            var weapon = carried[slot];
+            SetVisible(cell.rect, true);
+            cell.icon.texture = WeaponIcons.IconFor(weapon);
+            cell.icon.enabled = cell.icon.texture != null;
+
             string name = weapon != null ? weapon.weaponName.ToUpperInvariant() : "EMPTY";
             // The airdropped slot is the only one that can vanish, so it is the
             // only one that says how long it has left.
             string tail = "";
             if (loadout != null && loadout.Special != null && weapon == loadout.Special)
-                tail = $"   ·   {Mathf.CeilToInt(loadout.SpecialSecondsLeft)}s";
-            row.label.text = $"{i + 1}    {name}{tail}";
+                tail = $"\n{Mathf.CeilToInt(loadout.SpecialSecondsLeft)}s";
+            // Slot numbers only while the keyboard can reach them — with sixty
+            // weapons carried, "37" next to a gun the number keys cannot select
+            // is a promise the controls do not keep.
+            cell.label.text = slot < 9 ? $"{slot + 1}  ·  {name}{tail}" : $"{name}{tail}";
 
-            // The held weapon reads as held: its own colour on the bar, rather
+            // The held weapon reads as held: its own colour on the cell, rather
             // than a tick somewhere that a thumb would cover.
-            row.dimmed = false;
+            cell.dimmed = false;
             Color tint = weapon != null ? weapon.color : HoloCyan;
-            row.image.color = row.held
+            cell.image.color = cell.held
                 ? new Color(tint.r, tint.g, tint.b, 0.85f)
-                : i == active
+                : slot == active
                     ? new Color(tint.r, tint.g, tint.b, 0.55f)
                     : ButtonIdle;
-            row.rim.color = new Color(tint.r, tint.g, tint.b, i == active ? 0.9f : 0.5f);
-            row.label.color = Color.white;
+            cell.rim.color = new Color(tint.r, tint.g, tint.b, slot == active ? 0.95f : 0.45f);
+            cell.label.color = Color.white;
         }
+
+        for (int i = next; i < _weaponCells.Count; i++)
+        {
+            _cellSlot[i] = -1;
+            SetVisible(_weaponCells[i].rect, false);
+        }
+    }
+
+    /// <summary>
+    /// Which tab a carried weapon belongs under. Weapons the catalogue does not
+    /// know — nothing carries one today, but the vehicle siege kit is exactly
+    /// that shape — fall into the core tab rather than out of the rack.
+    /// </summary>
+    static int TabOf(Weapon weapon)
+    {
+        var group = WeaponCatalog.GroupOf(weapon);
+        if (group == null)
+            return 0;
+        var tabs = WeaponCatalog.Tabs;
+        for (int i = 0; i < tabs.Length; i++)
+            if (tabs[i] == group)
+                return i;
+        return 0;
+    }
+
+    static bool TabHasWeapons(Weapon[] carried, int tab)
+    {
+        foreach (var weapon in carried)
+            if (weapon != null && TabOf(weapon) == tab)
+                return true;
+        return false;
     }
 
     void BuildStick()
