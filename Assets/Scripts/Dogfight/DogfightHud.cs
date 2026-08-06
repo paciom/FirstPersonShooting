@@ -566,7 +566,9 @@ public class DogfightHud : MonoBehaviour
               "ROBOT / TANK   —   Mouse aims   ·   WASD moves   ·   SHIFT runs   ·   SPACE jumps\n" +
               "\n" +
               "Hold Click   —   guns   (SPACE too, in the air)\n" +
-              "Right Click   —   missile (hold the ring on a target until it locks)\n" +
+              "RIGHT CLICK   —   MISSILE   ·   touch:  the MISSILE button\n" +
+              "        Keep the enemy inside the ring until it locks — the shot\n" +
+              "        will not go until it has. In the air the guns fire themselves.\n" +
               "F   —   flares, when INCOMING flashes\n" +
               "T   —   transform:  jet  →  robot  →  tank  →  jet\n" +
               "C   —   chase / cockpit camera\n" +

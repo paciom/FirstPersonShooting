@@ -221,10 +221,15 @@ public class DogfightSticks : MonoBehaviour
         SetButtonActive(_fireLeft, _ground);
         SetButtonActive(_fireRight, _ground);
         SetButtonActive(_jump, _ground && _jumpWanted);
-        // On the deck the twin FIRE buttons are the guns, so the verb column's
-        // missile button says what it always meant.
+        // It has always fired missiles, in the air as much as on the deck, so
+        // it always says so. It used to read FIRE while flying, on the grounds
+        // that it was then the only fire button on screen — but the air guns
+        // shoot themselves, so a thumb pressing FIRE was asking for the one
+        // thing that button does not do, and getting a missile it had not
+        // aimed. Worse, an unlocked tap does nothing at all, which reads as a
+        // broken button rather than a missing lock.
         if (_missile.label != null)
-            _missile.label.text = _ground ? "MISSILE" : "FIRE";
+            _missile.label.text = "MISSILE";
         // And the column steps up one slot so JUMP fits beneath it.
         float lift = _ground ? ButtonSize + 16f : 0f;
         foreach (var verb in _column)
@@ -463,7 +468,7 @@ public class DogfightSticks : MonoBehaviour
         // top, the pair you tap on purpose below.
         _column.Add(MakeButton("FLARES", new Vector2(1f, 0f), new Vector2(-96f, 560f), ButtonSize,
             () => FlaresTapped = true));
-        _missile = MakeButton("FIRE", new Vector2(1f, 0f), new Vector2(-96f, 452f), ButtonSize,
+        _missile = MakeButton("MISSILE", new Vector2(1f, 0f), new Vector2(-96f, 452f), ButtonSize,
             () => MissileTapped = true);
         _column.Add(_missile);
         _column.Add(MakeButton("MORPH", new Vector2(1f, 0f), new Vector2(-96f, 344f), ButtonSize,
