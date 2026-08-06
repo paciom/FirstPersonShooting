@@ -2,11 +2,19 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// DOGFIGHT's set: the navy void the transformation clips were shot on, made a
-/// place — an airport deck far below (runways, taxi lights, a terminal
-/// district wearing Commander's building models), a handful of rock spires and
-/// cloud puffs for the speed to read against, two suns, a starfield, and the
-/// fly volume.
+/// DOGFIGHT's set, in three flavours picked on the select screen
+/// (<see cref="DogfightMapPick"/>):
+///
+///  - AIRFIELD — the original navy void made a place: a night airport far
+///    below, rock spires, cloud puffs, two suns and a starfield.
+///  - TINY PLANET — a 130 m worldlet whose north pole is the deck. The
+///    horizon curves away in every direction, a tilted ring and a slow moon
+///    hang beyond the fence, and the soft floor follows the SURFACE, so the
+///    fight swoops around the dome instead of hovering over a plane.
+///  - DONUT STATION — a torus station floating in open space: launch pads on
+///    the hub deck, a ring walkway the turrets stand on, spokes between, and
+///    the hole through the middle begging to be flown through. A faint
+///    energy net far below catches anything that falls off the furniture.
 ///
 /// THE VOLUME IS SOFT. <see cref="SteerAssist"/> leans on the same steer values
 /// the drivers write, ramping in over the last stretch before an edge, so the
@@ -15,9 +23,13 @@ using UnityEngine;
 /// assist, which is what keeps "the AI never leaves the arena" from being a
 /// separate piece of cleverness in the brain.
 ///
+/// THE DECK IS A QUERY, NOT A CONSTANT. Every landing, wreck crash and ground
+/// gait asks <see cref="GroundHeight"/> what is underfoot, which is what lets
+/// one map curve the ground and another float it in pieces over nothing.
 /// Constants are expressed against each other: the spawn ring sits inside the
-/// turn-back band, the spires stop below the fight floor's approach, the
-/// camera's far plane covers the ground's corners. Change one, the rest follow.
+/// turn-back band, the props stop below the fight floor's approach, the
+/// camera's far plane covers the furthest dressing. Change one, the rest
+/// follow.
 /// </summary>
 public class DogfightSky : MonoBehaviour
 {
@@ -25,7 +37,9 @@ public class DogfightSky : MonoBehaviour
     /// steering it home.</summary>
     public const float Radius = 150f;
 
-    /// <summary>The soft floor and ceiling of the fight.</summary>
+    /// <summary>The soft floor and ceiling of the fight. The floor is the
+    /// AIRFIELD's flat one; the other maps answer through
+    /// <see cref="LocalFloor"/>.</summary>
     public const float FloorY = 16f;
     public const float CeilingY = 110f;
 
@@ -37,11 +51,76 @@ public class DogfightSky : MonoBehaviour
     /// <summary>Where jets are (re)born: well inside the turn-back band, at an
     /// altitude with room both ways.</summary>
     public const float SpawnRing = Radius - AssistBand * 0.9f;
-    public const float SpawnAltitude = (FloorY + CeilingY) * 0.36f;
 
-    /// <summary>Where the intro pads stand. Above the soft floor on purpose:
-    /// the robots transform, throttle up and CLIMB into the volume.</summary>
-    public const float PadY = 12f;
+    /// <summary>The battlefield being flown. Cached from the pick when the set
+    /// is built; a mid-Play recompile wipes the cache and the next read falls
+    /// back to the store, which cannot have changed mid-sortie.</summary>
+    static DogfightMapKind? _map;
+    public static DogfightMapKind Map => _map ??= DogfightMapPick.Chosen;
+
+    /// <summary>Respawn altitude. The station map lifts it clear of the ring
+    /// walkway — the default ring altitude would set jets down ON the deck.</summary>
+    public static float SpawnAltitude =>
+        Map == DogfightMapKind.DonutStation ? 74f : (FloorY + CeilingY) * 0.36f;
+
+    /// <summary>Where the intro pads stand: always a floating platform a
+    /// climb's worth above whatever counts as the deck beneath them.</summary>
+    public static float PadY =>
+        Map == DogfightMapKind.DonutStation ? HubTopY + 12f : 12f;
+
+    // ------------------------------------------------------------- tiny planet
+
+    /// <summary>The worldlet. Its north pole touches y = 0, so pads, turrets
+    /// and the fight's numbers all line up with the airfield's.</summary>
+    const float PlanetRadius = 130f;
+    static readonly Vector3 PlanetCenter = new Vector3(0f, -PlanetRadius, 0f);
+
+    /// <summary>Past this horizontal distance the surface is treated as the
+    /// near-vertical flank: the deck query clamps here, which is what keeps a
+    /// chute that drifts past the rim landing beside the silhouette instead
+    /// of hovering in space.</summary>
+    const float PlanetRim = 129f;
+
+    /// <summary>The planet's soft floor rides this far above the LOCAL
+    /// surface — the airfield floor rule, bent around a sphere.</summary>
+    const float PlanetFloorLift = 14f;
+
+    // ----------------------------------------------------------- donut station
+
+    const float TorusY = 30f;        // the tube's centre plane
+    const float TorusMajor = 72f;    // ring spine radius
+    const float TorusTube = 14f;     // tube radius
+
+    const float HubRadius = 34f;
+    const float HubTopY = 35f;       // the hub deck the pads launch off
+    const float HubBottomY = 19f;
+
+    /// <summary>The flat walkway laid over the tube's crown — proud of the
+    /// curve so it reads as built architecture, wide enough to fight on.</summary>
+    const float RingDeckY = TorusY + TorusTube + 0.2f;
+    const float RingDeckInner = 64f;
+    const float RingDeckOuter = 80f;
+
+    /// <summary>The energy net far under the station: the deck of last
+    /// resort, so nothing — robot, tank or wreck — ever falls forever.</summary>
+    const float VoidY = -40f;
+
+    /// <summary>The station map's flat soft floor: low enough to fly UNDER
+    /// the ring, high enough that the net stays a failsafe, not a venue.</summary>
+    const float DonutFloorY = 8f;
+
+    const float SpokeGirth = 2.75f;
+
+    // ----------------------------------------------------------------- palette
+
+    /// <summary>The void's own colour — the camera clears to it, the fog fades
+    /// to it, and it is deliberately the navy the transformation clips were
+    /// shot on.</summary>
+    public static readonly Color SkyTint = new Color(0.016f, 0.035f, 0.09f);
+    static readonly Color GroundColor = new Color(0.05f, 0.065f, 0.095f);
+    static readonly Color GridGlow = new Color(0.15f, 0.75f, 0.85f);
+
+    // ---------------------------------------------------------------- airfield
 
     const float GroundSize = 640f;
 
@@ -51,20 +130,17 @@ public class DogfightSky : MonoBehaviour
     const float RunwayWidth = 36f;
     static readonly float[] RunwayX = { -70f, 70f };
 
-    /// <summary>The void's own colour — the camera clears to it, the fog fades
-    /// to it, and it is deliberately the navy the transformation clips were
-    /// shot on.</summary>
-    public static readonly Color SkyTint = new Color(0.016f, 0.035f, 0.09f);
-    static readonly Color GroundColor = new Color(0.05f, 0.065f, 0.095f);
-    static readonly Color GridGlow = new Color(0.15f, 0.75f, 0.85f);
-
     static readonly List<Transform> Spires = new List<Transform>();
     static readonly List<float> SpireRadii = new List<float>();
 
     readonly List<Transform> _clouds = new List<Transform>();
+    Transform _moonPivot;
 
     public static DogfightSky Build(Transform stageRoot)
     {
+        // Re-read the pick for THIS sortie before anything measures the map.
+        _map = DogfightMapPick.Chosen;
+
         var go = new GameObject("DogfightSky");
         go.transform.SetParent(stageRoot, false);
         var sky = go.AddComponent<DogfightSky>();
@@ -77,11 +153,36 @@ public class DogfightSky : MonoBehaviour
         Spires.Clear();
         SpireRadii.Clear();
 
-        BuildGround();
-        BuildTerminalDistrict();
-        BuildSpires();
-        BuildClouds();
-        BuildStars();
+        switch (Map)
+        {
+            case DogfightMapKind.TinyPlanet:
+                BuildPlanet();
+                BuildPlanetProps();
+                BuildPlanetRing();
+                BuildMoon();
+                BuildClouds();
+                BuildStars(true);
+                break;
+
+            case DogfightMapKind.DonutStation:
+                BuildTorus();
+                BuildHub();
+                BuildSpokes();
+                BuildRingDeck();
+                BuildStationWindows();
+                BuildStationLamps();
+                BuildSafetyNet();
+                BuildStars(true);
+                break;
+
+            default:
+                BuildGround();
+                BuildTerminalDistrict();
+                BuildSpires();
+                BuildClouds();
+                BuildStars(false);
+                break;
+        }
 
         Sun("KeySun", new Vector3(48f, 42f, 0f), 1.05f, new Color(1f, 0.97f, 0.9f));
         Sun("FillSun", new Vector3(18f, 218f, 0f), 0.35f, new Color(0.5f, 0.7f, 1f));
@@ -97,6 +198,8 @@ public class DogfightSky : MonoBehaviour
         RenderSettings.fogColor = SkyTint;
         RenderSettings.fogDensity = 0.0028f;
     }
+
+    // ------------------------------------------------------- airfield builders
 
     /// <summary>
     /// The deck far below the fight is a night airport: dark tarmac, two
@@ -169,11 +272,22 @@ public class DogfightSky : MonoBehaviour
     static void AddFlatQuad(List<Vector3> vertices, List<Vector2> uvs, List<Color> colors,
         List<int> triangles, float x, float z, float width, float length, Color color, float y)
     {
+        AddOrientedQuad(vertices, uvs, colors, triangles,
+            new Vector3(x, y, z),
+            Vector3.right * (width * 0.5f), Vector3.forward * (length * 0.5f), color);
+    }
+
+    /// <summary>A quad on any plane: centre plus half-extent basis vectors.
+    /// The flat deck paint, the station's windows and the planet's moss all
+    /// go through here.</summary>
+    static void AddOrientedQuad(List<Vector3> vertices, List<Vector2> uvs, List<Color> colors,
+        List<int> triangles, Vector3 center, Vector3 halfRight, Vector3 halfUp, Color color)
+    {
         int v = vertices.Count;
-        vertices.Add(new Vector3(x - width * 0.5f, y, z - length * 0.5f));
-        vertices.Add(new Vector3(x - width * 0.5f, y, z + length * 0.5f));
-        vertices.Add(new Vector3(x + width * 0.5f, y, z + length * 0.5f));
-        vertices.Add(new Vector3(x + width * 0.5f, y, z - length * 0.5f));
+        vertices.Add(center - halfRight - halfUp);
+        vertices.Add(center - halfRight + halfUp);
+        vertices.Add(center + halfRight + halfUp);
+        vertices.Add(center + halfRight - halfUp);
         uvs.Add(new Vector2(0f, 0f));
         uvs.Add(new Vector2(0f, 1f));
         uvs.Add(new Vector2(1f, 1f));
@@ -435,6 +549,480 @@ public class DogfightSky : MonoBehaviour
         return new Vector3(centerX + Mathf.Sign(offset) * want, at.y, at.z);
     }
 
+    // ---------------------------------------------------- tiny planet builders
+
+    /// <summary>The worldlet itself: one big sphere (its collider is what
+    /// bolts and gun runs hit), with a glowing equator band poking out of the
+    /// rock the way the pad rings do.</summary>
+    void BuildPlanet()
+    {
+        var planet = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        planet.name = "Planet";
+        planet.transform.SetParent(transform, false);
+        planet.transform.localScale = Vector3.one * (PlanetRadius * 2f);
+        planet.transform.localPosition = PlanetCenter;
+        planet.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Lit("dogfight-planet", new Color(0.11f, 0.10f, 0.16f), 0.25f);
+
+        // The equator band: a disc a shade wider than the sphere, so only its
+        // rim shows — a line of light around the worldlet's waist.
+        var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        Object.Destroy(band.GetComponent<Collider>());
+        band.name = "EquatorBand";
+        band.transform.SetParent(transform, false);
+        band.transform.localScale = new Vector3(PlanetRadius * 2f + 3f, 1.1f,
+            PlanetRadius * 2f + 3f);
+        band.transform.localPosition = PlanetCenter;
+        band.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Emissive("dogfight-equator", GridGlow, 1.2f);
+    }
+
+    /// <summary>
+    /// Life on the dome: crystals, boulders and mushroom-trees scattered over
+    /// the upper hemisphere, each standing along its own bit of "up", plus
+    /// faint moss glows painted onto the rock. Everything stays under the
+    /// planet's soft floor (surface + <see cref="PlanetFloorLift"/>), the
+    /// spires' rule bent around a sphere — a skimming jet clears the tallest
+    /// prop with room to spare.
+    /// </summary>
+    void BuildPlanetProps()
+    {
+        var rock = ArenaMaterials.Lit("dogfight-boulder", new Color(0.16f, 0.15f, 0.22f), 0.3f);
+        var cap = ArenaMaterials.Lit("dogfight-mushroom", new Color(0.10f, 0.28f, 0.26f), 0.4f);
+        var crystalCyan = ArenaMaterials.Emissive("dogfight-crystal-cyan", GridGlow, 1.3f);
+        var crystalMagenta = ArenaMaterials.Emissive("dogfight-crystal-magenta",
+            new Color(0.85f, 0.3f, 0.9f), 1.3f);
+
+        var mossVerts = new List<Vector3>();
+        var mossUvs = new List<Vector2>();
+        var mossColors = new List<Color>();
+        var mossTris = new List<int>();
+
+        var random = new System.Random(19);
+        const int count = 64;
+        for (int i = 0; i < count; i++)
+        {
+            // Polar 12°–52° from the pole: clear of the pad apron at the top,
+            // stopped where the walkable dome ends and the flank begins.
+            float polar = Mathf.Lerp(12f, 52f, (float)random.NextDouble()) * Mathf.Deg2Rad;
+            float azimuth = (float)random.NextDouble() * Mathf.PI * 2f;
+            Vector3 up = new Vector3(
+                Mathf.Sin(polar) * Mathf.Cos(azimuth),
+                Mathf.Cos(polar),
+                Mathf.Sin(polar) * Mathf.Sin(azimuth));
+            Vector3 foot = PlanetCenter + up * PlanetRadius;
+
+            float roll = (float)random.NextDouble();
+            if (roll < 0.25f)
+            {
+                // Moss: a soft glow painted on the rock, no body at all.
+                Vector3 right = Vector3.Cross(up, Vector3.forward).normalized;
+                Vector3 along = Vector3.Cross(right, up);
+                float size = Mathf.Lerp(3f, 7f, (float)random.NextDouble());
+                AddOrientedQuad(mossVerts, mossUvs, mossColors, mossTris,
+                    foot + up * 0.25f, right * size, along * size,
+                    new Color(0.2f, 0.8f, 0.6f) * 0.35f);
+                continue;
+            }
+
+            var holder = new GameObject("PlanetProp");
+            holder.transform.SetParent(transform, false);
+            holder.transform.localPosition = foot;
+            holder.transform.localRotation = Quaternion.FromToRotation(Vector3.up, up)
+                * Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f);
+
+            if (roll < 0.5f)
+            {
+                // A crystal, leaning a little off plumb, tip glowing.
+                float height = Mathf.Lerp(3f, 8f, (float)random.NextDouble());
+                float width = Mathf.Lerp(0.8f, 1.8f, (float)random.NextDouble());
+                var crystal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                crystal.name = "Crystal";
+                crystal.transform.SetParent(holder.transform, false);
+                crystal.transform.localScale = new Vector3(width, height * 0.5f, width);
+                crystal.transform.localRotation = Quaternion.Euler(
+                    Mathf.Lerp(-14f, 14f, (float)random.NextDouble()), 0f,
+                    Mathf.Lerp(-14f, 14f, (float)random.NextDouble()));
+                crystal.transform.localPosition = crystal.transform.localRotation
+                    * Vector3.up * (height * 0.5f);
+                crystal.GetComponent<MeshRenderer>().sharedMaterial =
+                    i % 2 == 0 ? crystalCyan : crystalMagenta;
+            }
+            else if (roll < 0.78f)
+            {
+                // A boulder — tumbled, half-buried.
+                var boulder = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                boulder.name = "Boulder";
+                boulder.transform.SetParent(holder.transform, false);
+                boulder.transform.localScale = new Vector3(
+                    Mathf.Lerp(1.5f, 4f, (float)random.NextDouble()),
+                    Mathf.Lerp(1.2f, 3f, (float)random.NextDouble()),
+                    Mathf.Lerp(1.5f, 4f, (float)random.NextDouble()));
+                boulder.transform.localRotation = Quaternion.Euler(
+                    (float)random.NextDouble() * 360f,
+                    (float)random.NextDouble() * 360f,
+                    (float)random.NextDouble() * 360f);
+                boulder.transform.localPosition = Vector3.up * 0.6f;
+                boulder.GetComponent<MeshRenderer>().sharedMaterial = rock;
+            }
+            else
+            {
+                // A mushroom-tree: pale trunk, wide teal cap.
+                float trunk = Mathf.Lerp(1.5f, 3f, (float)random.NextDouble());
+                var stem = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                stem.name = "Trunk";
+                stem.transform.SetParent(holder.transform, false);
+                stem.transform.localScale = new Vector3(0.5f, trunk * 0.5f, 0.5f);
+                stem.transform.localPosition = Vector3.up * (trunk * 0.5f);
+                stem.GetComponent<MeshRenderer>().sharedMaterial = rock;
+
+                var crown = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                crown.name = "Cap";
+                crown.transform.SetParent(holder.transform, false);
+                float spread = Mathf.Lerp(2f, 3.6f, (float)random.NextDouble());
+                crown.transform.localScale = new Vector3(spread, spread * 0.4f, spread);
+                crown.transform.localPosition = Vector3.up * trunk;
+                crown.GetComponent<MeshRenderer>().sharedMaterial = cap;
+            }
+        }
+
+        FlatQuadMesh("PlanetMoss", VfxUtil.GlowTexture,
+            mossVerts, mossUvs, mossColors, mossTris);
+    }
+
+    /// <summary>The Saturn ring: two translucent bands with a gap, tilted so
+    /// the near side climbs into view when a jet swoops the rim. Wholly
+    /// outside the fence — dressing, never an obstacle. Vertex colour fades
+    /// the bands' edges to nothing (additive: dark IS transparent).</summary>
+    void BuildPlanetRing()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+
+        Color tint = new Color(0.45f, 0.6f, 0.9f);
+        void Band(float inner, float outer, float brightness)
+        {
+            const int segments = 72;
+            float mid = (inner + outer) * 0.5f;
+            int first = vertices.Count;
+            for (int s = 0; s <= segments; s++)
+            {
+                float a = s * (Mathf.PI * 2f / segments);
+                Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                vertices.Add(dir * inner);
+                vertices.Add(dir * mid);
+                vertices.Add(dir * outer);
+                for (int k = 0; k < 3; k++)
+                    uvs.Add(new Vector2(0.5f, 0.5f));
+                colors.Add(Color.black);
+                colors.Add(tint * brightness);
+                colors.Add(Color.black);
+                if (s == 0)
+                    continue;
+                int a0 = first + (s - 1) * 3, b0 = first + s * 3;
+                for (int k = 0; k < 2; k++)
+                {
+                    triangles.Add(a0 + k); triangles.Add(a0 + k + 1); triangles.Add(b0 + k + 1);
+                    triangles.Add(a0 + k); triangles.Add(b0 + k + 1); triangles.Add(b0 + k);
+                }
+            }
+        }
+
+        Band(175f, 202f, 0.38f);
+        Band(210f, 236f, 0.24f);
+
+        var ring = FlatQuadMesh("PlanetRing", null, vertices, uvs, colors, triangles);
+        ring.transform.localPosition = PlanetCenter;
+        ring.transform.localRotation = Quaternion.Euler(32f, 0f, 6f);
+    }
+
+    /// <summary>A pale moon on a lazy orbit past the fence — parallax for the
+    /// stars and something to frame a dogfight against.</summary>
+    void BuildMoon()
+    {
+        _moonPivot = new GameObject("MoonOrbit").transform;
+        _moonPivot.SetParent(transform, false);
+
+        var moon = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Object.Destroy(moon.GetComponent<Collider>());
+        moon.name = "Moon";
+        moon.transform.SetParent(_moonPivot, false);
+        moon.transform.localScale = Vector3.one * 44f;
+        moon.transform.localPosition = new Vector3(240f, 88f, 0f);
+        moon.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Lit("dogfight-moon", new Color(0.35f, 0.37f, 0.45f), 0.2f);
+    }
+
+    // -------------------------------------------------- donut station builders
+
+    /// <summary>The donut itself: a real torus mesh with a real mesh collider,
+    /// so bolts hit it and gun runs use it as cover.</summary>
+    void BuildTorus()
+    {
+        var mesh = TorusMesh(TorusMajor, TorusTube, 56, 20);
+        var go = new GameObject("StationRing");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, TorusY, 0f);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Lit("dogfight-station", new Color(0.14f, 0.17f, 0.24f), 0.45f);
+        go.AddComponent<MeshCollider>().sharedMesh = mesh;
+    }
+
+    static Mesh TorusMesh(float majorR, float tubeR, int segments, int sides)
+    {
+        var vertices = new Vector3[(segments + 1) * (sides + 1)];
+        var normals = new Vector3[vertices.Length];
+        var uvs = new Vector2[vertices.Length];
+        var triangles = new int[segments * sides * 6];
+
+        for (int s = 0; s <= segments; s++)
+        {
+            float a = s * (Mathf.PI * 2f / segments);
+            Vector3 outward = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            Vector3 spine = outward * majorR;
+            for (int t = 0; t <= sides; t++)
+            {
+                float b = t * (Mathf.PI * 2f / sides);
+                Vector3 normal = outward * Mathf.Cos(b) + Vector3.up * Mathf.Sin(b);
+                int v = s * (sides + 1) + t;
+                vertices[v] = spine + normal * tubeR;
+                normals[v] = normal;
+                uvs[v] = new Vector2((float)s / segments, (float)t / sides);
+            }
+        }
+
+        int i = 0;
+        for (int s = 0; s < segments; s++)
+            for (int t = 0; t < sides; t++)
+            {
+                int v = s * (sides + 1) + t;
+                int next = v + sides + 1;
+                triangles[i++] = v; triangles[i++] = next; triangles[i++] = v + 1;
+                triangles[i++] = v + 1; triangles[i++] = next; triangles[i++] = next + 1;
+            }
+
+        var mesh = new Mesh { name = "StationTorus" };
+        mesh.vertices = vertices;
+        mesh.normals = normals;
+        mesh.uv = uvs;
+        mesh.triangles = triangles;
+        return mesh;
+    }
+
+    /// <summary>The hub the pads launch off: a drum in the donut's hole, a
+    /// glowing rim band, and the comms mast hanging under it with the one red
+    /// beacon every station keeps lit.</summary>
+    void BuildHub()
+    {
+        var hull = ArenaMaterials.Lit("dogfight-station", new Color(0.14f, 0.17f, 0.24f), 0.45f);
+
+        var drum = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        drum.name = "Hub";
+        drum.transform.SetParent(transform, false);
+        drum.transform.localScale = new Vector3(HubRadius * 2f,
+            (HubTopY - HubBottomY) * 0.5f, HubRadius * 2f);
+        drum.transform.localPosition = new Vector3(0f, (HubTopY + HubBottomY) * 0.5f, 0f);
+        drum.GetComponent<MeshRenderer>().sharedMaterial = hull;
+
+        var rim = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        Object.Destroy(rim.GetComponent<Collider>());
+        rim.name = "HubRim";
+        rim.transform.SetParent(transform, false);
+        rim.transform.localScale = new Vector3(HubRadius * 2f + 0.8f, 0.35f, HubRadius * 2f + 0.8f);
+        rim.transform.localPosition = new Vector3(0f, HubTopY - 2f, 0f);
+        rim.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Emissive("dogfight-hub-rim", GridGlow, 1.4f);
+
+        var mast = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        mast.name = "HubMast";
+        mast.transform.SetParent(transform, false);
+        mast.transform.localScale = new Vector3(2.4f, 6.5f, 2.4f);
+        mast.transform.localPosition = new Vector3(0f, HubBottomY - 6.5f, 0f);
+        mast.GetComponent<MeshRenderer>().sharedMaterial = hull;
+
+        var dish = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Object.Destroy(dish.GetComponent<Collider>());
+        dish.name = "HubDish";
+        dish.transform.SetParent(transform, false);
+        dish.transform.localScale = new Vector3(7f, 2.2f, 7f);
+        dish.transform.localPosition = new Vector3(0f, HubBottomY - 11f, 0f);
+        dish.GetComponent<MeshRenderer>().sharedMaterial = hull;
+
+        var beacon = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Object.Destroy(beacon.GetComponent<Collider>());
+        beacon.name = "MastBeacon";
+        beacon.transform.SetParent(transform, false);
+        beacon.transform.localScale = Vector3.one * 0.9f;
+        beacon.transform.localPosition = new Vector3(0f, HubBottomY - 13.5f, 0f);
+        beacon.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Emissive("dogfight-beacon", new Color(1f, 0.3f, 0.25f), 1.8f);
+    }
+
+    /// <summary>Four beams tying the hub to the ring, each wearing a glow
+    /// strip so the cross reads from altitude.</summary>
+    void BuildSpokes()
+    {
+        var hull = ArenaMaterials.Lit("dogfight-station", new Color(0.14f, 0.17f, 0.24f), 0.45f);
+        var trim = ArenaMaterials.Emissive("dogfight-spoke-trim", GridGlow, 1.2f);
+
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 dir = Quaternion.Euler(0f, i * 90f, 0f) * Vector3.forward;
+            var spoke = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            spoke.name = "Spoke";
+            spoke.transform.SetParent(transform, false);
+            spoke.transform.localScale = new Vector3(5.5f, 4.5f, 28f);
+            spoke.transform.localPosition = dir * 46f + Vector3.up * TorusY;
+            spoke.transform.localRotation = Quaternion.LookRotation(dir, Vector3.up);
+            spoke.GetComponent<MeshRenderer>().sharedMaterial = hull;
+
+            var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(strip.GetComponent<Collider>());
+            strip.name = "SpokeStrip";
+            strip.transform.SetParent(spoke.transform, false);
+            strip.transform.localScale = new Vector3(0.2f, 0.06f, 0.9f);
+            strip.transform.localPosition = new Vector3(0f, 0.53f, 0f);
+            strip.GetComponent<MeshRenderer>().sharedMaterial = trim;
+        }
+    }
+
+    /// <summary>The flat walkway over the tube's crown — the deck ground
+    /// forms fight on and turrets stand on. Its own mesh and collider; the
+    /// glowing edge lamps live in <see cref="BuildStationLamps"/>.</summary>
+    void BuildRingDeck()
+    {
+        const int segments = 72;
+        var vertices = new Vector3[(segments + 1) * 2];
+        var normals = new Vector3[vertices.Length];
+        var uvs = new Vector2[vertices.Length];
+        var triangles = new int[segments * 6];
+
+        for (int s = 0; s <= segments; s++)
+        {
+            float a = s * (Mathf.PI * 2f / segments);
+            Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            vertices[s * 2] = dir * RingDeckInner;
+            vertices[s * 2 + 1] = dir * RingDeckOuter;
+            normals[s * 2] = normals[s * 2 + 1] = Vector3.up;
+            uvs[s * 2] = new Vector2((float)s / segments, 0f);
+            uvs[s * 2 + 1] = new Vector2((float)s / segments, 1f);
+        }
+        int i = 0;
+        for (int s = 0; s < segments; s++)
+        {
+            int v = s * 2;
+            triangles[i++] = v; triangles[i++] = v + 2; triangles[i++] = v + 1;
+            triangles[i++] = v + 1; triangles[i++] = v + 2; triangles[i++] = v + 3;
+        }
+
+        var mesh = new Mesh { name = "StationDeck" };
+        mesh.vertices = vertices;
+        mesh.normals = normals;
+        mesh.uv = uvs;
+        mesh.triangles = triangles;
+
+        var go = new GameObject("RingDeck");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, RingDeckY, 0f);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Lit("dogfight-station-deck", new Color(0.17f, 0.2f, 0.28f), 0.35f);
+        go.AddComponent<MeshCollider>().sharedMesh = mesh;
+    }
+
+    /// <summary>Portholes: hard-edged glow rectangles around the tube's outer
+    /// AND inner equators (the hole should glow when flown through), warm
+    /// white with the odd cyan control room and the odd dark cabin. One mesh.</summary>
+    void BuildStationWindows()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+
+        Color warm = new Color(1f, 0.93f, 0.75f) * 1.5f;
+        Color cool = GridGlow * 1.6f;
+
+        var random = new System.Random(31);
+        const int count = 72;
+        foreach (float facing in new[] { 1f, -1f })
+            foreach (float dy in new[] { -2.5f, 2.5f })
+                for (int s = 0; s < count; s++)
+                {
+                    if (random.NextDouble() < 0.22)
+                        continue;     // a dark cabin
+                    float a = (s + (dy > 0f ? 0.5f : 0f)) * (Mathf.PI * 2f / count);
+                    Vector3 outward = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                    float reach = TorusMajor
+                        + facing * (Mathf.Sqrt(TorusTube * TorusTube - dy * dy) + 0.15f);
+                    Vector3 center = outward * reach + Vector3.up * (TorusY + dy);
+                    Vector3 tangent = new Vector3(-outward.z, 0f, outward.x);
+                    AddOrientedQuad(vertices, uvs, colors, triangles, center,
+                        tangent * 0.9f, Vector3.up * 0.55f,
+                        random.NextDouble() < 0.14 ? cool : warm);
+                }
+
+        FlatQuadMesh("StationWindows", null, vertices, uvs, colors, triangles);
+    }
+
+    /// <summary>The deck's own lamps: cyan and warm markers alternating along
+    /// both walkway edges, and a hazard ring around the hub deck's rim.</summary>
+    void BuildStationLamps()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+
+        Color edgeA = GridGlow * 1.5f;
+        Color edgeB = new Color(1f, 0.7f, 0.3f) * 1.4f;
+
+        for (int s = 0; s < 36; s++)
+        {
+            float a = s * (Mathf.PI * 2f / 36f);
+            Vector3 dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            Color c = s % 2 == 0 ? edgeA : edgeB;
+            foreach (float r in new[] { RingDeckInner + 0.8f, RingDeckOuter - 0.8f })
+                AddOrientedQuad(vertices, uvs, colors, triangles,
+                    dir * r + Vector3.up * (RingDeckY + 0.15f),
+                    Vector3.right * 0.65f, Vector3.forward * 0.65f, c);
+            // The hub deck's rim, denser and all-cyan: the launch apron.
+            AddOrientedQuad(vertices, uvs, colors, triangles,
+                dir * (HubRadius - 1.2f) + Vector3.up * (HubTopY + 0.15f),
+                Vector3.right * 0.55f, Vector3.forward * 0.55f, edgeA);
+        }
+
+        FlatQuadMesh("StationLamps", VfxUtil.GlowTexture, vertices, uvs, colors, triangles);
+    }
+
+    /// <summary>The energy net the void deck is made visible by: a faint
+    /// holo-grid far below the station, so landing on "nothing" reads as
+    /// landing on something the station put there.</summary>
+    void BuildSafetyNet()
+    {
+        var vertices = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var colors = new List<Color>();
+        var triangles = new List<int>();
+
+        Color line = GridGlow * 0.22f;
+        const float half = 280f;
+        for (float p = -half; p <= half; p += 40f)
+        {
+            AddOrientedQuad(vertices, uvs, colors, triangles,
+                new Vector3(p, VoidY, 0f), Vector3.right * 0.35f, Vector3.forward * half, line);
+            AddOrientedQuad(vertices, uvs, colors, triangles,
+                new Vector3(0f, VoidY, p), Vector3.right * half, Vector3.forward * 0.35f, line);
+        }
+
+        FlatQuadMesh("SafetyNet", null, vertices, uvs, colors, triangles);
+    }
+
+    // ------------------------------------------------------------------ shared
+
     /// <summary>Soft puffs drifting through the fight band. Pure speed cues —
     /// no colliders, faint enough that a jet vanishing into one for a beat is
     /// atmosphere, not occlusion.</summary>
@@ -469,8 +1057,12 @@ public class DogfightSky : MonoBehaviour
     /// facing to read as anything but a point. Brightness and tint live in
     /// vertex colour; the additive shader skips fog, which is what lets them
     /// survive a fog density that swallows lit geometry long before the dome.
+    ///
+    /// The airfield keeps its stars above the horizon (there is ground down
+    /// there); the space maps wrap them the whole way round, because below
+    /// the furniture there is only more sky.
     /// </summary>
-    void BuildStars()
+    void BuildStars(bool fullDome)
     {
         // Far plane is 900 and the camera roams ~170 from centre at worst;
         // 680 keeps every star inside the clip with margin.
@@ -485,6 +1077,7 @@ public class DogfightSky : MonoBehaviour
 
         // A tilted band gets a denser share of the stars — a cheap milky way.
         Quaternion bandTilt = Quaternion.Euler(62f, 0f, 24f);
+        float floorDot = fullDome ? -1f : -0.05f;
 
         for (int i = 0; i < count; i++)
         {
@@ -503,13 +1096,13 @@ public class DogfightSky : MonoBehaviour
             else
             {
                 // Uniform over the dome: y uniform is area uniform on a sphere.
-                float y = Mathf.Lerp(-0.05f, 1f, (float)random.NextDouble());
+                float y = Mathf.Lerp(floorDot, 1f, (float)random.NextDouble());
                 float azimuth = (float)random.NextDouble() * Mathf.PI * 2f;
                 float flat = Mathf.Sqrt(1f - y * y);
                 dir = new Vector3(Mathf.Cos(azimuth) * flat, y, Mathf.Sin(azimuth) * flat);
             }
-            if (dir.y < -0.05f)
-                dir.y = -0.05f + ((float)random.NextDouble() * 0.3f);
+            if (dir.y < floorDot)
+                dir.y = floorDot + ((float)random.NextDouble() * 0.3f);
             dir = dir.normalized;
 
             float roll = (float)random.NextDouble();
@@ -595,6 +1188,10 @@ public class DogfightSky : MonoBehaviour
 
     void Update()
     {
+        // The moon takes its year at a walking pace.
+        if (_moonPivot != null)
+            _moonPivot.Rotate(0f, 1.1f * Time.deltaTime, 0f);
+
         // Clouds face whoever is looking. Yaw only: a puff that pitches over to
         // meet a diving camera visibly lies down.
         var camera = Camera.main;
@@ -629,6 +1226,125 @@ public class DogfightSky : MonoBehaviour
         light.shadows = LightShadows.None;
     }
 
+    // ----------------------------------------------------------------- the deck
+
+    /// <summary>
+    /// What is underfoot at this spot — the height a landing, a walk, a drive
+    /// or a wreck crash settles onto. The airfield is flat; the planet's deck
+    /// is its curved surface (clamped at the rim so the flank behaves like a
+    /// very steep hill rather than an abyss); the station is decks over an
+    /// energy net, so the answer JUMPS at every edge — which is why grounded
+    /// steps go through <see cref="HoldOnDeck"/> and landings refuse a deck
+    /// that is far above them (see JetPawn.TouchDownCheck).
+    /// </summary>
+    public static float GroundHeight(Vector3 at)
+    {
+        switch (Map)
+        {
+            case DogfightMapKind.TinyPlanet:
+            {
+                float d = Mathf.Min(new Vector2(at.x, at.z).magnitude, PlanetRim);
+                return PlanetCenter.y
+                       + Mathf.Sqrt(PlanetRadius * PlanetRadius - d * d);
+            }
+            case DogfightMapKind.DonutStation:
+            {
+                float d = new Vector2(at.x, at.z).magnitude;
+                if (d < HubRadius - 1f)
+                    return HubTopY;
+                if (d >= RingDeckInner && d <= RingDeckOuter)
+                    return RingDeckY;
+                return VoidY;
+            }
+            default:
+                return 0f;
+        }
+    }
+
+    /// <summary>The deck of last resort — where a fall that misses every
+    /// piece of furniture finally ends. The airfield's tarmac, the planet's
+    /// flank line, the station's energy net.</summary>
+    public static float BottomHeight
+    {
+        get
+        {
+            switch (Map)
+            {
+                case DogfightMapKind.TinyPlanet:
+                    return PlanetCenter.y + Mathf.Sqrt(
+                        PlanetRadius * PlanetRadius - PlanetRim * PlanetRim);
+                case DogfightMapKind.DonutStation:
+                    return VoidY;
+                default:
+                    return 0f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The deck this mover is actually OVER: <see cref="GroundHeight"/> when
+    /// the mover is above it, the map's <see cref="BottomHeight"/> once it has
+    /// fallen past. This is the query every ground CONTACT uses — a jet
+    /// threading under the station's walkway is over the net, not the
+    /// walkway, and must never be snapped up through the furniture.
+    /// </summary>
+    public static float DeckUnder(Vector3 at)
+    {
+        float deck = GroundHeight(at);
+        return at.y >= deck - 3f ? deck : BottomHeight;
+    }
+
+    /// <summary>True where the deck under this spot is not real furniture —
+    /// the station's energy net, the planet's flank clamp. Wreck craters skip
+    /// their fire here (flame standing on a hologram reads as a bug), and AI
+    /// pilots refuse to fold into ground forms over it.</summary>
+    public static bool OverVoid(Vector3 at)
+    {
+        switch (Map)
+        {
+            case DogfightMapKind.TinyPlanet:
+                return new Vector2(at.x, at.z).magnitude > PlanetRim - 2f;
+            case DogfightMapKind.DonutStation:
+                return GroundHeight(at) == VoidY;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// The grounded step test: a walking robot or driving tank may follow the
+    /// deck up and down honest slopes, but a step whose deck leaps — a
+    /// walkway edge, the planet's flank going vertical — is refused, keeping
+    /// the mover on its ledge instead of teleporting down a cliff or up onto
+    /// one. Slope-based so the planet's dome walks naturally while its flank
+    /// (and every station edge) reads as a wall.
+    /// </summary>
+    public static Vector3 HoldOnDeck(Vector3 from, Vector3 to)
+    {
+        float step = new Vector2(to.x - from.x, to.z - from.z).magnitude;
+        float delta = Mathf.Abs(DeckUnder(to) - DeckUnder(from));
+        if (delta <= Mathf.Max(0.6f, step * 1.2f))
+            return to;
+        return new Vector3(from.x, to.y, from.z);
+    }
+
+    /// <summary>The local soft floor the assist lifts away from: flat on the
+    /// airfield, the SURFACE plus a margin on the planet (so the fight bends
+    /// around the dome), and low on the station map so the hole and the
+    /// under-ring pass stay flyable.</summary>
+    static float LocalFloor(Vector3 position)
+    {
+        switch (Map)
+        {
+            case DogfightMapKind.TinyPlanet:
+                return GroundHeight(position) + PlanetFloorLift;
+            case DogfightMapKind.DonutStation:
+                return DonutFloorY;
+            default:
+                return FloorY;
+        }
+    }
+
     // --------------------------------------------------------------- the volume
 
     /// <summary>
@@ -657,8 +1373,11 @@ public class DogfightSky : MonoBehaviour
         }
 
         // Pull up from the floor, push down from the ceiling. The bands are
-        // shallower than the fence's: altitude mistakes happen faster.
-        float lift = Mathf.Clamp01((FloorY + 22f - position.y) / 22f);
+        // shallower than the fence's: altitude mistakes happen faster. The
+        // floor is the MAP's — flat over the airfield, bent around the
+        // planet's dome, dropped under the station's ring.
+        float floor = LocalFloor(position);
+        float lift = Mathf.Clamp01((floor + 22f - position.y) / 22f);
         if (lift > 0f)
             steer.y = Mathf.Lerp(steer.y, 1f, lift * lift);
         float duck = Mathf.Clamp01((position.y - (CeilingY - 22f)) / 22f);
@@ -669,13 +1388,41 @@ public class DogfightSky : MonoBehaviour
     }
 
     /// <summary>
-    /// Keep jets out of the spires. A positional push, TankPawn's
+    /// Keep movers out of the furniture. A positional push, TankPawn's
     /// AvoidScenery reasoning in the air: everything here moves by writing its
     /// own transform, so Unity's collision response never runs, and cover you
     /// can be shot around but flown through is a rule nobody can learn.
+    ///
+    /// Grounded movers skip the big-body pushes — their y belongs to
+    /// <see cref="GroundHeight"/> and their edges to <see cref="HoldOnDeck"/>;
+    /// a radial shove fighting the deck clamp is a jitter machine. They keep
+    /// the spire-style column pushes, which are purely horizontal.
     /// </summary>
-    public static Vector3 KeepOffProps(Vector3 position, float clearance)
+    public static Vector3 KeepOffProps(Vector3 position, float clearance,
+        bool grounded = false)
     {
+        if (!grounded)
+        {
+            switch (Map)
+            {
+                case DogfightMapKind.TinyPlanet:
+                {
+                    // The planet is one big prop: a radial push off the sphere,
+                    // which is what lets low passes skim the flank as happily
+                    // as the pole.
+                    Vector3 gap = position - PlanetCenter;
+                    float want = PlanetRadius + clearance;
+                    float distance = gap.magnitude;
+                    if (distance < want && distance > 1e-3f)
+                        position = PlanetCenter + gap / distance * want;
+                    break;
+                }
+                case DogfightMapKind.DonutStation:
+                    position = PushOffStation(position, clearance);
+                    break;
+            }
+        }
+
         for (int i = 0; i < Spires.Count; i++)
         {
             var spire = Spires[i];
@@ -695,6 +1442,71 @@ public class DogfightSky : MonoBehaviour
             Vector3 pushed = spire.position + gap / distance * want;
             position = new Vector3(pushed.x, position.y, pushed.z);
         }
+        return position;
+    }
+
+    /// <summary>The station's solids, in flight terms: the tube (nearest
+    /// point on the ring's spine, pushed out of the cross-section), the hub
+    /// drum (pushed out its nearest face), the four spokes (capsule tests)
+    /// and the mast under the hub. All constant geometry — a mid-Play
+    /// recompile cannot forget it.</summary>
+    static Vector3 PushOffStation(Vector3 position, float clearance)
+    {
+        // The tube.
+        Vector2 flat = new Vector2(position.x, position.z);
+        float d = flat.magnitude;
+        Vector3 spine = d > 1e-3f
+            ? new Vector3(position.x / d * TorusMajor, TorusY, position.z / d * TorusMajor)
+            : new Vector3(TorusMajor, TorusY, 0f);
+        Vector3 gap = position - spine;
+        float want = TorusTube + clearance;
+        float distance = gap.magnitude;
+        if (distance < want)
+            position = spine + (distance > 1e-3f ? gap / distance : Vector3.up) * want;
+
+        // The hub drum: push out whichever face is nearest. "Above the top"
+        // is judged with a capped margin so a jet may skim the deck as low as
+        // it skims everything else.
+        d = new Vector2(position.x, position.z).magnitude;
+        float topMargin = Mathf.Min(clearance, 1.0f);
+        if (d < HubRadius + clearance
+            && position.y > HubBottomY - clearance && position.y < HubTopY + topMargin)
+        {
+            float side = HubRadius + clearance - d;
+            float up = HubTopY + topMargin - position.y;
+            float down = position.y - (HubBottomY - clearance);
+            if (side <= up && side <= down && d > 1e-3f)
+                position = new Vector3(position.x / d * (HubRadius + clearance),
+                    position.y, position.z / d * (HubRadius + clearance));
+            else if (up <= down)
+                position = new Vector3(position.x, HubTopY + topMargin, position.z);
+            else
+                position = new Vector3(position.x, HubBottomY - clearance, position.z);
+        }
+
+        // The spokes: horizontal capsules from hub to ring.
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 dir = i == 0 ? Vector3.forward
+                : i == 1 ? Vector3.right
+                : i == 2 ? Vector3.back
+                : Vector3.left;
+            float along = Mathf.Clamp(Vector3.Dot(position, dir), 32f, 60f);
+            Vector3 axis = dir * along + Vector3.up * TorusY;
+            Vector3 offset = position - axis;
+            float reach = SpokeGirth + clearance;
+            float off = offset.magnitude;
+            if (off < reach && off > 1e-3f)
+                position = axis + offset / off * reach;
+        }
+
+        // The mast hanging under the hub.
+        d = new Vector2(position.x, position.z).magnitude;
+        if (position.y < HubBottomY && position.y > HubBottomY - 14f
+            && d < 2.5f + clearance && d > 1e-3f)
+            position = new Vector3(position.x / d * (2.5f + clearance),
+                position.y, position.z / d * (2.5f + clearance));
+
         return position;
     }
 }

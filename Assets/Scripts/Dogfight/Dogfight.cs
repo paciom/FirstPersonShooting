@@ -747,8 +747,12 @@ public class Dogfight : MonoBehaviour
         if (pawn == _finalWreck)
         {
             _finalWreck = null;
+            // The mushroom grows off whatever deck the wreck actually hit —
+            // tarmac, planet dome, station walkway or the net below it all.
             WarFx.Spawn(WarFx.Kind.Nuke,
-                new Vector3(pawn.Center.x, 0f, pawn.Center.z));
+                new Vector3(pawn.Center.x,
+                    DogfightSky.DeckUnder(pawn.transform.position),
+                    pawn.Center.z));
         }
     }
 

@@ -96,17 +96,41 @@ public class DogfightTurret : MonoBehaviour
     /// The battery: a fixed, seeded ring on the deck, azimuths staggered and
     /// every reload clock started out of phase — four turrets that fired as
     /// one would read as a scripted volley, and dodge as one problem.
+    ///
+    /// Each map mounts it on its own furniture: the airfield's tarmac, the
+    /// planet's upper dome (footings sunk into the slope; past ~30° of tilt a
+    /// flat-based turret visibly floats), the station's ring walkway between
+    /// the spokes.
     /// </summary>
     public static void BuildRing()
     {
         var random = new System.Random(53);
         for (int i = 0; i < RingCount; i++)
         {
-            float azimuth = (i + 0.5f) * (360f / RingCount)
-                            + (float)random.NextDouble() * 30f;
-            float distance = Mathf.Lerp(DogfightSky.Radius * 0.3f, DogfightSky.Radius * 0.7f,
-                (float)random.NextDouble());
+            float azimuth, distance, sink = 0f;
+            switch (DogfightSky.Map)
+            {
+                case DogfightMapKind.TinyPlanet:
+                    azimuth = (i + 0.5f) * (360f / RingCount)
+                              + (float)random.NextDouble() * 30f;
+                    distance = Mathf.Lerp(30f, 62f, (float)random.NextDouble());
+                    sink = 0.9f;
+                    break;
+                case DogfightMapKind.DonutStation:
+                    // On the walkway, offset 45° so no turret stands on a spoke.
+                    azimuth = 45f + i * 90f + Mathf.Lerp(-12f, 12f,
+                        (float)random.NextDouble());
+                    distance = 72f;
+                    break;
+                default:
+                    azimuth = (i + 0.5f) * (360f / RingCount)
+                              + (float)random.NextDouble() * 30f;
+                    distance = Mathf.Lerp(DogfightSky.Radius * 0.3f,
+                        DogfightSky.Radius * 0.7f, (float)random.NextDouble());
+                    break;
+            }
             Vector3 at = Quaternion.Euler(0f, azimuth, 0f) * Vector3.forward * distance;
+            at.y = DogfightSky.GroundHeight(at) - sink;
             Spawn(at, (float)random.NextDouble() * ReloadSeconds);
         }
     }
@@ -272,8 +296,11 @@ public class DogfightTurret : MonoBehaviour
         float bestSqr = Range * Range;
         foreach (var jet in JetPawn.All)
         {
+            // The altitude gate is measured off the LOCAL deck — on the
+            // planet's dome "low" follows the surface down the curve.
             if (jet == null || jet.IsDown || !jet.FlightOn
-                || jet.transform.position.y < MinTargetAltitude)
+                || jet.transform.position.y
+                   < DogfightSky.GroundHeight(jet.transform.position) + MinTargetAltitude)
                 continue;
             float sqr = (jet.transform.position - transform.position).sqrMagnitude;
             if (sqr > bestSqr)

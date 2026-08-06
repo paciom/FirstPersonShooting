@@ -169,7 +169,12 @@ public static class RobotSelectMenu
         if (pendingMode == GameMode.AIvAI || pendingMode == GameMode.PlayerVsAI)
             BuildTeamSizePicker(canvasGo.transform, pendingMode == GameMode.PlayerVsAI);
         if (pendingMode == GameMode.Dogfight || pendingMode == GameMode.DogfightWar)
+        {
             BuildDogfightSizePicker(canvasGo.transform, pendingMode == GameMode.Dogfight);
+            // The battlefield chips sit where BRAWL keeps its CPU levels —
+            // the two mode families never share a select screen.
+            BuildMapPicker(canvasGo.transform);
+        }
 
         inspector.BuildUI(canvasGo.transform);
 
@@ -574,6 +579,61 @@ public static class RobotSelectMenu
             labels[i] = MakeText(chip.transform, "Label", level.ToString(), 26,
                 Color.white, FontStyle.Bold,
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
+        }
+        Refresh();
+    }
+
+    /// <summary>
+    /// DOGFIGHT's battlefield chips, on the Brawl level picker's strip right
+    /// of START: one per <see cref="DogfightMapKind"/>, the chosen one lit.
+    /// Remembered between sorties the way every other picker here is.
+    /// </summary>
+    static void BuildMapPicker(Transform parent)
+    {
+        MakeText(parent, "MapTitle", "BATTLEFIELD", 18,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(385f, -312f), new Vector2(560f, 24f));
+
+        var chips = new Image[DogfightMapPick.All.Length];
+        var labels = new Text[chips.Length];
+
+        void Refresh()
+        {
+            var chosen = DogfightMapPick.Chosen;
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = DogfightMapPick.All[i] == chosen;
+                chips[i].color = on
+                    ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                    : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            var kind = DogfightMapPick.All[i];
+            var chip = MakeImage(parent, $"Map_{kind}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(385f + (i - 1) * 192f, -352f);
+            rect.sizeDelta = new Vector2(184f, 52f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                DogfightMapPick.Chosen = kind;
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", DogfightMapPick.NameOf(kind), 17,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(180f, 48f));
+            // "DONUT  STATION" is the widest label; wrapped it would break
+            // onto two lines and only that one chip would look wrong.
+            labels[i].horizontalOverflow = HorizontalWrapMode.Overflow;
         }
         Refresh();
     }

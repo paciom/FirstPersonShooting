@@ -213,7 +213,10 @@ public class JetBrain : MonoBehaviour
                 urge += 0.4f;
             if (pawn.Shield != null && pawn.Shield.Normalized < 0.55f)
                 urge += 0.22f;
-            if (Random.value < urge * _groundAffinity
+            // Never fold up over the void — a tank parachuted onto the
+            // station's energy net has opted out of the fight.
+            if (!DogfightSky.OverVoid(pawn.transform.position)
+                && Random.value < urge * _groundAffinity
                 && pawn.RequestForm(JetPawn.Form.Tank))
                 _phaseUntil = Time.time + Random.Range(12f, 20f);
             return;

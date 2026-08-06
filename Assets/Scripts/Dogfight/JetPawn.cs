@@ -184,8 +184,9 @@ public class JetPawn : MonoBehaviour
     const float TankFallAcceleration = 28f;
     const float TankFallTerminal = 40f;
 
-    /// <summary>Where the deck is. The sky's ground slab tops out at zero.</summary>
-    const float GroundY = 0f;
+    // Where the deck is belongs to the MAP: flat tarmac, a curved worldlet
+    // or floating station decks — every ground contact in this class asks
+    // DogfightSky.GroundHeight rather than assuming a plane.
 
     // ------------------------------------------------------------------- state
 
@@ -958,9 +959,13 @@ public class JetPawn : MonoBehaviour
         transform.position = DogfightSky.KeepOffProps(transform.position, 1.2f);
         // The floor assist steers a jet up long before this matters; the
         // clamp is the net under the net (a jet re-folding off the deck
-        // starts far below the assist's whole band).
-        if (transform.position.y < 1f)
-            transform.position = new Vector3(transform.position.x, 1f, transform.position.z);
+        // starts far below the assist's whole band). DeckUnder, not
+        // GroundHeight: a jet threading beneath the station's walkway is over
+        // the void net, and must not be snapped up through the furniture.
+        float deck = DogfightSky.DeckUnder(transform.position);
+        if (transform.position.y < deck + 1f)
+            transform.position = new Vector3(transform.position.x, deck + 1f,
+                transform.position.z);
 
         foreach (var trail in _trails)
             trail.emitting = true;
@@ -1009,11 +1014,17 @@ public class JetPawn : MonoBehaviour
                 if (_hop <= 0f)
                     _hopSpeed = 0f;
             }
+            // The step is refused at deck edges and cliff-grade slopes —
+            // walking off the station's walkway or down the planet's flank
+            // is a fall, not a stroll.
+            Vector3 before = transform.position;
             transform.position += drift * ((Sprint ? RunSpeed : WalkSpeed) * dt);
-            transform.position = new Vector3(transform.position.x, GroundY + 1.7f + _hop,
+            transform.position = DogfightSky.HoldOnDeck(before, transform.position);
+            transform.position = new Vector3(transform.position.x,
+                DogfightSky.DeckUnder(transform.position) + 1.7f + _hop,
                 transform.position.z);
         }
-        transform.position = DogfightSky.KeepOffProps(transform.position, 0.9f);
+        transform.position = DogfightSky.KeepOffProps(transform.position, 0.9f, Grounded);
     }
 
     /// <summary>The tank: ballistic until the deck, then a hull that turns
@@ -1046,10 +1057,15 @@ public class JetPawn : MonoBehaviour
 
         _yaw += steer.x * TankTurnSpeed * dt;
         transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        // Same edge rule as the robot's walk: the deck is followed, ledges
+        // and cliff-grade slopes are walls.
+        Vector3 wasAt = transform.position;
         transform.position += transform.forward * (_tankDrive * TankDriveSpeed * dt);
-        transform.position = new Vector3(transform.position.x, GroundY + 1.1f,
+        transform.position = DogfightSky.HoldOnDeck(wasAt, transform.position);
+        transform.position = new Vector3(transform.position.x,
+            DogfightSky.DeckUnder(transform.position) + 1.1f,
             transform.position.z);
-        transform.position = DogfightSky.KeepOffProps(transform.position, 1.4f);
+        transform.position = DogfightSky.KeepOffProps(transform.position, 1.4f, true);
 
         // Hold the deck: the fence is for jets; a tank just runs out of road.
         Vector3 flat = new Vector3(transform.position.x, 0f, transform.position.z);
@@ -1238,12 +1254,15 @@ public class JetPawn : MonoBehaviour
         return smoke;
     }
 
-    /// <summary>Common landing test. True on the frame the deck arrives.</summary>
+    /// <summary>Common landing test. True on the frame the deck arrives.
+    /// DeckUnder, not GroundHeight: a faller that has already dropped past a
+    /// floating walkway belongs to the net below it, never snapped up.</summary>
     bool TouchDownCheck(float rideHeight)
     {
-        if (transform.position.y > GroundY + rideHeight)
+        float deck = DogfightSky.DeckUnder(transform.position);
+        if (transform.position.y > deck + rideHeight)
             return false;
-        transform.position = new Vector3(transform.position.x, GroundY + rideHeight,
+        transform.position = new Vector3(transform.position.x, deck + rideHeight,
             transform.position.z);
         _verticalSpeed = 0f;
         _airVelocity = Vector3.zero;
@@ -1426,7 +1445,7 @@ public class JetPawn : MonoBehaviour
         if (falling > 0.35f && Random.value < 12f * dt)
             VfxUtil.SpawnBurst(Center, new Color(1f, 0.6f, 0.25f), 4, 3f, 0.14f);
 
-        if (transform.position.y <= GroundY + 0.9f)
+        if (transform.position.y <= DogfightSky.DeckUnder(transform.position) + 0.9f)
             LandWreck();
     }
 
@@ -1443,13 +1462,20 @@ public class JetPawn : MonoBehaviour
             return;
         WreckLanded = true;
         Grounded = true;
-        transform.position = new Vector3(transform.position.x, GroundY + 0.9f,
+        float rest = DogfightSky.DeckUnder(transform.position);
+        // A crater burns only on real furniture: fire standing on the
+        // station's energy net or hanging off the planet's flank reads as a
+        // bug, not a crash site. The blast is honest anywhere.
+        bool onDeck = !DogfightSky.OverVoid(transform.position)
+            && rest >= DogfightSky.GroundHeight(transform.position) - 0.5f;
+        transform.position = new Vector3(transform.position.x, rest + 0.9f,
             transform.position.z);
 
         VfxUtil.Explosion(transform.position, MatchAnnouncer.TeamColor(Team), 2.4f);
         WarFx.Spawn(WarFx.Kind.Big, transform.position, 1.8f);
         VfxUtil.SpawnBurst(transform.position, new Color(0.75f, 0.7f, 0.6f), 26, 7f, 0.2f);
-        WarFx.SpawnFire(transform.position, 1.3f, 6f);
+        if (onDeck)
+            WarFx.SpawnFire(transform.position, 1.3f, 6f);
 
         SetVisible(false);
         foreach (var trail in _trails)
