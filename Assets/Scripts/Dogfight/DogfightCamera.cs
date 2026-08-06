@@ -160,7 +160,13 @@ public class DogfightCamera : MonoBehaviour
             _hidSubject = false;
             Subject.SetVisible(true);
         }
-        Vector3 wanted = jet.position - jet.forward * ChaseBack + Vector3.up * ChaseUp;
+        // Sit above the jet's OWN back in space, not the world's. Offsetting
+        // along world up would swing the camera under the belly the moment a
+        // jet inverted, and orbiting the planet means being inverted half the
+        // time — the shot has to be stable relative to the aircraft, not the
+        // axis the level was authored along.
+        Vector3 chaseUp = DogfightSky.FreeOrientation ? jet.up : Vector3.up;
+        Vector3 wanted = jet.position - jet.forward * ChaseBack + chaseUp * ChaseUp;
         if (!_snapped)
         {
             _snapped = true;
@@ -172,9 +178,15 @@ public class DogfightCamera : MonoBehaviour
         }
         transform.position = _position + jolt;
 
-        // Lean a fraction of the subject's bank: enough to feel the turn,
-        // level enough that the horizon stays a horizon.
-        Vector3 up = Vector3.Slerp(Vector3.up, jet.up, LeanFraction);
+        // On the airfield, lean only a fraction of the subject's bank: enough
+        // to feel the turn, level enough that the horizon stays a horizon.
+        //
+        // In space there is no horizon to keep, and holding a world-up bias
+        // would roll the picture over on its own as a jet went round the far
+        // side of the planet. Take the jet's up whole and the frame stays put.
+        Vector3 up = DogfightSky.FreeOrientation
+            ? jet.up
+            : Vector3.Slerp(Vector3.up, jet.up, LeanFraction);
         transform.rotation = Quaternion.LookRotation(
             (jet.position + jet.forward * LookAhead - transform.position).normalized, up);
     }

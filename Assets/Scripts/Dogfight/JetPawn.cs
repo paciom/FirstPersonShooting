@@ -327,6 +327,14 @@ public class JetPawn : MonoBehaviour
     float _yaw;
     float _pitch;
     float _roll;
+
+    /// <summary>
+    /// Flight attitude on the space maps, carried as a quaternion because the
+    /// jet may end up any way round and Euler angles cannot say that. Excludes
+    /// the cosmetic bank, so <c>_orientation * forward</c> is the direction the
+    /// jet actually travels no matter how far it is leaning.
+    /// </summary>
+    Quaternion _orientation = Quaternion.identity;
     float _missileReadyAt;
     int _flareCharges = FlareChargesMax;
     float _flareRechargeAt;
@@ -730,6 +738,10 @@ public class JetPawn : MonoBehaviour
                 Speed = Grounded ? SpeedMin : Mathf.Max(SpeedMin, _airVelocity.magnitude);
                 _pitch = 0f;
                 _roll = 0f;
+                // Take up the attitude the jet already has rather than snapping
+                // to identity: a transform mid-fight is a continuous move, and
+                // on a space map there is no upright to snap to anyway.
+                _orientation = transform.rotation;
                 break;
             case Form.Robot:
                 ShowStage(_tankSet.Exists, 0);
@@ -941,15 +953,39 @@ public class JetPawn : MonoBehaviour
         Steer = Vector2.zero;
         Throttle = 0f;
 
-        steer = DogfightSky.SteerAssist(transform.position, transform.forward, steer);
+        steer = DogfightSky.SteerAssist(
+            transform.position, transform.forward, transform.up, steer);
 
-        _yaw += steer.x * YawRate * dt;
-        _pitch = Mathf.Clamp(_pitch + steer.y * PitchRate * dt, -PitchLimit, PitchLimit);
-        if (Mathf.Abs(steer.y) < 0.05f)
-            _pitch = Mathf.MoveTowards(_pitch, 0f, 14f * dt);
-        _roll = Mathf.Lerp(_roll, -steer.x * BankDegrees, 1f - Mathf.Exp(-6f * dt));
+        if (DogfightSky.FreeOrientation)
+        {
+            // Space: integrate the stick as rotation RATES in the jet's own
+            // frame. Absolute Euler angles cannot express this — pitch would
+            // need clamping to stay out of gimbal lock, which is exactly the
+            // clamp that stops a jet looping over the top of the planet or
+            // rolling under the station's ring.
+            //
+            // Nothing levels itself here. There is no horizon to level to, and
+            // an auto-level would fight the player every time they settled into
+            // an orbit that is not the world's idea of upright.
+            _orientation *= Quaternion.Euler(
+                -steer.y * PitchRate * dt, steer.x * YawRate * dt, 0f);
 
-        transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
+            // Bank stays cosmetic and rides on top: a rotation about the jet's
+            // OWN forward axis leaves that axis alone, so the flight direction
+            // is untouched and the model still leans into its turns.
+            _roll = Mathf.Lerp(_roll, -steer.x * BankDegrees, 1f - Mathf.Exp(-6f * dt));
+            transform.rotation = _orientation * Quaternion.Euler(0f, 0f, _roll);
+        }
+        else
+        {
+            _yaw += steer.x * YawRate * dt;
+            _pitch = Mathf.Clamp(_pitch + steer.y * PitchRate * dt, -PitchLimit, PitchLimit);
+            if (Mathf.Abs(steer.y) < 0.05f)
+                _pitch = Mathf.MoveTowards(_pitch, 0f, 14f * dt);
+            _roll = Mathf.Lerp(_roll, -steer.x * BankDegrees, 1f - Mathf.Exp(-6f * dt));
+
+            transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
+        }
 
         float wanted = throttle >= 0f
             ? Mathf.Lerp(SpeedCruise, SpeedBoost, throttle)
@@ -1497,6 +1533,9 @@ public class JetPawn : MonoBehaviour
         _yaw = yaw;
         _pitch = 0f;
         _roll = 0f;
+        // A respawn is the one place a jet SHOULD be levelled: it arrives on a
+        // spawn ring facing along the yaw it was given, whichever map it is on.
+        _orientation = Quaternion.Euler(0f, yaw, 0f);
         SetVisible(true);
         if (_burnFlame != null)
         {

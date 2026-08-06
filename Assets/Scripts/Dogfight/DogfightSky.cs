@@ -1348,12 +1348,91 @@ public class DogfightSky : MonoBehaviour
     // --------------------------------------------------------------- the volume
 
     /// <summary>
+    /// True where the map is a body hanging in space rather than ground under a
+    /// sky. The planet is a real sphere and the station a real torus, so "below"
+    /// them is not out of bounds — it is the other side. On those maps there is
+    /// no floor, no ceiling and no level: the volume is a shell, and a jet may
+    /// fly any attitude through it.
+    ///
+    /// The airfield stays as it was. It has a runway, a takeoff and a landing,
+    /// and a horizon to level against — a fixed up is the right model there.
+    /// </summary>
+    public static bool FreeOrientation => Map != DogfightMapKind.Airfield;
+
+    /// <summary>Centre of the body the shell is drawn around.</summary>
+    public static Vector3 SpaceCenter =>
+        Map == DogfightMapKind.TinyPlanet ? PlanetCenter : Vector3.zero;
+
+    /// <summary>Closest a jet may come to the body's centre — the surface plus
+    /// room to pull out of a dive at boost.</summary>
+    public static float ShellInner =>
+        Map == DogfightMapKind.TinyPlanet ? PlanetRadius + PlanetFloorLift : RingDeckOuter * 0.55f;
+
+    /// <summary>The far edge of the fight, measured from the same centre. Sized
+    /// so the planet map keeps roughly the roaming room the cylinder gave it,
+    /// now available all the way around instead of over the top only.</summary>
+    public static float ShellOuter =>
+        Map == DogfightMapKind.TinyPlanet ? PlanetRadius + 150f : Radius;
+
+    /// <summary>
+    /// Shell assist: the space maps' answer to the fence, floor and ceiling in
+    /// one. Distance from the body's centre is the only thing that matters, so
+    /// the same rule holds whichever way up a jet is flying.
+    ///
+    /// Both nudges are applied as PITCH, in the jet's own frame — pull toward
+    /// open space, push away from the body. Yaw would be meaningless here: with
+    /// free orientation there is no world-horizontal plane for it to turn in.
+    /// </summary>
+    static Vector2 ShellAssist(Vector3 position, Vector3 forward, Vector3 up, Vector2 steer)
+    {
+        Vector3 out0 = position - SpaceCenter;
+        float distance = out0.magnitude;
+        if (distance < 1e-3f)
+            return steer;
+        Vector3 outward = out0 / distance;
+
+        // Which way the nose would have to swing, expressed as a pitch sign in
+        // the jet's own frame: +1 pulls toward the jet's back, -1 toward its
+        // belly. Dotting the wanted direction against the jet's up gives that
+        // directly, and stays correct upside down.
+        float band = AssistBand * 0.65f;
+
+        float below = (ShellInner + band) - distance;      // too close to the body
+        if (below > 0f)
+        {
+            float grip = Mathf.Clamp01(below / band);
+            if (Vector3.Dot(forward, outward) < 0.85f)
+                steer.y = Mathf.Lerp(steer.y, Mathf.Sign(Vector3.Dot(up, outward)), grip * grip);
+        }
+
+        float beyond = distance - (ShellOuter - AssistBand);   // drifting out of the fight
+        if (beyond > 0f)
+        {
+            float grip = Mathf.Clamp01(beyond / AssistBand);
+            if (Vector3.Dot(forward, -outward) < 0.85f)
+                steer.y = Mathf.Lerp(steer.y, Mathf.Sign(Vector3.Dot(up, -outward)), grip * grip);
+        }
+
+        return steer;
+    }
+
+    /// <summary>
     /// The sky's hand on the stick: blends the driver's steer toward "back
     /// inside" as a jet nears the edge, the floor or the ceiling, reaching full
     /// authority at the boundary itself. Centripetal rather than a hard flip —
     /// the yaw component pushes toward the centre's side, so an edge approach
     /// becomes a wide banked turn back into the fight.
+    ///
+    /// Space maps answer through <see cref="ShellAssist"/> instead: there is no
+    /// fence, floor or ceiling to lean away from, only a distance from the body.
     /// </summary>
+    public static Vector2 SteerAssist(Vector3 position, Vector3 forward, Vector3 up, Vector2 steer)
+    {
+        if (FreeOrientation)
+            return ShellAssist(position, forward, up, steer);
+        return SteerAssist(position, forward, steer);
+    }
+
     public static Vector2 SteerAssist(Vector3 position, Vector3 forward, Vector2 steer)
     {
         // Turn back from the fence.
