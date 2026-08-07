@@ -79,11 +79,22 @@ public class TDCreep : CommanderUnit
     }
 
     /// <summary>
+    /// The march does not stop for architecture. The base brain sieges
+    /// structures now (Commander's wars needed it), but a raider that
+    /// parked at ITS attack range to duel a tower would stand just outside
+    /// the tower's — a fight the tower can never answer, and a march that
+    /// never arrives. Structure fire stays the drive-by gun's job
+    /// (TDRaiderGun); the Core stays a destination, not a target.
+    /// </summary>
+    protected override bool AttacksStructures => false;
+
+    /// <summary>
     /// Shot by a defender: turn and fight — the base brain already knows
     /// how, and the attack-move's resume point survives the detour. Shot by
     /// a TOWER (no unit attacker to resolve): shrug and keep marching — the
-    /// base behavior would break toward "home", and this map's home for
-    /// team 1 is a Commander coordinate that doesn't exist here.
+    /// base behavior would answer the turret in place (and from outside its
+    /// reach, see AttacksStructures) or break toward a "home" that on this
+    /// map is a Commander coordinate.
     /// </summary>
     protected override void OnUnderAttack(CommanderUnit attacker)
     {

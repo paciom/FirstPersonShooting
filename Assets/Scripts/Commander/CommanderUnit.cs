@@ -39,6 +39,18 @@ public class CommanderUnit : MonoBehaviour
     public float sightRange = 26f;
     public float attackRange = 20f;
 
+    /// <summary>
+    /// Whether this unit's own brain picks fights with enemy STRUCTURES
+    /// (attack-move and idle auto-engage). Commander units say yes — sieging
+    /// is how wars end. Tower Defense raiders say no: their structure fire
+    /// is a drive-by side gun by design, and a raider that parks at its own
+    /// attack range to duel a tower stands just outside the tower's — a
+    /// stationary fight the tower can never answer. Explicit orders
+    /// (IssueAttackBuilding) are not gated; this governs only what the unit
+    /// decides for itself.
+    /// </summary>
+    protected virtual bool AttacksStructures => true;
+
     /// <summary>Seconds between slow-brain ticks (scans, arrivals, mining).</summary>
     protected const float ThinkInterval = 0.4f;
 
@@ -597,10 +609,11 @@ public class CommanderUnit : MonoBehaviour
                 }
                 else
                 {
-                    // No robots to fight — structures will do. This is how a
-                    // wave that reaches an empty base actually ends the war
-                    // instead of loitering outside the Command Center.
-                    var structure = NearestEnemyBuilding(sightRange);
+                    // No robots to fight — structures will do (for units
+                    // whose doctrine says so). This is how a wave that
+                    // reaches an empty base actually ends the war instead
+                    // of loitering outside the Command Center.
+                    var structure = AttacksStructures ? NearestEnemyBuilding(sightRange) : null;
                     if (structure != null)
                     {
                         _order = OrderKind.Attack;
@@ -651,8 +664,8 @@ public class CommanderUnit : MonoBehaviour
         }
         // Enemy structures in sight get the same treatment — a turret built
         // up against your mining field is an intruder that happens to stand
-        // still.
-        var structure = NearestEnemyBuilding(sightRange);
+        // still. (Units whose doctrine forbids it skip straight to work.)
+        var structure = AttacksStructures ? NearestEnemyBuilding(sightRange) : null;
         if (structure != null)
         {
             _leashOrigin = transform.position;
