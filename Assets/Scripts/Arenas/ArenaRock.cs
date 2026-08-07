@@ -300,7 +300,9 @@ public static class ArenaRock
         // and lumpy rock beside hard-edged robots looks like an accident
         // rather than a style. Variety comes from the container's own
         // proportions and how it is placed, not from bending its shape.
-        // The rock forms stay in the file: the horizon rings want mountains.
+        // As of 2026-08-07 nothing requests the organic forms at all — the
+        // horizon rings that wanted mountains were removed with the rest of
+        // the strange rocks. The generators stay for whoever needs one next.
         return Form.Crate;
     }
 }

@@ -1,13 +1,19 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// A living cover block. Weapons can destroy it (it shatters and sinks away),
-/// then it regrows from the ground later — lifting any character standing on
-/// top — and occasionally slides to a new spot, sometimes slowly, sometimes in
-/// a sudden dash. A NavMeshObstacle carves the navmesh as it moves so bots
-/// re-path around it without a full rebake.
+/// A living cover block. Weapons can destroy it (it shatters and sinks away);
+/// its replacement then DROPS OUT OF THE SKY somewhere else, Brawl
+/// cargo-rain style: a glowing ring marks the landing spot, the block falls
+/// with gravity's acceleration, thuds down in a puff of dust and shoves
+/// anyone underneath out of the way. A NavMeshObstacle carves the navmesh at
+/// its resting spot so bots path around it without a full rebake.
+///
+/// Blocks used to also slide and dash across the floor between fights. That
+/// churn is gone on purpose: cover that drifts reads as furniture rearranging
+/// itself, where a crate falling out of the sky reads as an EVENT — the same
+/// verdict Brawl's Cargo Rain already settled. The only way a block moves now
+/// is down.
 /// </summary>
 [RequireComponent(typeof(NavMeshObstacle))]
 public class ArenaBlock : MonoBehaviour
@@ -15,7 +21,13 @@ public class ArenaBlock : MonoBehaviour
     public float maxHealth = 55f;
     public Color color = new Color(1f, 0.25f, 0.9f);
 
-    enum State { Active, Sinking, Hidden, Rising, Moving }
+    /// <summary>Metres above its home a dropping block starts from.</summary>
+    const float DropHeight = 12f;
+
+    /// <summary>Seconds a drop takes, tuned to read as a real fall from that height.</summary>
+    const float DropDuration = 1.05f;
+
+    enum State { Active, Sinking, Hidden, Dropping }
     State _state = State.Active;
 
     public bool IsActive => _state == State.Active;
@@ -24,21 +36,21 @@ public class ArenaBlock : MonoBehaviour
 
     /// <summary>
     /// Raised the instant this block is shot out, with the world point it died
-    /// at. ArenaBlockManager listens: every destroyed block regrows somewhere
-    /// else, and sometimes coughs up a treasure on the way out.
+    /// at. ArenaBlockManager listens: every destroyed block drops back in
+    /// somewhere else, and sometimes coughs up a treasure on the way out.
     /// </summary>
     public event System.Action<ArenaBlock, Vector3> OnShattered;
 
     Renderer[] _renderers;
     NavMeshObstacle _obstacle;
     MaterialPropertyBlock _mpb;
+    GameObject _warning;
     float _health;
     float _flash;
 
-    // Tween state (shared by sink / rise / move).
+    // Tween state (shared by sink / drop).
     Vector3 _from, _to;
     float _t, _dur;
-    readonly HashSet<NavMeshAgent> _liftedAgents = new HashSet<NavMeshAgent>();
 
     static readonly int EmissionId = Shader.PropertyToID("_SeamGlow");
 
@@ -62,12 +74,18 @@ public class ArenaBlock : MonoBehaviour
         LockPatternToMesh();
     }
 
+    void OnDestroy()
+    {
+        if (_warning != null)
+            Destroy(_warning);
+    }
+
     /// <summary>
-    /// A cover block is the one thing in an arena that MOVES — it slides,
-    /// rotates, sinks and regrows elsewhere. Both arena shaders tile their
-    /// surface pattern in world space by default, which is what keeps two walls
-    /// sharing a course of brick where they meet, but it means a moving block
-    /// swims through a pattern that stays nailed to the arena.
+    /// A cover block is the one thing in an arena that moves — it sinks away
+    /// and falls back in. Both arena shaders tile their surface pattern in
+    /// world space by default, which is what keeps two walls sharing a course
+    /// of brick where they meet, but it means a moving block swims through a
+    /// pattern that stays nailed to the arena.
     ///
     /// Set per-renderer rather than on the material so it also corrects blocks
     /// whose materials were authored before the toggle existed — no scene
@@ -86,13 +104,12 @@ public class ArenaBlock : MonoBehaviour
     }
 
     float HalfHeight => transform.localScale.y * 0.5f;
-    float TopY => transform.position.y + HalfHeight;
 
     // ---------- Damage ----------
 
     public void TakeHit(float damage, Vector3 point)
     {
-        if (_state != State.Active && _state != State.Moving)
+        if (_state != State.Active)
             return;
         _health -= damage;
         _flash = 1f;
@@ -113,22 +130,23 @@ public class ArenaBlock : MonoBehaviour
 
     // ---------- Manager commands ----------
 
-    public void Regrow()
+    /// <summary>
+    /// Fall out of the sky onto <see cref="Home"/>, cargo-rain style: warning
+    /// ring first, then the fall, then the thud. Works from Hidden (a shattered
+    /// block returning) and from Active (a reshuffle throwing it somewhere
+    /// new — set Home before calling).
+    /// </summary>
+    public void DropIn()
     {
         _health = maxHealth;
         SetVisible(true);
-        transform.position = new Vector3(Home.x, Home.y - (transform.localScale.y + 0.6f), Home.z);
-        _obstacle.enabled = true;
-        BeginTween(transform.position, Home, 1.1f);
-        _state = State.Rising;
-    }
-
-    public void SlideTo(Vector3 target, float duration)
-    {
-        if (_state != State.Active)
-            return;
-        BeginTween(transform.position, new Vector3(target.x, transform.position.y, target.z), duration);
-        _state = State.Moving;
+        // Not an obstacle again until it lands: a carve hanging in mid-air
+        // does nothing useful, and bots may legitimately cross the ring.
+        _obstacle.enabled = false;
+        transform.position = Home + Vector3.up * DropHeight;
+        SpawnWarningRing();
+        BeginTween(transform.position, Home, DropDuration);
+        _state = State.Dropping;
     }
 
     void BeginTween(Vector3 from, Vector3 to, float dur)
@@ -149,8 +167,7 @@ public class ArenaBlock : MonoBehaviour
         switch (_state)
         {
             case State.Sinking: TickSink(); break;
-            case State.Rising: TickRise(); break;
-            case State.Moving: TickMove(); break;
+            case State.Dropping: TickDrop(); break;
         }
     }
 
@@ -165,49 +182,54 @@ public class ArenaBlock : MonoBehaviour
         }
     }
 
-    void TickRise()
+    void TickDrop()
     {
         _t += Time.deltaTime / _dur;
-        var p = transform.position;
-        p.y = Mathf.Lerp(_from.y, _to.y, Mathf.SmoothStep(0f, 1f, _t));
-        transform.position = p;
+        // t² easing: starts slow, arrives fast — a fall, not an elevator.
+        transform.position = Vector3.Lerp(_from, _to, Mathf.Clamp01(_t) * Mathf.Clamp01(_t));
+        if (_t < 1f)
+            return;
 
-        LiftRiders();
-
-        if (_t >= 1f)
-        {
-            transform.position = _to;
-            ReleaseAgents();
-            _state = State.Active;
-        }
+        transform.position = _to;
+        Land();
     }
 
-    void TickMove()
+    void Land()
     {
-        _t += Time.deltaTime / _dur;
-        Vector3 prev = transform.position;
-        Vector3 next = Vector3.Lerp(_from, _to, Mathf.SmoothStep(0f, 1f, _t));
-
-        // Bots navigate on the navmesh and don't physically collide, so a sliding
-        // block would clip straight through them. Halt against a robot in the way.
-        if (BlockedByRobot(next))
+        if (_warning != null)
         {
-            _state = State.Active;
-            return;
+            Destroy(_warning);
+            _warning = null;
         }
+        ExpelResidents();
+        _obstacle.enabled = true;
+        VfxUtil.SpawnBurst(transform.position - Vector3.up * (HalfHeight * 0.8f),
+            new Color(1f, 0.8f, 0.4f), 10, 3.5f, 0.12f);
+        _state = State.Active;
+    }
 
-        ShovePlayer(next - prev);
-        transform.position = next;
-        if (_t >= 1f)
-            _state = State.Active;
+    /// <summary>
+    /// The Brawl-style landing marker: a flat glowing disc on the ground under
+    /// the falling block, so the drop is a telegraph rather than an ambush.
+    /// </summary>
+    void SpawnWarningRing()
+    {
+        _warning = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        _warning.name = "DropWarning";
+        Destroy(_warning.GetComponent<Collider>());
+        float diameter = Mathf.Max(transform.localScale.x, transform.localScale.z) * 1.3f;
+        _warning.transform.position = new Vector3(Home.x, Home.y - HalfHeight + 0.03f, Home.z);
+        _warning.transform.localScale = new Vector3(diameter, 0.012f, diameter);
+        _warning.GetComponent<MeshRenderer>().sharedMaterial =
+            ArenaMaterials.Emissive("block-drop-warning", new Color(1f, 0.55f, 0.15f), 2.2f);
     }
 
     // ---------- Character interaction ----------
     //
     // We test characters directly against the block's footprint rather than via
     // Physics.OverlapBox: a small fixed physics buffer near walls/other blocks
-    // could fill with non-character colliders and miss a bot, which let a rising
-    // block engulf it. Iterating the handful of characters is cheap and reliable.
+    // could fill with non-character colliders and miss a bot. Iterating the
+    // handful of characters is cheap and reliable.
 
     CharacterMotor[] _motors;
     NavMeshAgent[] _agents;
@@ -217,7 +239,7 @@ public class ArenaBlock : MonoBehaviour
     {
         // Refreshed on a slow tick rather than cached once: teams gain robots
         // mid-match now (gold-funded reinforcements), and a newcomer missing
-        // from the cache would get engulfed by a rising block.
+        // from the cache would get landed on by a dropping block.
         bool stale = Time.time >= _nextCharacterRescan;
         if (stale || _motors == null || _motors.Length == 0)
             _motors = FindObjectsByType<CharacterMotor>(FindObjectsSortMode.None);
@@ -230,7 +252,7 @@ public class ArenaBlock : MonoBehaviour
     /// <summary>
     /// Does this block stand on <paramref name="worldPoint"/> (plus a margin)?
     /// Asked by anything that needs open floor — airdrop landing spots, and the
-    /// manager picking somewhere to slide or regrow a block.
+    /// manager picking somewhere for a block to drop back in.
     ///
     /// Note this deliberately ignores <see cref="IsHidden"/>: a block that's
     /// currently sunk still owns its footprint, because it's coming back.
@@ -248,69 +270,56 @@ public class ArenaBlock : MonoBehaviour
         return Mathf.Abs(local.x) <= half.x + margin && Mathf.Abs(local.z) <= half.z + margin;
     }
 
-    void LiftRiders()
+    /// <summary>
+    /// Push anyone under a just-landed block out to its nearest edge. The
+    /// warning ring is the fair notice; this is the guarantee nobody ends the
+    /// frame inside the geometry.
+    /// </summary>
+    void ExpelResidents()
     {
         CacheCharacters();
-        float topY = TopY;
 
         foreach (var m in _motors)
         {
             if (m == null) continue;
             Vector3 p = m.transform.position;
-            if (p.y < topY && InsideFootprint(transform.position, p, 0.45f))
-                m.Teleport(new Vector3(p.x, topY, p.z));
+            Vector3 pushed = PushedClear(p, 0.6f);
+            if (pushed != p)
+                m.Teleport(pushed);
         }
 
         foreach (var a in _agents)
         {
-            if (a == null) continue;
+            if (a == null || !a.enabled) continue;
             Vector3 p = a.transform.position;
-            if (p.y < topY && InsideFootprint(transform.position, p, 0.45f))
-            {
-                if (a.enabled)
-                {
-                    a.enabled = false;
-                    _liftedAgents.Add(a);
-                }
-                a.transform.position = new Vector3(p.x, topY, p.z);
-            }
+            Vector3 pushed = PushedClear(p, 0.55f);
+            if (pushed != p)
+                a.Warp(NavMesh.SamplePosition(pushed, out var hit, 4f, NavMesh.AllAreas)
+                    ? hit.position : pushed);
         }
     }
 
-    void ReleaseAgents()
+    /// <summary>
+    /// Where <paramref name="worldPos"/> ends up if it must be clear of the
+    /// footprint: unchanged when already outside, otherwise shoved out the
+    /// nearest side.
+    /// </summary>
+    Vector3 PushedClear(Vector3 worldPos, float margin)
     {
-        foreach (var agent in _liftedAgents)
-        {
-            if (agent == null)
-                continue;
-            // Drop the bot back onto the nearest navmesh (edge of the block).
-            if (NavMesh.SamplePosition(agent.transform.position, out var hit, 8f, NavMesh.AllAreas))
-                agent.transform.position = hit.position;
-            agent.enabled = true;
-        }
-        _liftedAgents.Clear();
-    }
+        Vector3 half = transform.localScale * 0.5f;
+        Vector3 local = Quaternion.Inverse(transform.rotation) * (worldPos - transform.position);
+        float escapeX = half.x + margin - Mathf.Abs(local.x);
+        float escapeZ = half.z + margin - Mathf.Abs(local.z);
+        if (escapeX <= 0f || escapeZ <= 0f)
+            return worldPos;
 
-    void ShovePlayer(Vector3 delta)
-    {
-        if (delta.sqrMagnitude < 1e-6f)
-            return;
-        CacheCharacters();
-        foreach (var m in _motors)
-        {
-            if (m == null) continue;
-            if (InsideFootprint(transform.position, m.transform.position, 0.5f))
-                m.Teleport(m.transform.position + new Vector3(delta.x, 0f, delta.z));
-        }
-    }
+        if (escapeX <= escapeZ)
+            local.x += (local.x >= 0f ? 1f : -1f) * escapeX;
+        else
+            local.z += (local.z >= 0f ? 1f : -1f) * escapeZ;
 
-    bool BlockedByRobot(Vector3 pos)
-    {
-        CacheCharacters();
-        foreach (var a in _agents)
-            if (a != null && a.enabled && InsideFootprint(pos, a.transform.position, 0.35f))
-                return true;
-        return false;
+        Vector3 world = transform.rotation * local + transform.position;
+        return new Vector3(world.x, worldPos.y, world.z);
     }
 
     // ---------- Visuals ----------

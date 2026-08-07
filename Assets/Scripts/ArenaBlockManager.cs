@@ -3,19 +3,19 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// Drives the living arena. Two jobs:
+/// Drives the living arena: every block that gets shot out DROPS BACK IN
+/// somewhere else, Brawl cargo-rain style — warning ring, fall, thud — so
+/// cover keeps circulating instead of the arena wearing flat. One destruction
+/// in <see cref="TreasureChance"/> also kicks a treasure out of the wreckage,
+/// which makes shooting cover a play rather than just tidying.
 ///
-///  * <b>Churn</b> — on a timer, slide an active block slowly to a new spot or,
-///    rarely, make one dash there suddenly. Keeps the cover layout in constant,
-///    watchable motion.
-///  * <b>Renewal</b> — every block that gets shot out grows back somewhere
-///    else, so cover keeps circulating instead of the arena wearing flat. One
-///    destruction in <see cref="TreasureChance"/> also kicks a treasure out of
-///    the wreckage, which makes shooting cover a play rather than just tidying.
+/// There is no idle churn any more. Blocks used to slide and dash between
+/// fights; that read as the furniture rearranging itself, and it is gone —
+/// combat is what moves cover now, and the only motion is the drop.
 /// </summary>
 public class ArenaBlockManager : MonoBehaviour
 {
-    [Header("Cadence")]
+    [Header("Cadence (stray-regrow safety net)")]
     public float minInterval = 2.5f;
     public float maxInterval = 5f;
 
@@ -161,7 +161,7 @@ public class ArenaBlockManager : MonoBehaviour
         }
     }
 
-    /// <summary>Move a hidden block's home to a fresh spot and grow it back there.</summary>
+    /// <summary>Move a hidden block's home to a fresh spot and drop it in there.</summary>
     void RelocateAndRegrow(ArenaBlock block, Vector3 avoid)
     {
         Vector3 spot = RandomSpot(avoid);
@@ -170,10 +170,8 @@ public class ArenaBlockManager : MonoBehaviour
         block.Home = new Vector3(spot.x,
                                  ArenaContext.GroundY + block.transform.localScale.y * 0.5f,
                                  spot.z);
-        block.Regrow();
+        block.DropIn();
     }
-
-    // ------------------------------------------------------------------ churn
 
     void Update()
     {
@@ -188,9 +186,7 @@ public class ArenaBlockManager : MonoBehaviour
 
         // Safety net: anything hidden that never got scheduled (or whose
         // scheduling was lost across a reload) still comes back.
-        if (Random.value < 0.4f && RegrowStrays())
-            return;
-        MoveOne(fast: Random.value > 0.9f);
+        RegrowStrays();
     }
 
     bool RegrowStrays()
@@ -208,16 +204,6 @@ public class ArenaBlockManager : MonoBehaviour
             if (entry.block == block)
                 return true;
         return false;
-    }
-
-    void MoveOne(bool fast)
-    {
-        var block = PickRandom(b => b.IsActive);
-        if (block == null)
-            return;
-        Vector3 target = RandomSpot(block.transform.position);
-        // Slow drift vs. sudden dash.
-        block.SlideTo(target, fast ? 0.4f : Random.Range(2.5f, 4f));
     }
 
     /// <summary>
@@ -290,13 +276,23 @@ public class ArenaBlockManager : MonoBehaviour
         return null;
     }
 
-    /// <summary>Arena Builder mode (R key): scatter every active block to a new spot.</summary>
+    /// <summary>
+    /// Arena Builder mode (R key): rain every active block down onto a fresh
+    /// spot — the whole layout re-deals in one cargo drop.
+    /// </summary>
     public void Reshuffle()
     {
         if (_blocks == null)
             return;
         foreach (var b in _blocks)
-            if (b != null && b.IsActive)
-                b.SlideTo(RandomSpot(b.transform.position), Random.Range(0.6f, 1.4f));
+        {
+            if (b == null || !b.IsActive)
+                continue;
+            Vector3 spot = RandomSpot(b.transform.position);
+            b.Home = new Vector3(spot.x,
+                                 ArenaContext.GroundY + b.transform.localScale.y * 0.5f,
+                                 spot.z);
+            b.DropIn();
+        }
     }
 }
