@@ -133,7 +133,9 @@ public static class RobotSelectMenu
                 : pendingMode == GameMode.Brawl ? "BRAWL"
                 : pendingMode == GameMode.BrawlWar ? "BRAWL  —  AI  v  AI"
                 : pendingMode == GameMode.BrawlShow ? "MARTIAL  ARTS  SHOW  —  CYAN  PERFORMS"
-                : pendingMode == GameMode.TankRaid ? "TANK  RAID  —  CYAN  DRIVES"
+                // Deliberately silent about who drives: that is a chip on this
+                // screen now and can change after this line is written.
+                : pendingMode == GameMode.TankRaid ? "TANK  RAID  —  PICK  YOUR  TANK"
                 : pendingMode == GameMode.Dogfight ? "DOGFIGHT  —  CYAN  FLIES"
                 : pendingMode == GameMode.DogfightWar ? "DOGFIGHT  —  AI  v  AI"
                 : "PLAYER  v  AI", 26,
@@ -168,6 +170,10 @@ public static class RobotSelectMenu
         // rules (two corners in a Brawl, one driver in Tank Raid).
         if (pendingMode == GameMode.AIvAI || pendingMode == GameMode.PlayerVsAI)
             BuildTeamSizePicker(canvasGo.transform, pendingMode == GameMode.PlayerVsAI);
+        // TANK RAID carries its AI-v-AI variant here rather than as a second
+        // home-screen card — see TankRaidPick.
+        if (pendingMode == GameMode.TankRaid)
+            BuildDriverPicker(canvasGo.transform);
         if (pendingMode == GameMode.Dogfight || pendingMode == GameMode.DogfightWar)
         {
             BuildDogfightSizePicker(canvasGo.transform, pendingMode == GameMode.Dogfight);
@@ -582,6 +588,66 @@ public static class RobotSelectMenu
             labels[i] = MakeText(chip.transform, "Label", level.ToString(), 26,
                 Color.white, FontStyle.Bold,
                 new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 48f));
+        }
+        Refresh();
+    }
+
+    /// <summary>
+    /// TANK RAID's two chips: WHO DRIVES — YOU, or the machine.
+    ///
+    /// This is the whole of the mode's AI-v-AI variant. It sits where BRAWL's
+    /// CPU-level row does, on the strip right of START, because the two mode
+    /// families never share a screen. The choice is remembered between runs, so
+    /// a couch that likes watching gets the demonstration by default from the
+    /// second time onward.
+    /// </summary>
+    static void BuildDriverPicker(Transform parent)
+    {
+        var title = MakeText(parent, "DriverTitle", "", 18,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(385f, -312f), new Vector2(360f, 24f));
+
+        var chips = new Image[2];
+        var labels = new Text[2];
+        // Index 0 is the player, so the lit chip is on the left when it is the
+        // player driving — the reading order the label is written in.
+        string[] names = { "YOU  DRIVE", "AI  v  AI" };
+
+        void Refresh()
+        {
+            bool player = TankRaidPick.PlayerDrives;
+            title.text = "WHO  DRIVES  —  " + (player ? "YOU" : "THE  MACHINE");
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = (i == 0) == player;
+                chips[i].color = on
+                    ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                    : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            bool player = i == 0;
+            var chip = MakeImage(parent, $"Driver_{i}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(385f + (i - 0.5f) * 168f, -352f);
+            rect.sizeDelta = new Vector2(160f, 52f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                TankRaidPick.PlayerDrives = player;
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", names[i], 20,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(156f, 48f));
         }
         Refresh();
     }

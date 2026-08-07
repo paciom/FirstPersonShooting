@@ -47,9 +47,12 @@ public class TankRaid : MonoBehaviour
     // Regen matters as much as the pool: it is slow enough that a bad stretch
     // still costs a continue, and quick enough that a player who breaks contact
     // and clears a flank is rewarded for it.
-    const float HeroShield = 600f;
+    /// <summary>Public because <see cref="TankBoons"/> recomputes from these
+    /// rather than multiplying live values — see its class note.</summary>
+    public const float HeroShield = 600f;
+    public const float HeroRegenPerSecond = 22f;
+
     const float HeroRegenDelay = 3.5f;
-    const float HeroRegenPerSecond = 22f;
     const float HeroSpeed = 12f;
     const float HeroTurn = 190f;
 
@@ -94,6 +97,21 @@ public class TankRaid : MonoBehaviour
     /// <summary>Odds a wreck leaves anything at all.</summary>
     const float DropChance = 0.45f;
 
+    /// <summary>Recruits the hero may keep at once, before any factory is taken.</summary>
+    const int BaseAllyCap = 3;
+
+    /// <summary>Shield and speed a recruit drives with.</summary>
+    const float AllyShield = 190f;
+    const float AllySpeed = 10.5f;
+
+    /// <summary>Metres to the first outpost, and between them after that.</summary>
+    const float FirstOutpostAt = 420f;
+    const float OutpostSpacing = 560f;
+
+    /// <summary>How far ahead of the frontier an outpost is planted. Well past the
+    /// top of the screen, so it comes over the horizon rather than appearing.</summary>
+    const float OutpostLead = TankRaidCamera.VisibleAhead + 34f;
+
     const string BestKey = "PhotonArena.TankRaidBest";
 
     // -------------------------------------------------------------------- state
@@ -112,22 +130,32 @@ public class TankRaid : MonoBehaviour
     int _heroRobot;
     TankPawn _hero;
 
+    /// <summary>False in AI v AI, where <see cref="TankPilot"/> has the controls.</summary>
+    bool _playerDrives = true;
+
+    /// <summary>Everything captured so far, and what it is worth. See TankBoons.</summary>
+    readonly TankBoons _boons = new TankBoons();
+
     int _lives = Lives;
     int _wrecks;
+    int _outpostsTaken;
     int _best;
     float _furthest;
     float _nextSpawn;
+    float _nextOutpostAt = FirstOutpostAt;
     float _graceUntil;
     bool _running;
     bool _continuing;
 
-    public static TankRaid Begin(GameModeController owner, RobotRoster roster, int heroRobot)
+    public static TankRaid Begin(GameModeController owner, RobotRoster roster, int heroRobot,
+        bool playerDrives)
     {
         var go = new GameObject("TankRaid");
         go.transform.SetParent(owner.transform, false);
         var raid = go.AddComponent<TankRaid>();
         raid._roster = roster;
         raid._heroRobot = heroRobot;
+        raid._playerDrives = playerDrives;
         raid.Setup();
         return raid;
     }
@@ -165,12 +193,15 @@ public class TankRaid : MonoBehaviour
         _field = TankField.Build(_stageRoot.transform);
 
         var entry = Entry(_heroRobot);
-        _hero = TankPawn.Spawn(entry, TankPawn.Chassis.Tank, 0, Vector3.zero, 0f, HeroShield);
+        _hero = TankPawn.Spawn(entry, TankPawn.Chassis.Tank, 0, Vector3.zero, 0f, HeroShield,
+            TankArsenal.Role.Hero);
         _hero.speed = HeroSpeed;
         _hero.turnSpeed = HeroTurn;
         _hero.Shield.regenDelay = HeroRegenDelay;
         _hero.Shield.regenPerSecond = HeroRegenPerSecond;
         _hero.OnWrecked += HeroWrecked;
+        if (!_playerDrives)
+            _hero.gameObject.AddComponent<TankPilot>();
 
         _cameraRig = BuildCameraRig();
         _camera = _cameraRig.GetComponent<Camera>();
@@ -180,7 +211,10 @@ public class TankRaid : MonoBehaviour
         _hud = TankRaidHud.Build(transform);
         _hud.SetLives(_lives);
         _hud.SetProgress(0, 0);
-        _sticks = TankSticks.Build(transform);
+        // No thumb sticks in AI v AI — there is nothing for a thumb to do, and a
+        // stick that appears under a finger would drive nothing.
+        if (_playerDrives)
+            _sticks = TankSticks.Build(transform);
 
         _running = true;
         _nextSpawn = 0.6f;
@@ -220,10 +254,12 @@ public class TankRaid : MonoBehaviour
         if (!_continuing)
             _field.Advance(_hero.transform.position.z, dt);
 
-        DriveHero();
+        if (_playerDrives)
+            DriveHero();
         RunRaiders();
         RunPickups(dt);
         Spawn(dt);
+        PlantOutpost();
         Readout();
     }
 
@@ -280,6 +316,15 @@ public class TankRaid : MonoBehaviour
         _hero.Firing = true;
     }
 
+    /// <summary>
+    /// Sweep what the field has left behind, and keep the army pointed at the
+    /// hero.
+    ///
+    /// The favourite is only ever stamped on RAIDERS. A recruit's brain must
+    /// keep choosing its own targets — pointing it at the hero would have the
+    /// escort attack the thing it is escorting — and an outpost's is set once,
+    /// when it is planted.
+    /// </summary>
     void RunRaiders()
     {
         var pawns = TankPawn.All;
@@ -288,18 +333,65 @@ public class TankRaid : MonoBehaviour
             var pawn = pawns[i];
             if (pawn == null || pawn == _hero)
                 continue;
-            // Swept once it drops off the bottom of the screen: a raider left
+            // Swept once it drops off the bottom of the screen: anything left
             // trailing the frontier forever is a pawn burning a slot in the
-            // pressure budget for a fight that can no longer happen.
+            // pressure budget for a fight that can no longer happen. Recruits go
+            // the same way — one that cannot keep up has been lost, and saying so
+            // beats an invisible tank fighting somewhere off camera.
             if (TankField.FallenBehind(pawn.transform.position, 26f))
             {
                 Destroy(pawn.gameObject);
                 continue;
             }
+            if (pawn.Team == 0 || pawn.Kind == TankPawn.Chassis.Structure)
+                continue;
             var brain = pawn.GetComponent<TankBrain>();
-            if (brain != null && brain.quarry == null && !_continuing)
-                brain.quarry = _hero;
+            if (brain != null && brain.favourite == null && !_continuing)
+                brain.favourite = _hero;
         }
+    }
+
+    /// <summary>Recruits currently driving with the hero.</summary>
+    int AllyCount()
+    {
+        int count = 0;
+        foreach (var pawn in TankPawn.All)
+            if (pawn != null && pawn != _hero && pawn.Team == 0 && !pawn.IsDown)
+                count++;
+        return count;
+    }
+
+    int AllyCap => BaseAllyCap + _boons.allyCapBonus;
+
+    /// <summary>
+    /// One tank changes sides and falls in beside the hero.
+    ///
+    /// Leashed to the hero rather than free: a recruit that chased a retreating
+    /// raider would be led off the bottom of the screen and swept, which reads to
+    /// the player as the reward evaporating for no reason.
+    /// </summary>
+    TankPawn Recruit(Vector3 where)
+    {
+        var ally = TankPawn.Spawn(RaiderEntry(), TankPawn.Chassis.Tank, 0, where, 0f,
+            AllyShield, TankArsenal.Role.Ally);
+        ally.speed = AllySpeed;
+        ally.turnSpeed = 165f;
+        ally.OnWrecked += AllyWrecked;
+
+        var brain = ally.gameObject.AddComponent<TankBrain>();
+        brain.anchor = _hero.transform;
+        brain.leash = 20f;
+        brain.standoff = 16f;
+        brain.idleDrift = 0f;               // it holds station, it does not retreat
+        brain.orbit = Random.value < 0.5f ? 1f : -1f;
+        return ally;
+    }
+
+    void AllyWrecked(TankPawn pawn)
+    {
+        _director.Shake(0.35f);
+        pawn.Wreck();
+        _hud.Flash("RECRUIT DOWN", new Color(0.35f, 0.7f, 1f), 1.1f);
     }
 
     void RunPickups(float dt)
@@ -328,9 +420,12 @@ public class TankRaid : MonoBehaviour
 
         int pressure = Mathf.Min(MaxPressure,
             StartingPressure + Mathf.FloorToInt(_furthest / MetresPerStep));
+        // Raiders only. Counting the hero's recruits here would have the army
+        // thin out exactly as the player got stronger, and counting outposts
+        // would stop the field feeding entirely while one stood.
         int alive = 0;
         foreach (var pawn in TankPawn.All)
-            if (pawn != null && pawn != _hero)
+            if (pawn != null && pawn.Team == 1 && pawn.Kind != TankPawn.Chassis.Structure)
                 alive++;
         if (alive >= pressure)
             return;
@@ -345,15 +440,99 @@ public class TankRaid : MonoBehaviour
 
         var raider = TankPawn.Spawn(RaiderEntry(),
             tank ? TankPawn.Chassis.Tank : TankPawn.Chassis.Walker, 1, where, 180f,
-            tank ? RaiderTankShield : RaiderWalkerShield);
+            tank ? RaiderTankShield : RaiderWalkerShield, TankArsenal.Role.Raider);
         raider.speed = tank ? RaiderTankSpeed : RaiderWalkerSpeed;
         raider.turnSpeed = tank ? 110f : 260f;
         raider.OnWrecked += RaiderWrecked;
 
         var brain = raider.gameObject.AddComponent<TankBrain>();
-        brain.quarry = _hero;
+        brain.favourite = _hero;
         brain.standoff = tank ? 19f : 13f;
         brain.orbit = Random.value < 0.5f ? 1f : -1f;
+    }
+
+    // -------------------------------------------------------------------- outposts
+
+    /// <summary>
+    /// Put a structure on the field, every few hundred metres.
+    ///
+    /// It is planted well past the top of the screen and off the centre line, so
+    /// it comes over the horizon as a thing the player can see coming and decide
+    /// about — which is the entire reason it exists. Everything else in the mode
+    /// arrives wanting a fight; this is the one thing that waits to be picked.
+    ///
+    /// One at a time. Two outposts in shot at once turns a decision into a
+    /// shopping list, and the field is only thirty metres wide.
+    /// </summary>
+    void PlantOutpost()
+    {
+        if (_continuing || _furthest < _nextOutpostAt)
+            return;
+        foreach (var pawn in TankPawn.All)
+            if (pawn != null && pawn.Kind == TankPawn.Chassis.Structure)
+                return;                                  // one is still standing
+
+        _nextOutpostAt = _furthest + OutpostSpacing;
+
+        string key = TankOutpost.RollBuilding(_furthest);
+        var reward = TankOutpost.RewardFor(key);
+        // Off to one side, and far enough in that it can be driven past: a
+        // structure across the middle would be a wall, not a choice.
+        float side = Random.value < 0.5f ? -1f : 1f;
+        var where = new Vector3(side * Random.Range(5f, TankField.HalfWidth - 5.5f), 0f,
+            TankField.Frontier + OutpostLead);
+
+        var structure = TankPawn.Spawn(default, TankPawn.Chassis.Structure, 1, where,
+            Random.Range(0f, 360f), TankOutpost.ShieldFor(key), TankArsenal.Role.Outpost, key);
+        var outpost = structure.gameObject.AddComponent<TankOutpost>();
+        outpost.buildingKey = key;
+        outpost.reward = reward;
+        structure.OnWrecked += OutpostWrecked;
+
+        var brain = structure.gameObject.AddComponent<TankBrain>();
+        brain.favourite = _hero;
+        // It cannot chase, so it must not try to shoot what it cannot reach.
+        brain.engageRange = 34f;
+
+        _hud.Flash($"{reward.title} AHEAD", new Color(1f, 0.55f, 0.25f), 2.2f);
+    }
+
+    /// <summary>
+    /// An outpost is down, and the run is permanently better for it. This is the
+    /// mode's only lasting progression — see <see cref="TankBoons"/>.
+    /// </summary>
+    void OutpostWrecked(TankPawn pawn)
+    {
+        _outpostsTaken++;
+        Vector3 where = pawn.transform.position;
+        var outpost = pawn.GetComponent<TankOutpost>();
+        pawn.Wreck();
+        _director.Shake(1.4f);
+
+        if (outpost == null)
+            return;
+
+        _boons.Add(outpost.reward);
+        _boons.Apply(_hero);
+        _hud.SetBoons(_boons.Summary);
+        _hud.Flash($"{outpost.reward.title}   ·   {outpost.reward.blurb}",
+            new Color(1f, 0.85f, 0.35f), 2.6f);
+
+        // Crews walking out of the wreckage. Placed in a fan in FRONT of it, so
+        // they arrive between the hero and whatever comes next rather than
+        // materialising behind the fight.
+        for (int i = 0; i < outpost.reward.recruits && AllyCount() < AllyCap; i++)
+            Recruit(where + new Vector3((i - 0.5f) * 5f, 0f, -6f));
+
+        // And the rest of it as loot on the ground, so a capture pays out
+        // immediately as well as permanently.
+        for (int i = 0; i < 2; i++)
+        {
+            var drop = TankPickup.Drop(_stageRoot.transform,
+                where + new Vector3(Random.Range(-4f, 4f), 0f, Random.Range(-6f, -2f)),
+                i == 0 ? TankPickup.Kind.Repair : TankPickup.Kind.Weapon);
+            drop.OnCollected += Collect;
+        }
     }
 
     void Readout()
@@ -362,6 +541,7 @@ public class TankRaid : MonoBehaviour
         _furthest = Mathf.Max(_furthest, z);
         _hud.SetProgress(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks);
         _hud.SetShield(_hero.Shield.Normalized, _hero.Shield.Current);
+        _hud.SetEscort(AllyCount(), AllyCap);
 
         var gun = _hero.CurrentGun;
         var loadout = _hero.Loadout;
@@ -376,9 +556,12 @@ public class TankRaid : MonoBehaviour
     /// A raider is down. It leaves the field in a burst and, just under half the
     /// time, leaves something behind.
     ///
-    /// The repair odds rise as the hero's shield falls. Deliberately: a run that
-    /// is going badly should be handed a way back, and one that is going well
-    /// should be handed guns instead of medicine it does not need.
+    /// WHAT it leaves is chosen against the state of the run, not rolled flat.
+    /// The repair odds rise as the hero's shield falls, so a run going badly is
+    /// handed a way back and one going well is handed guns instead of medicine it
+    /// does not need. Recruit beacons stop dropping once the escort is full,
+    /// because a pickup that does nothing is worse than no pickup — the player
+    /// drove across the field for it.
     /// </summary>
     void RaiderWrecked(TankPawn pawn)
     {
@@ -391,12 +574,20 @@ public class TankRaid : MonoBehaviour
         if (Random.value > DropChance * (tank ? 1.25f : 0.8f))
             return;
 
-        float hurt = _hero != null && _hero.Shield != null ? 1f - _hero.Shield.Normalized : 0f;
-        var sort = Random.value < Mathf.Lerp(0.25f, 0.8f, hurt)
-            ? TankPickup.Kind.Repair
-            : TankPickup.Kind.Weapon;
-        var pickup = TankPickup.Drop(_stageRoot.transform, where, sort);
+        var pickup = TankPickup.Drop(_stageRoot.transform, where, RollDrop());
         pickup.OnCollected += Collect;
+    }
+
+    TankPickup.Kind RollDrop()
+    {
+        float hurt = _hero != null && _hero.Shield != null ? 1f - _hero.Shield.Normalized : 0f;
+        if (Random.value < Mathf.Lerp(0.25f, 0.8f, hurt))
+            return TankPickup.Kind.Repair;
+        // A beacon is the rarer of the two remaining, and only while there is
+        // room in the escort for it to mean anything.
+        if (AllyCount() < AllyCap && Random.value < 0.35f)
+            return TankPickup.Kind.Recruit;
+        return TankPickup.Kind.Weapon;
     }
 
     void Collect(TankPickup pickup)
@@ -404,16 +595,38 @@ public class TankRaid : MonoBehaviour
         if (_hero == null || _hero.IsDown)
             return;
 
-        if (pickup.Sort == TankPickup.Kind.Repair)
+        switch (pickup.Sort)
         {
-            _hero.Shield.Restore(_hero.Shield.maxShield * 0.4f);
-            _hud.Flash("REPAIRED", new Color(0.35f, 1f, 0.6f));
-            return;
-        }
+            case TankPickup.Kind.Repair:
+                _hero.Shield.Restore(_hero.Shield.maxShield * 0.4f);
+                _hud.Flash("REPAIRED", new Color(0.35f, 1f, 0.6f));
+                return;
 
-        var granted = _hero.Loadout != null ? _hero.Loadout.GrantRandom() : null;
-        _hud.Flash(granted != null ? granted.weaponName.ToUpperInvariant() : "WEAPON POD",
-            new Color(1f, 0.75f, 0.2f));
+            case TankPickup.Kind.Recruit:
+                if (AllyCount() >= AllyCap)
+                {
+                    // The escort filled up between the drop and the pickup. Pay
+                    // out in shield rather than nothing at all.
+                    _hero.Shield.Restore(_hero.Shield.maxShield * 0.25f);
+                    _hud.Flash("ESCORT FULL", new Color(0.35f, 0.7f, 1f));
+                    return;
+                }
+                // Beside the hero, not on top of it: a tank materialising inside
+                // another tank is two pawns shoving each other apart on frame one.
+                Recruit(_hero.transform.position + new Vector3(
+                    Random.value < 0.5f ? -4.5f : 4.5f, 0f, -2f));
+                _hud.Flash("RECRUIT JOINED", new Color(0.35f, 0.7f, 1f));
+                return;
+
+            default:
+                var granted = _hero.Loadout != null ? _hero.Loadout.GrantRandom() : null;
+                // Re-stamped: a pod's gun is built once at spawn and knows nothing
+                // about the outposts captured since.
+                _boons.Apply(_hero);
+                _hud.Flash(granted != null ? granted.weaponName.ToUpperInvariant() : "WEAPON POD",
+                    new Color(1f, 0.75f, 0.2f));
+                return;
+        }
     }
 
     void HeroWrecked(TankPawn pawn)
@@ -438,11 +651,16 @@ public class TankRaid : MonoBehaviour
         _continuing = true;
         _hero.Firing = false;
         _hero.SetVisible(false);
+        // Drop the army's fixation on a hero that is no longer on the field.
+        // Only theirs: a recruit never had one, and clearing an outpost's would
+        // just be re-stamped by RunRaiders the moment the hero is back.
         foreach (var pawn in TankPawn.All)
         {
-            var brain = pawn != null ? pawn.GetComponent<TankBrain>() : null;
+            if (pawn == null || pawn.Team == 0)
+                continue;
+            var brain = pawn.GetComponent<TankBrain>();
             if (brain != null)
-                brain.quarry = null;
+                brain.favourite = null;
         }
 
         _hud.Flash($"{_lives} LEFT", new Color(1f, 0.35f, 0.3f), ContinueBeat);
@@ -455,6 +673,11 @@ public class TankRaid : MonoBehaviour
         _hero.Revive();
         _hero.SetVisible(true);
         VfxUtil.SpawnBurst(_hero.Center, MatchAnnouncer.TeamColor(0), 24, 7f, 0.16f);
+
+        // Re-stamped after the shield was refilled: Rematerialize fills to
+        // maxShield, and the boons are what decide what maxShield is. From base
+        // every time, so three continues do not hand out three reactors.
+        _boons.Apply(_hero);
 
         _graceUntil = Time.time + GraceSeconds;
         _hero.Shield.invulnerable = true;
@@ -490,7 +713,7 @@ public class TankRaid : MonoBehaviour
         TankPickup.DespawnAll();
 
         BankBest();
-        _hud.ShowOver(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks, _best);
+        _hud.ShowOver(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks, _outpostsTaken, _best);
     }
 
     void BankBest()

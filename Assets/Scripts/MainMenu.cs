@@ -121,7 +121,6 @@ public static class MainMenu
             new Mode("BRAWL", "brawl", () => controller.OpenRobotSelect(GameMode.Brawl)),
             new Mode("BRAWL:  AI  WAR", "brawlwar", () => controller.OpenRobotSelect(GameMode.BrawlWar)),
             new Mode("MARTIAL  ARTS  SHOW", "brawlshow", () => controller.OpenRobotSelect(GameMode.BrawlShow)),
-            new Mode("STORY:  TRAINING  DAY", "story", () => controller.StartStory("pilot")),
         });
         BuildDeck(decks, "WAR  ROOM", Command, -202f, 3, new[]
         {
@@ -132,11 +131,16 @@ public static class MainMenu
             new Mode("DOGFIGHT", "dogfight", () => controller.OpenRobotSelect(GameMode.Dogfight)),
             new Mode("DOGFIGHT:  AI  WAR", "dogfightwar", () => controller.OpenRobotSelect(GameMode.DogfightWar)),
         });
+        // STORY sits here rather than in ARENA COMBAT, which was over its two
+        // rows by one card and drawing STORY exactly on top of BRAWL. It is the
+        // better home anyway: the mode is called TRAINING DAY, and this is the
+        // deck the game does its teaching from.
         BuildDeck(decks, "ACADEMY  ·  WORKSHOP", Academy, 464f, 2, new[]
         {
             new Mode("CHINESE  QUEST", "chinesequest", controller.OpenChineseDeckSelect),
             new Mode("CHINESE  RUN", "chineserun", controller.OpenChineseRunDeckSelect),
             new Mode("ARENA  BUILDER", "arenabuilder", controller.StartArenaPreview),
+            new Mode("STORY:  TRAINING  DAY", "story", () => controller.StartStory("pilot")),
         });
 
         BuildFooter(canvasGo.transform, controller);
@@ -352,6 +356,16 @@ public static class MainMenu
         var ruleRect = rule.rectTransform;
         ruleRect.pivot = new Vector2(0f, 0.5f);
         Place(ruleRect, new Vector2(left, HeaderY - 19f), new Vector2(width, 1f));
+
+        // A deck is two rows deep and no more — there is no third row Y, and the
+        // footer rule sits where one would have to go. Anything past the second
+        // row would be drawn silently ON TOP of a card already there, which is
+        // exactly what happened when STORY was added; say so rather than let the
+        // next mode disappear the same way.
+        if (modes.Length > cols * 2)
+            Debug.LogError($"[MainMenu] Deck '{title}' has {modes.Length} cards but only " +
+                           $"{cols * 2} slots ({cols} columns x 2 rows). The extras will be " +
+                           "drawn on top of the first row's cards.");
 
         for (int i = 0; i < modes.Length; i++)
         {

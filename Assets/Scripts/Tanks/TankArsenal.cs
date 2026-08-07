@@ -25,15 +25,32 @@ public static class TankArsenal
     /// enough that losing it is a reason to go and find another one.</summary>
     public const float PodSeconds = 20f;
 
+    /// <summary>Who is holding the gun. Decides the whole profile.</summary>
+    public enum Role
+    {
+        /// <summary>The player's tank (or the AI driving it). Carries the pods.</summary>
+        Hero,
+        /// <summary>A recruit that joined off a beacon. Real help, never the star.</summary>
+        Ally,
+        /// <summary>One of the army.</summary>
+        Raider,
+        /// <summary>An enemy outpost's gun. Slow, heavy, and it hurts.</summary>
+        Outpost,
+    }
+
     /// <summary>
     /// THE HERO IS NOT A RAIDER WITH MORE SHIELD. It is one tank against an army,
     /// and the arithmetic has to say so: its cannon one-shots a walker and
     /// two-shots a raider tank, while a raider needs the best part of a minute
     /// alone to get through the hero. An army does it in seconds; one raider
     /// never does. That gap is the mode.
+    ///
+    /// Public because <see cref="TankBoons"/> recomputes the gun from these
+    /// rather than multiplying the live value — an upgrade re-applied on every
+    /// respawn must not compound.
     /// </summary>
-    const float HeroCannonDamage = 60f;
-    const float HeroCannonRate = 3.4f;
+    public const float HeroCannonDamage = 60f;
+    public const float HeroCannonRate = 3.4f;
 
     /// <summary>
     /// What a pod's gun is multiplied by.
@@ -51,19 +68,19 @@ public static class TankArsenal
     /// <summary>
     /// Attach the rack and hand it back in canonical order.
     ///
-    /// <paramref name="hero"/> gets the pods. Raiders get the cannon and nothing
-    /// else: pods are a reward the player collects, so a raider's other eleven
-    /// guns could never be reached — and eleven unreachable <see cref="Weapon"/>
-    /// components on every one of a dozen live raiders is a hundred and thirty
-    /// MonoBehaviours a frame doing nothing at all.
+    /// Only <see cref="Role.Hero"/> gets the pods. Everyone else gets the main
+    /// gun and nothing else: pods are a reward the player collects, so nobody
+    /// else's other eleven guns could ever be reached — and eleven unreachable
+    /// <see cref="Weapon"/> components on every one of a dozen live raiders is a
+    /// hundred and thirty MonoBehaviours a frame doing nothing at all.
     /// </summary>
     public static Weapon[] Attach(GameObject host, Transform muzzle, Transform owner,
-        TankPawn.Chassis kind, bool hero, Color boltColor)
+        TankPawn.Chassis kind, Role role, Color boltColor)
     {
-        // Slot 0 on both: the main gun. Slower and heavier than the FPS blaster
-        // — a tank's cannon should land, not chatter.
-        var cannon = Cannon(host, muzzle, owner, kind, hero, boltColor);
-        if (!hero)
+        // Slot 0 for everyone: the main gun. Slower and heavier than the FPS
+        // blaster — a tank's cannon should land, not chatter.
+        var cannon = Cannon(host, muzzle, owner, kind, role, boltColor);
+        if (role != Role.Hero)
             return new[] { cannon };
 
         var rack = new Weapon[]
@@ -91,27 +108,50 @@ public static class TankArsenal
     /// so the player is the one who gets to hit a tank that is trying to dodge.
     /// </summary>
     static LaserBlaster Cannon(GameObject host, Transform muzzle, Transform owner,
-        TankPawn.Chassis kind, bool hero, Color boltColor)
+        TankPawn.Chassis kind, Role role, Color boltColor)
     {
         var gun = Add<LaserBlaster>(host, muzzle, owner);
         bool tank = kind == TankPawn.Chassis.Tank;
-        gun.weaponName = tank ? "Cannon" : "Rifle";
+        gun.weaponName = kind == TankPawn.Chassis.Structure ? "Emplacement"
+            : tank ? "Cannon" : "Rifle";
         // Coloured by TEAM rather than by weapon, unlike the arena's guns. Down a
         // scrolling field with a dozen tanks firing at once, "whose shot is that"
         // has to be answerable at a glance, and hue is the only channel left.
         gun.color = boltColor;
 
-        if (hero)
+        switch (role)
         {
-            gun.shotsPerSecond = HeroCannonRate;
-            gun.damage = HeroCannonDamage;
-            gun.boltSpeed = 70f;
-            return gun;
-        }
+            case Role.Hero:
+                gun.shotsPerSecond = HeroCannonRate;
+                gun.damage = HeroCannonDamage;
+                gun.boltSpeed = 70f;
+                break;
 
-        gun.shotsPerSecond = tank ? 1.5f : 2.2f;
-        gun.damage = tank ? 13f : 7f;
-        gun.boltSpeed = 46f;
+            // Real help, never the star: a recruit hits half as hard as the hero
+            // and takes half again as long between shots. Four of them are worth
+            // having and still do not make the player a spectator at their own
+            // escort's battle.
+            case Role.Ally:
+                gun.shotsPerSecond = 2.2f;
+                gun.damage = 30f;
+                gun.boltSpeed = 62f;
+                break;
+
+            // An outpost's gun is the one enemy weapon that genuinely threatens
+            // the hero on its own — slow enough to drive out of, heavy enough
+            // that sitting in front of it is a decision rather than an oversight.
+            case Role.Outpost:
+                gun.shotsPerSecond = 0.85f;
+                gun.damage = 42f;
+                gun.boltSpeed = 40f;
+                break;
+
+            default:
+                gun.shotsPerSecond = tank ? 1.5f : 2.2f;
+                gun.damage = tank ? 13f : 7f;
+                gun.boltSpeed = 46f;
+                break;
+        }
         return gun;
     }
 

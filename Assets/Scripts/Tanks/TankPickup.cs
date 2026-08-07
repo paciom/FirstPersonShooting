@@ -27,6 +27,8 @@ public class TankPickup : MonoBehaviour
         Weapon,
         /// <summary>Shield back. The mode's only healing.</summary>
         Repair,
+        /// <summary>A recruit beacon: one tank changes sides and drives with you.</summary>
+        Recruit,
     }
 
     static readonly List<TankPickup> Live = new List<TankPickup>();
@@ -47,6 +49,11 @@ public class TankPickup : MonoBehaviour
 
     static readonly Color PodColor = new Color(1f, 0.75f, 0.2f);
     static readonly Color KitColor = new Color(0.35f, 1f, 0.6f);
+    static readonly Color RecruitColor = new Color(0.35f, 0.7f, 1f);
+
+    /// <summary>The colour a kind is read by from across the field.</summary>
+    public static Color ColorOf(Kind sort) =>
+        sort == Kind.Weapon ? PodColor : sort == Kind.Repair ? KitColor : RecruitColor;
 
     public Kind Sort { get; private set; }
 
@@ -83,28 +90,42 @@ public class TankPickup : MonoBehaviour
     /// </summary>
     void Compose()
     {
-        bool pod = Sort == Kind.Weapon;
-        Color color = pod ? PodColor : KitColor;
+        Color color = ColorOf(Sort);
 
         _spinner = new GameObject("Spinner").transform;
         _spinner.SetParent(transform, false);
         _spinner.localPosition = new Vector3(0f, 1.1f, 0f);
 
-        var glow = ArenaMaterials.Emissive($"tank-pickup-{(pod ? "pod" : "kit")}", color,
-            // Under 2.5: past that the bloom takes any colour to white, and an
-            // amber pod and a green kit that both read white are two pickups the
-            // player cannot tell apart from across the field.
+        var glow = ArenaMaterials.Emissive($"tank-pickup-{Sort}", color,
+            // Under 2.5: past that the bloom takes any colour to white, and three
+            // pickups that all read white are three the player cannot tell apart
+            // from across the field.
             1.8f);
 
-        if (pod)
+        switch (Sort)
         {
-            Shape(_spinner, PrimitiveType.Cube, Vector3.zero, Vector3.one * 0.85f, glow,
-                new Vector3(35f, 0f, 35f));
-        }
-        else
-        {
-            Shape(_spinner, PrimitiveType.Cube, Vector3.zero, new Vector3(1.1f, 0.34f, 0.34f), glow, null);
-            Shape(_spinner, PrimitiveType.Cube, Vector3.zero, new Vector3(0.34f, 1.1f, 0.34f), glow, null);
+            // A crate on its corner.
+            case Kind.Weapon:
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero, Vector3.one * 0.85f, glow,
+                    new Vector3(35f, 0f, 35f));
+                break;
+
+            // A cross.
+            case Kind.Repair:
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
+                    new Vector3(1.1f, 0.34f, 0.34f), glow, null);
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
+                    new Vector3(0.34f, 1.1f, 0.34f), glow, null);
+                break;
+
+            // A chevron pointing up the field: the shape armies mark their own
+            // vehicles with, and the only pickup here that gives you one.
+            default:
+                Shape(_spinner, PrimitiveType.Cube, new Vector3(-0.26f, 0f, 0f),
+                    new Vector3(0.9f, 0.3f, 0.3f), glow, new Vector3(0f, 40f, 0f));
+                Shape(_spinner, PrimitiveType.Cube, new Vector3(0.26f, 0f, 0f),
+                    new Vector3(0.9f, 0.3f, 0.3f), glow, new Vector3(0f, -40f, 0f));
+                break;
         }
 
         // A ground ring, so the thing that matters — WHERE it is — survives the
@@ -163,8 +184,7 @@ public class TankPickup : MonoBehaviour
         if (gap.sqrMagnitude > Reach * Reach)
             return;
 
-        VfxUtil.SpawnBurst(transform.position + Vector3.up, Sort == Kind.Weapon ? PodColor : KitColor,
-            16, 5f, 0.14f);
+        VfxUtil.SpawnBurst(transform.position + Vector3.up, ColorOf(Sort), 16, 5f, 0.14f);
         OnCollected?.Invoke(this);
         Destroy(gameObject);
     }

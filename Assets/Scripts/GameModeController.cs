@@ -1,9 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, Dogfight, DogfightWar, Story }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, TankRaidWar, Dogfight, DogfightWar, Story }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -430,7 +430,10 @@ public class GameModeController : MonoBehaviour
             else if (mode == GameMode.Brawl) StartBrawl();
             else if (mode == GameMode.BrawlWar) StartBrawlWar();
             else if (mode == GameMode.BrawlShow) StartBrawlShow();
-            else if (mode == GameMode.TankRaid) StartTankRaid();
+            else if (mode == GameMode.TankRaid || mode == GameMode.TankRaidWar)
+            {
+                if (TankRaidPick.PlayerDrives) StartTankRaid(); else StartTankRaidWar();
+            }
             else if (mode == GameMode.Dogfight) StartDogfight();
             else if (mode == GameMode.DogfightWar) StartDogfightWar();
             else StartPlayerVsAI();
@@ -484,9 +487,11 @@ public class GameModeController : MonoBehaviour
         // tanks from the roster, so it skips the FPS-cast reskin the same way
         // the Brawl family does — and its battlefield is its own set, so there
         // is no arena step in front of it either.
+        // Both of its variants come through this one card: the WHO DRIVES chips
+        // on the select screen decide which, and remember the answer.
         if (_pendingMode == GameMode.TankRaid)
         {
-            StartTankRaid();
+            if (TankRaidPick.PlayerDrives) StartTankRaid(); else StartTankRaidWar();
             return;
         }
         // Dogfight spawns both jets fresh from the roster picks, and its sky
@@ -1048,21 +1053,35 @@ public class GameModeController : MonoBehaviour
     /// builds its world rather than borrowing an arena — so no arena select
     /// comes in front of it.
     /// </summary>
-    public void StartTankRaid()
+    public void StartTankRaid() => StartTankRaidMode(playerDrives: true);
+
+    /// <summary>
+    /// Tank Raid's exhibition run: the same battlefield with a machine at the
+    /// hero's controls. Its own pilot rather than a raider brain — see
+    /// <see cref="TankPilot"/> — because the hero's job is to get up the field,
+    /// which is a different problem from holding a range.
+    /// </summary>
+    public void StartTankRaidWar() => StartTankRaidMode(playerDrives: false);
+
+    void StartTankRaidMode(bool playerDrives)
     {
-        Mode = GameMode.TankRaid;
+        Mode = playerDrives ? GameMode.TankRaid : GameMode.TankRaidWar;
         CloseRobotSelect();
         DestroySpectatorRig();
         ResetMatchState();
         // Before the characters are hidden — same order every mode uses.
         RestoreAllDeRez();
 
-        _tankRaid = TankRaid.Begin(this, _roster, _cyanRobot);
+        _tankRaid = TankRaid.Begin(this, _roster, _cyanRobot, playerDrives);
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
-                    "grab the pods   ·   = — Thumb sticks   ·   ESC — Menu",
-                    "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
+        if (playerDrives)
+            ShowOverlay("WASD — Drive   ·   Mouse — Turret   ·   the guns fire themselves   ·   " +
+                        "take the outposts   ·   = — Thumb sticks   ·   ESC — Menu",
+                        "left thumb drives   ·   right thumb aims   ·   tap MENU to go back");
+        else
+            ShowOverlay("TANK RAID: AI v AI — the machine drives, the outposts fall   ·   ESC — Menu",
+                        "TANK RAID: AI v AI — tap MENU to go back");
         LockCursor(false);
     }
 

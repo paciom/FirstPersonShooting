@@ -22,6 +22,7 @@ public class TankRaidHud : MonoBehaviour
     static readonly Color Cyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color Warn = new Color(1f, 0.75f, 0.2f);
     static readonly Color Danger = new Color(1f, 0.35f, 0.3f);
+    static readonly Color Recruit = new Color(0.35f, 0.7f, 1f);
     static readonly Color Panel = new Color(0.04f, 0.09f, 0.14f, 0.72f);
 
     RectTransform _shieldFill;
@@ -30,6 +31,8 @@ public class TankRaidHud : MonoBehaviour
     Image[] _lifePips;
     Text _distance;
     Text _wrecks;
+    Text _escort;
+    Text _boons;
     Text _weapon;
     RectTransform _weaponClock;
     Image _weaponClockImage;
@@ -105,6 +108,17 @@ public class TankRaidHud : MonoBehaviour
             _lifePips[i] = Box($"Life{i}", Cyan, new Vector2(0f, 1f),
                 new Vector2(38f + i * 24f, -80f), new Vector2(16f, 16f));
 
+        // The escort, beside the lives: both answer "how much of me is left".
+        _escort = Label("Escort", "", 16, Recruit, FontStyle.Bold,
+            new Vector2(0f, 1f), new Vector2(210f, -80f), new Vector2(240f, 22f));
+        _escort.alignment = TextAnchor.MiddleLeft;
+
+        // The trophy shelf, under everything. Empty — and therefore invisible —
+        // until the first outpost comes down.
+        _boons = Label("Boons", "", 17, Warn, FontStyle.Bold,
+            new Vector2(0f, 1f), new Vector2(360f, -108f), new Vector2(700f, 24f));
+        _boons.alignment = TextAnchor.MiddleLeft;
+
         // The frame is behind everything it frames; uGUI draws in hierarchy
         // order, so it has to go first.
         frame.transform.SetAsFirstSibling();
@@ -170,6 +184,20 @@ public class TankRaidHud : MonoBehaviour
         _wrecks.text = wrecks == 1 ? "1 WRECK" : $"{wrecks} WRECKS";
     }
 
+    /// <summary>Recruits driving with you, out of how many you may keep. Blank
+    /// while the escort is empty — a readout that says "0" every run until the
+    /// first beacon is a readout that teaches nothing.</summary>
+    public void SetEscort(int allies, int cap)
+    {
+        _escort.text = allies > 0 ? $"ESCORT {allies}/{cap}" : "";
+    }
+
+    /// <summary>What has been captured, as one line. See TankBoons.Summary.</summary>
+    public void SetBoons(string summary)
+    {
+        _boons.text = summary;
+    }
+
     /// <summary>
     /// The gun and how long it has left. <paramref name="secondsLeft"/> below
     /// zero means the permanent cannon, whose clock bar is hidden rather than
@@ -231,10 +259,12 @@ public class TankRaidHud : MonoBehaviour
     /// own PLAY AGAIN would be a second, competing way out of a mode that
     /// already has one.
     /// </summary>
-    public void ShowOver(int metres, int wrecks, int best)
+    public void ShowOver(int metres, int wrecks, int outposts, int best)
     {
-        _overBody.text = $"{metres} metres   ·   {wrecks} wrecked\n" +
-                         (metres >= best ? "A NEW RECORD" : $"best {best} m");
+        string haul = $"{metres} metres   ·   {wrecks} wrecked";
+        if (outposts > 0)
+            haul += outposts == 1 ? "   ·   1 outpost taken" : $"   ·   {outposts} outposts taken";
+        _overBody.text = haul + "\n" + (metres >= best ? "A NEW RECORD" : $"best {best} m");
         _over.SetActive(true);
         foreach (var part in _weaponStrip)
             part.SetActive(false);

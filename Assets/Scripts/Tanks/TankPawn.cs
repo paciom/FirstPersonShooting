@@ -35,6 +35,11 @@ public class TankPawn : MonoBehaviour
         Tank,
         /// <summary>A roster walker, gun on the body.</summary>
         Walker,
+        /// <summary>
+        /// A Commander building, bolted to the ground. It never drives and never
+        /// turns — see <see cref="OnTarget"/> for why its guns bear anyway.
+        /// </summary>
+        Structure,
     }
 
     // ------------------------------------------------------------- the registry
@@ -83,6 +88,14 @@ public class TankPawn : MonoBehaviour
     /// <summary>And a walker beside it, in the same money.</summary>
     public const float WalkerHeight = 2.6f;
 
+    /// <summary>
+    /// An outpost's widest ground dimension. Big enough to be a landmark from
+    /// the top of the screen and to be worth driving around, small enough that
+    /// it never spans the strip — a structure that blocked the field would turn
+    /// a driving game into a door.
+    /// </summary>
+    public const float StructureWidth = 9f;
+
     public Chassis Kind { get; private set; }
     public int Team { get; private set; }
     public EnergyShield Shield { get; private set; }
@@ -126,7 +139,41 @@ public class TankPawn : MonoBehaviour
     bool _hasAim;
     Transform _model;
     Weapon[] _guns;
+    float[] _baseDamage;
     bool _wrecked;
+
+    /// <summary>
+    /// Remember what every gun was built to hit for. See <see cref="RestampGuns"/>.
+    /// </summary>
+    void BankBaseDamage()
+    {
+        if (_guns == null)
+            return;
+        _baseDamage = new float[_guns.Length];
+        for (int i = 0; i < _guns.Length; i++)
+            _baseDamage[i] = _guns[i] != null ? _guns[i].damage : 0f;
+    }
+
+    /// <summary>
+    /// Rewrite every gun from its BUILD value times the boons taken so far.
+    ///
+    /// From base, never from the live number, because this is re-run after every
+    /// capture and after every continue: multiplying in place would compound one
+    /// outpost's reward once per respawn. Rate reaches the cannon only — it is
+    /// the one gun in the rack with a cadence this code can name, and the eleven
+    /// pods all count their own time in their own fields.
+    /// </summary>
+    public void RestampGuns(float damageScale, float rateScale)
+    {
+        if (_guns == null || _baseDamage == null)
+            return;
+        for (int i = 0; i < _guns.Length && i < _baseDamage.Length; i++)
+            if (_guns[i] != null)
+                _guns[i].damage = _baseDamage[i] * damageScale;
+
+        if (_guns.Length > 0 && _guns[0] is LaserBlaster cannon)
+            cannon.shotsPerSecond = TankArsenal.HeroCannonRate * rateScale;
+    }
 
     void OnEnable()
     {
@@ -151,7 +198,8 @@ public class TankPawn : MonoBehaviour
     /// missing model must never be able to blank a fighter off the field.
     /// </summary>
     public static TankPawn Spawn(RobotRoster.Entry entry, Chassis kind, int teamId,
-        Vector3 position, float yaw, float maxShield)
+        Vector3 position, float yaw, float maxShield, TankArsenal.Role role,
+        string buildingKey = null)
     {
         var go = new GameObject($"TankPawn_{kind}_{teamId}");
         go.transform.position = new Vector3(position.x, 0f, position.z);
@@ -162,10 +210,11 @@ public class TankPawn : MonoBehaviour
         // MeshRenderer's world box on a deactivated hierarchy is not a number to
         // bet a tank's scale and ride height on.
         Color tint = MatchAnnouncer.TeamColor(teamId);
-        float height = kind == Chassis.Tank ? TankHeight : WalkerHeight;
-        var model = kind == Chassis.Tank
-            ? BuildTankBody(go.transform, entry, tint, height)
-            : BuildWalkerBody(go.transform, entry, tint, height);
+        float height = kind == Chassis.Tank ? TankHeight
+            : kind == Chassis.Walker ? WalkerHeight : StructureWidth * 0.75f;
+        var model = kind == Chassis.Tank ? BuildTankBody(go.transform, entry, tint, height)
+            : kind == Chassis.Walker ? BuildWalkerBody(go.transform, entry, tint, height)
+            : BuildStructureBody(go.transform, buildingKey, tint);
         var box = MeasureLocal(model);
 
         // From here the object goes dark; see the class note on why. SetActive
@@ -207,15 +256,16 @@ public class TankPawn : MonoBehaviour
         if (kind == Chassis.Tank)
         {
             var turret = go.AddComponent<TankTurret>();
-            turret.turnSpeed = teamId == 0 ? 210f : 120f;
+            turret.turnSpeed = role == TankArsenal.Role.Hero ? 210f
+                : role == TankArsenal.Role.Ally ? 170f : 120f;
             pawn.Turret = turret;
         }
 
         // Only the hero can ever pick up a pod, so only the hero carries a rack
         // to grant one out of. Bolts take the team's colour so the player can
         // tell their own fire from the army's.
-        bool hero = teamId == 0;
-        pawn._guns = TankArsenal.Attach(go, pawn.Muzzle, go.transform, kind, hero, tint);
+        bool hero = role == TankArsenal.Role.Hero;
+        pawn._guns = TankArsenal.Attach(go, pawn.Muzzle, go.transform, kind, role, tint);
         pawn.Loadout = go.AddComponent<WeaponLoadout>();
         pawn.Loadout.all = pawn._guns;
         pawn.Loadout.basicIndices = new[] { 0 };
@@ -226,6 +276,10 @@ public class TankPawn : MonoBehaviour
         // this moment run. See TankArsenal.AmplifyPods.
         if (hero)
             TankArsenal.AmplifyPods(pawn._guns);
+        // Captured AFTER that, so the numbers banked here are the ones the pawn
+        // is meant to fight at. TankBoons rescales from these on every capture
+        // and every respawn; see RestampGuns.
+        pawn.BankBaseDamage();
         pawn.Shield.OnDeRezzed += pawn.HandleWrecked;
         return pawn;
     }
@@ -355,6 +409,63 @@ public class TankPawn : MonoBehaviour
         return holder;
     }
 
+    /// <summary>
+    /// A Commander building, fitted so its widest ground dimension is
+    /// <see cref="StructureWidth"/> and grounded where it stands.
+    ///
+    /// Scaled by FOOTPRINT rather than by height, unlike everything else here:
+    /// the six differ wildly in how tall they are (a turret against a command
+    /// center), and matching their heights would leave the small ones sprawling
+    /// across the strip. Matching footprints keeps every outpost the same thing
+    /// to drive around and lets the tall ones stay tall.
+    ///
+    /// Falls back to a lit block, so a missing GLB can never put an invisible
+    /// wall on the field.
+    /// </summary>
+    static Transform BuildStructureBody(Transform root, string buildingKey, Color tint)
+    {
+        var holder = new GameObject("Model").transform;
+        holder.SetParent(root, false);
+
+        var prefab = Resources.Load<GameObject>($"Buildings/{buildingKey}-building");
+        if (prefab == null)
+            return BuildBlockBody(root, tint, StructureWidth * 0.7f, 1f);
+
+        var instance = Object.Instantiate(prefab, holder);
+        instance.name = "Structure";
+        var renderers = instance.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            Object.Destroy(holder.gameObject);
+            return BuildBlockBody(root, tint, StructureWidth * 0.7f, 1f);
+        }
+
+        Bounds raw = RobotFactory.MeasureWorldBounds(renderers);
+        float widest = Mathf.Max(raw.size.x, raw.size.z, 0.01f);
+        // Multiply, never replace — glTF roots carry their own unit scale.
+        instance.transform.localScale *= StructureWidth / widest;
+
+        Bounds fitted = RobotFactory.MeasureWorldBounds(renderers);
+        instance.transform.position += new Vector3(
+            root.position.x - fitted.center.x,
+            root.position.y - fitted.min.y,
+            root.position.z - fitted.center.z);
+
+        // A ring of the owner's colour underneath. The Meshy texture carries the
+        // building's identity but says nothing about whose it is — the same
+        // reason Commander rings its own buildings.
+        var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        ring.name = "TeamRing";
+        Object.Destroy(ring.GetComponent<Collider>());
+        ring.transform.SetParent(holder, false);
+        ring.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        ring.transform.localScale = new Vector3(StructureWidth * 1.15f, 0.02f, StructureWidth * 1.15f);
+        ring.GetComponent<MeshRenderer>().sharedMaterial = ArenaMaterials.Emissive(
+            $"tank-outpost-ring-{ColorUtility.ToHtmlStringRGB(tint)}", tint, 1.6f);
+
+        return holder;
+    }
+
     /// <summary>Last resort: a lit block, so a roster with no models still fights.</summary>
     static Transform BuildBlockBody(Transform root, Color tint, float height, float lengthRatio)
     {
@@ -431,6 +542,10 @@ public class TankPawn : MonoBehaviour
         {
             if (!_hasAim)
                 return false;
+            // A bunker has embrasures on every side. It does not turn, so gating
+            // its guns on a facing it can never change would be gating them shut.
+            if (Kind == Chassis.Structure)
+                return true;
             Vector3 wanted = Flat(_aimPoint - transform.position);
             if (wanted.sqrMagnitude < 1e-6f)
                 return false;
@@ -454,20 +569,27 @@ public class TankPawn : MonoBehaviour
         Vector2 drive = Vector2.ClampMagnitude(Drive, 1f);
         Drive = Vector2.zero;                       // see the Drive doc comment
 
-        var heading = new Vector3(drive.x, 0f, drive.y);
-        if (Kind == Chassis.Tank)
-            DriveHull(heading, dt);
-        else
-            DriveLegs(heading, dt);
+        // A structure is bolted down: no drive, no turn, no shove, and no fence
+        // — an outpost pushed off a rock or nudged out of another tank's way
+        // would be a building sliding across the battlefield. It still aims and
+        // still fires; that is all it does.
+        if (Kind != Chassis.Structure)
+        {
+            var heading = new Vector3(drive.x, 0f, drive.y);
+            if (Kind == Chassis.Tank)
+                DriveHull(heading, dt);
+            else
+                DriveLegs(heading, dt);
 
-        transform.position = TankField.Clamp(transform.position, Radius);
-        Separate(dt);
-        AvoidScenery();
-        // Flat ground: the field is a deck at y = 0 and nothing in this mode
-        // climbs, so there is no surface query worth making.
-        var grounded = transform.position;
-        grounded.y = 0f;
-        transform.position = grounded;
+            transform.position = TankField.Clamp(transform.position, Radius);
+            Separate(dt);
+            AvoidScenery();
+            // Flat ground: the field is a deck at y = 0 and nothing in this mode
+            // climbs, so there is no surface query worth making.
+            var grounded = transform.position;
+            grounded.y = 0f;
+            transform.position = grounded;
+        }
 
         PointTheGun();
         PullTrigger();
@@ -643,7 +765,22 @@ public class TankPawn : MonoBehaviour
     /// <summary>Blow up and leave the field. The mode calls this on every raider it kills.</summary>
     public void Wreck()
     {
-        VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), Kind == Chassis.Tank ? 1.3f : 0.9f);
+        Color color = MatchAnnouncer.TeamColor(Team);
+        if (Kind == Chassis.Structure)
+        {
+            // A building comes down in more than one bang, spread across its
+            // footprint: one burst at the centre of a nine-metre structure reads
+            // as something small exploding behind it.
+            VfxUtil.Explosion(Center, color, 2.4f);
+            for (int i = 0; i < 5; i++)
+                VfxUtil.Explosion(transform.position + new Vector3(
+                    Random.Range(-1f, 1f) * Radius, Random.Range(0.4f, 2.2f),
+                    Random.Range(-1f, 1f) * Radius), color, Random.Range(0.9f, 1.5f));
+        }
+        else
+        {
+            VfxUtil.Explosion(Center, color, Kind == Chassis.Tank ? 1.3f : 0.9f);
+        }
         Destroy(gameObject);
     }
 
