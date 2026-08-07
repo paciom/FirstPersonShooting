@@ -152,6 +152,19 @@ public static class CommanderMap
             Mathf.Clamp(Mathf.Sin(angle) * radius, -(_ridgeZ - 10f), _ridgeZ - 10f));
         AddPair(fields, centre);
 
+        // A second helping on each side of the ridge — seven pairs total,
+        // because two commanders, their collectors AND their moonlighting
+        // armies eat through five pairs before the war gets interesting.
+        float outerX = next(18f, 42f) * (next(0f, 1f) > 0.5f ? 1f : -1f);
+        float outerZ = next(-66f, -50f);
+        AddPair(fields, new Vector2(outerX, outerZ));
+
+        float ringAngle = next(0f, Mathf.PI * 2f);
+        float ringRadius = next(18f, 34f);
+        var ring = new Vector2(Mathf.Cos(ringAngle) * ringRadius,
+            Mathf.Clamp(Mathf.Sin(ringAngle) * ringRadius, -(_ridgeZ - 10f), _ridgeZ - 10f));
+        AddPair(fields, ring);
+
         // Nudge any pair that landed on another apart. Deterministic: fixed
         // iteration order, pure function of positions already rolled.
         for (int i = 2; i < fields.Count; i += 2)
@@ -197,8 +210,54 @@ public static class CommanderMap
         {
             case 0: return 1500f;    // starter — spends fast, pushes you out
             case 4: return 4000f;    // centre — worth the fight
+            case 6: return 4000f;    // mid-ring — also worth the fight
             default: return 3000f;
         }
+    }
+
+    /// <summary>
+    /// A small crystal field conjured mid-match — what a prospector's dig
+    /// uncovers under a boulder. Same shard recipe as the rolled fields,
+    /// unseeded: the MAP is reproducible from its code, but what happens
+    /// during a war belongs to the war.
+    /// </summary>
+    public static void SpawnFieldAt(Transform mapRoot, Vector3 at, float capacity, int shardCount)
+    {
+        if (mapRoot == null)
+            return;
+        var kit = new ArenaKit(mapRoot, "Commander");
+        var amber = new Color(1f, 0.65f, 0.2f);
+        var crystal = ArenaMaterials.Style("Cmd_Crystal", ArenaMaterials.SurfaceStyle.Crystal,
+            new Color(0.45f, 0.30f, 0.10f), new Color(0.25f, 0.15f, 0.05f), 0.8f, 0.35f,
+            amber, 1.5f);
+
+        var fieldGo = new GameObject("CrystalField");
+        fieldGo.transform.SetParent(mapRoot, false);
+        fieldGo.transform.position = new Vector3(at.x, GroundY, at.z);
+
+        var shards = new List<Transform>(shardCount);
+        for (int i = 0; i < shardCount; i++)
+        {
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            float dist = Random.Range(0f, 2.6f);
+            var basePoint = new Vector3(at.x + Mathf.Cos(angle) * dist, GroundY,
+                                        at.z + Mathf.Sin(angle) * dist);
+            float lean = Random.Range(0f, 0.45f);
+            float leanDir = Random.Range(0f, Mathf.PI * 2f);
+            float height = Random.Range(1.0f, 2.2f);
+            var tip = basePoint + new Vector3(Mathf.Cos(leanDir) * lean * height, height,
+                                              Mathf.Sin(leanDir) * lean * height);
+            var shard = kit.Beam("Crystal", basePoint - Vector3.up * 0.3f, tip,
+                Random.Range(0.45f, 0.8f), crystal);
+            if (shard != null)
+            {
+                shard.transform.SetParent(fieldGo.transform, true);
+                shards.Add(shard.transform);
+            }
+        }
+
+        kit.Point(new Vector3(at.x, 2.2f, at.z), amber, 1.6f, 8f);
+        fieldGo.AddComponent<CrystalField>().Init(shards, capacity);
     }
 
     // ------------------------------------------------------------- terrain
@@ -532,7 +591,12 @@ public static class CommanderMap
                 continue;
 
             float size = next(1.6f, 3.4f);
-            RockPair(kit, rock, pos, size, next);
+            // Every full-size boulder is a PROSPECT — a robot can dig it open,
+            // and what the map rolled underneath (crystal, or honest nothing)
+            // is the same on both twins.
+            bool hasCrystal = next(0f, 1f) < 0.45f;
+            float digRequired = next(10f, 16f);
+            RockPair(kit, rock, pos, size, next, prospect: true, hasCrystal, digRequired);
 
             // Rubble around the boulder's feet, a stride out in random
             // directions — a cluster reads as a place, a lone cube as a prop.
@@ -545,7 +609,8 @@ public static class CommanderMap
                     float dist = size * next(0.8f, 1.6f);
                     var piecePos = pos + new Vector3(Mathf.Cos(angle) * dist, 0f,
                         Mathf.Sin(angle) * dist);
-                    RockPair(kit, rock, piecePos, next(0.5f, 1.2f), next);
+                    // Rubble is just rubble — nobody prospects gravel.
+                    RockPair(kit, rock, piecePos, next(0.5f, 1.2f), next, false, false, 0f);
                 }
             }
             placed++;
@@ -553,12 +618,19 @@ public static class CommanderMap
     }
 
     static void RockPair(ArenaKit kit, Material rock, Vector3 pos, float size,
-        System.Func<float, float, float> next)
+        System.Func<float, float, float> next, bool prospect, bool hasCrystal, float digRequired)
     {
         var scale = new Vector3(size, size * 0.7f, size * next(0.7f, 1.1f));
         float yaw = next(0f, 360f);
-        kit.Box("Rock", new Vector3(pos.x, size * 0.35f, pos.z), scale, rock, yaw);
-        kit.Box("Rock", new Vector3(-pos.x, size * 0.35f, -pos.z), scale, rock, yaw);
+        var south = kit.Box("Rock", new Vector3(pos.x, size * 0.35f, pos.z), scale, rock, yaw);
+        var north = kit.Box("Rock", new Vector3(-pos.x, size * 0.35f, -pos.z), scale, rock, yaw);
+        // EVERY boulder can be dug; whether crystal waits underneath is the
+        // secret the digging exists to answer.
+        if (prospect)
+        {
+            south.AddComponent<RockDeposit>().Init(hasCrystal, digRequired);
+            north.AddComponent<RockDeposit>().Init(hasCrystal, digRequired);
+        }
     }
 
     // ------------------------------------------------------------- keep-outs

@@ -100,15 +100,19 @@ public class CommanderUnit : MonoBehaviour
 
     [SerializeField] float _workCarrying;
     CrystalField _workField;
+    RockDeposit _digRock;
 
     /// <summary>Currently moonlighting in the mines (and interruptible by anything).</summary>
     public bool IsWorking =>
-        _order == OrderKind.Idle && (_workCarrying > 0f || _workField != null);
+        _order == OrderKind.Idle
+        && (_workCarrying > 0f || _workField != null || _digRock != null);
 
     OrderKind _order = OrderKind.Idle;
     Vector3 _destination;
     Vector3 _leashOrigin;
     CommanderUnit _target;
+    /// <summary>Structure under attack — the Attack order's other kind of victim.</summary>
+    [SerializeField] Building _targetBuilding;
     /// <summary>Where an attack-move resumes to once its current fight is won.</summary>
     Vector3 _resumeDestination;
     bool _hasResume;
@@ -127,7 +131,8 @@ public class CommanderUnit : MonoBehaviour
     public bool IsSelected => _selectRing != null && _selectRing.activeSelf;
 
     /// <summary>Mid-fight right now — what the spectator camera hunts for.</summary>
-    public bool InCombat => _order == OrderKind.Attack && _target != null;
+    public bool InCombat => _order == OrderKind.Attack
+        && (_target != null || _targetBuilding != null);
 
     /// <summary>
     /// Folded for travel right now. Read by TDPace, which owns agent speed
@@ -410,9 +415,10 @@ public class CommanderUnit : MonoBehaviour
     }
 
     /// <summary>
-    /// Fight back — or, when the attacker is nothing a robot can duel (a
-    /// turret), break contact toward home. The Collector overrides this to
-    /// always run: it has no gun to answer with.
+    /// Fight back — against the robot that shot, or the turret that shot
+    /// (robots shoot buildings now). Only when the attacker is untraceable
+    /// does an idle unit fall back toward home. The Collector overrides this
+    /// to always run: it has no gun to answer with.
     /// </summary>
     protected virtual void OnUnderAttack(CommanderUnit attacker)
     {
@@ -427,10 +433,27 @@ public class CommanderUnit : MonoBehaviour
             }
             _order = OrderKind.Attack;
             _target = attacker;
+            _targetBuilding = null;
             return;
         }
 
-        // Shot by something un-duel-able while idle: step out of its range.
+        // A turret, then: it bleeds like anything else with a shield.
+        Building turret = _shield.LastAttacker != null
+            ? _shield.LastAttacker.GetComponent<Building>() : null;
+        if (turret != null && turret.IsAlive && turret.TeamId != TeamId)
+        {
+            if (_order == OrderKind.Idle)
+            {
+                _leashOrigin = transform.position;
+                _leashed = true;
+            }
+            _order = OrderKind.Attack;
+            _target = null;
+            _targetBuilding = turret;
+            return;
+        }
+
+        // Shot by something untraceable while idle: step out of its range.
         if (_order == OrderKind.Idle)
         {
             Vector3 home = CommanderMap.BaseSite(TeamId) - transform.position;
@@ -475,6 +498,19 @@ public class CommanderUnit : MonoBehaviour
             return;
         _order = OrderKind.Attack;
         _target = target;
+        _targetBuilding = null;
+        _hasResume = false;
+        _leashed = false;
+    }
+
+    /// <summary>Right-click on an enemy structure: robots shoot buildings too.</summary>
+    public virtual void IssueAttackBuilding(Building target)
+    {
+        if (target == null || !target.IsAlive)
+            return;
+        _order = OrderKind.Attack;
+        _target = null;
+        _targetBuilding = target;
         _hasResume = false;
         _leashed = false;
     }
@@ -559,15 +595,27 @@ public class CommanderUnit : MonoBehaviour
                     _order = OrderKind.Attack;
                     _target = enemy;
                 }
-                else if (Arrived())
+                else
                 {
-                    _order = OrderKind.Idle;
-                    _hasResume = false;
+                    // No robots to fight — structures will do. This is how a
+                    // wave that reaches an empty base actually ends the war
+                    // instead of loitering outside the Command Center.
+                    var structure = NearestEnemyBuilding(sightRange);
+                    if (structure != null)
+                    {
+                        _order = OrderKind.Attack;
+                        _targetBuilding = structure;
+                    }
+                    else if (Arrived())
+                    {
+                        _order = OrderKind.Idle;
+                        _hasResume = false;
+                    }
                 }
                 break;
 
             case OrderKind.Attack:
-                if (_target == null || !_target.IsAlive)
+                if (TargetGone())
                     FightOver();
                 // An idle unit that auto-engaged does not chase across the
                 // map on one glimpse — past the leash it walks home instead.
@@ -599,6 +647,18 @@ public class CommanderUnit : MonoBehaviour
             _leashed = true;
             _order = OrderKind.Attack;
             _target = intruder;
+            return;
+        }
+        // Enemy structures in sight get the same treatment — a turret built
+        // up against your mining field is an intruder that happens to stand
+        // still.
+        var structure = NearestEnemyBuilding(sightRange);
+        if (structure != null)
+        {
+            _leashOrigin = transform.position;
+            _leashed = true;
+            _order = OrderKind.Attack;
+            _targetBuilding = structure;
             return;
         }
         TickIdleWork();
@@ -637,8 +697,30 @@ public class CommanderUnit : MonoBehaviour
 
         if (_workField == null || _workField.IsExhausted)
             _workField = CrystalField.Nearest(transform.position);
+
+        // Prospecting: when the nearest live field is a long walk (or gone
+        // entirely) and a boulder is close, dig the boulder instead — some
+        // of them hide fresh crystal, and a robot finds out by digging.
+        var rock = RockDeposit.Nearest(transform.position);
+        bool prospect = rock != null
+            && (_workField == null
+                || FlatTo(rock.transform.position) + 10f < FlatTo(_workField.transform.position));
+        if (prospect)
+        {
+            _digRock = rock;
+            if (FlatTo(rock.transform.position) > RockDeposit.DigRadius)
+            {
+                SetAgentDestination(rock.transform.position);
+                return;
+            }
+            if (rock.Dig(ThinkInterval))
+                _digRock = null;   // cracked it — next tick sees what's under
+            return;
+        }
+        _digRock = null;
+
         if (_workField == null)
-            return;   // map mined dry — stand down for real
+            return;   // map mined dry and no rocks left — stand down for real
 
         Vector3 fieldPos = _workField.transform.position;
         Vector3 toField = fieldPos - transform.position;
@@ -653,28 +735,67 @@ public class CommanderUnit : MonoBehaviour
         _workCarrying += _workField.Harvest(FighterCarry * (ThinkInterval / FighterMineSeconds));
     }
 
-    /// <summary>Per-frame attack behaviour: chase, face, fire.</summary>
+    float FlatTo(Vector3 to)
+    {
+        Vector3 delta = to - transform.position;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
+    bool TargetGone()
+    {
+        if (_target != null && _target.IsAlive)
+            return false;
+        if (_targetBuilding != null && _targetBuilding.IsAlive)
+            return false;
+        return true;
+    }
+
+    /// <summary>Per-frame attack behaviour: chase, face, fire — robot or building alike.</summary>
     void TickAttack()
     {
-        if (_target == null || !_target.IsAlive)
+        // Resolve whichever kind of victim this order holds. Robots first —
+        // a moving gun outranks a standing wall.
+        Vector3 aimPoint;
+        Transform victimRoot;
+        float reachBonus;
+        if (_target != null && _target.IsAlive)
+        {
+            aimPoint = _target.transform.position + Vector3.up * 1.1f;
+            victimRoot = _target.transform;
+            reachBonus = 0f;
+        }
+        else if (_targetBuilding != null && _targetBuilding.IsAlive)
+        {
+            var def = _targetBuilding.Definition;
+            aimPoint = _targetBuilding.transform.position
+                + Vector3.up * (def != null ? def.height * 0.45f : 1.5f);
+            victimRoot = _targetBuilding.transform;
+            // Range is measured to the wall, not the centre — a 6 m-wide
+            // factory should not need robots inside it to be shootable.
+            reachBonus = def != null ? Mathf.Max(def.footprint.x, def.footprint.y) * 0.5f : 2f;
+        }
+        else
+        {
             return;   // Think() resolves what happens next
+        }
 
-        Vector3 toTarget = _target.transform.position - transform.position;
+        Vector3 toTarget = victimRoot.position - transform.position;
         toTarget.y = 0f;
-        float distance = toTarget.magnitude;
+        float distance = toTarget.magnitude - reachBonus;
 
         // Out of range OR occluded: keep moving. Without the line-of-sight
         // half, two units 20 m apart through a ridge both stop and pour fire
         // into the rock forever — neither dies, neither moves, permanent
         // deadlock at exactly the chokepoints where armies actually meet.
-        if (distance > attackRange || !CanSee(_target))
+        if (distance > attackRange || !CanSeePoint(victimRoot, aimPoint))
         {
             // Chase — with a repath throttle so a hundred pursuers don't all
             // recompute paths every frame.
             if (Time.time >= _nextRepath)
             {
                 _nextRepath = Time.time + 0.5f;
-                SetAgentDestination(_target.transform.position);
+                SetAgentDestination(victimRoot.position);
             }
             return;
         }
@@ -688,7 +809,7 @@ public class CommanderUnit : MonoBehaviour
 
         if (_weapon != null && Quaternion.Angle(transform.rotation, face) < 15f)
         {
-            Vector3 aim = _target.transform.position + Vector3.up * 1.1f - _weapon.muzzle.position;
+            Vector3 aim = aimPoint - _weapon.muzzle.position;
             _weapon.TryFire(aim.normalized);
             // Ammunition is cheap, never free — trigger time goes on the books.
             CommanderAmmo.AccrueFiring(TeamId, _weapon, Time.deltaTime);
@@ -879,10 +1000,47 @@ public class CommanderUnit : MonoBehaviour
     void FightOver()
     {
         _target = null;
+        _targetBuilding = null;
         if (_hasResume)
             IssueAttackMove(_resumeDestination);
         else
             _order = OrderKind.Idle;
+    }
+
+    /// <summary>
+    /// Nearest enemy structure the unit can draw a sightline to — turrets
+    /// first, always: the thing shooting back dies before the thing that
+    /// merely pays for it.
+    /// </summary>
+    Building NearestEnemyBuilding(float within)
+    {
+        Building best = null, bestTurret = null;
+        float bestSqr = within * within, bestTurretSqr = within * within;
+        foreach (var building in Building.All)
+        {
+            if (building == null || building.TeamId == TeamId || !building.IsAlive)
+                continue;
+            var def = building.Definition;
+            float reach = def != null ? Mathf.Max(def.footprint.x, def.footprint.y) * 0.5f : 2f;
+            Vector3 flat = building.transform.position - transform.position;
+            flat.y = 0f;
+            float effective = Mathf.Max(0f, flat.magnitude - reach);
+            float sqr = effective * effective;
+            Vector3 aim = building.transform.position
+                + Vector3.up * (def != null ? def.height * 0.45f : 1.5f);
+            bool turret = def != null && def.key == BuildingCatalog.Turret;
+            if (turret && sqr < bestTurretSqr && CanSeePoint(building.transform, aim))
+            {
+                bestTurretSqr = sqr;
+                bestTurret = building;
+            }
+            else if (!turret && sqr < bestSqr && CanSeePoint(building.transform, aim))
+            {
+                bestSqr = sqr;
+                best = building;
+            }
+        }
+        return bestTurret != null ? bestTurret : best;
     }
 
     CommanderUnit NearestEnemy(float within)
@@ -911,10 +1069,16 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     bool CanSee(CommanderUnit target)
     {
+        return CanSeePoint(target.transform,
+            target.transform.position + Vector3.up * 1.1f);
+    }
+
+    /// <summary>Same sightline test against any victim — a building's wall counts as seeing it.</summary>
+    bool CanSeePoint(Transform victimRoot, Vector3 aimPoint)
+    {
         Vector3 from = transform.position + Vector3.up * 1.1f;
-        Vector3 to = target.transform.position + Vector3.up * 1.1f;
-        return !Physics.Linecast(from, to, out RaycastHit hit, ~0, QueryTriggerInteraction.Ignore)
-            || hit.transform.root == target.transform.root;
+        return !Physics.Linecast(from, aimPoint, out RaycastHit hit, ~0, QueryTriggerInteraction.Ignore)
+            || hit.transform.root == victimRoot.root;
     }
 
     protected bool Arrived()

@@ -282,12 +282,30 @@ public class CommanderSelection : MonoBehaviour
             return;
         }
 
+        // Enemy structures are targets too — right-click a turret and the
+        // squad concentrates on it.
+        var building = BuildingUnder(screenPoint);
+        if (building != null && building.TeamId != PlayerTeam && building.IsAlive)
+        {
+            foreach (var unit in _selected)
+                unit.IssueAttackBuilding(building);
+            return;
+        }
+
         if (GroundPoint(screenPoint, out Vector3 ground))
         {
             var spots = Formation(ground, _selected.Count);
             for (int i = 0; i < _selected.Count; i++)
                 _selected[i].IssueMove(spots[i]);
         }
+    }
+
+    Building BuildingUnder(Vector2 screenPoint)
+    {
+        var ray = _camera.ScreenPointToRay(screenPoint);
+        if (Physics.Raycast(ray, out RaycastHit hit, 600f))
+            return hit.collider.GetComponentInParent<Building>();
+        return null;
     }
 
     void OrderAttackMove(Vector2 screenPoint)
