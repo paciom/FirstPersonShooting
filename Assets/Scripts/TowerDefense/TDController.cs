@@ -117,6 +117,7 @@ public class TDController : MonoBehaviour
         Placer = gameObject.AddComponent<TDPlacer>();
         gameObject.AddComponent<TDGarrison>();
         gameObject.AddComponent<TDHud>();
+        gameObject.AddComponent<TDDirector>();
         gameObject.AddComponent<TDWaves>();
         gameObject.AddComponent<TDMatch>();
         gameObject.AddComponent<CommanderTouch>()

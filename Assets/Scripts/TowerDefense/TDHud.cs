@@ -21,6 +21,7 @@ public class TDHud : MonoBehaviour
     Text _core;
     Text _wave;
     Text _robots;
+    Text _threat;
     Text _waveButtonLabel;
     Button _waveButton;
 
@@ -52,6 +53,8 @@ public class TDHud : MonoBehaviour
             new Vector2(-28f, -92f), new Vector2(360f, 28f));
         _robots = MakeReadout(canvasGo.transform, "Robots", 20, new Color(1f, 1f, 1f, 0.8f),
             new Vector2(-28f, -122f), new Vector2(360f, 28f));
+        _threat = MakeReadout(canvasGo.transform, "Threat", 20, new Color(1f, 1f, 1f, 0.8f),
+            new Vector2(-28f, -152f), new Vector2(360f, 28f));
 
         BuildBar(canvasGo.transform);
         BuildWaveButton(canvasGo.transform);
@@ -251,6 +254,18 @@ public class TDHud : MonoBehaviour
         int corps = TDGarrison.DefenderCount;
         _robots.text = $"ROBOTS  {corps} / {TDGarrison.MaxDefenders}";
 
+        // The director's dial, out in the open: 100% is the authored game,
+        // the distance from it is how hard the invasion is leaning on YOU.
+        var director = TDDirector.Instance;
+        if (director != null)
+        {
+            int threat = Mathf.RoundToInt(director.Pressure * 100f);
+            _threat.text = $"THREAT  {threat}%";
+            _threat.color = threat > 120 ? WarnRed
+                : threat < 95 ? new Color(0.55f, 1f, 0.4f)
+                : new Color(1f, 1f, 1f, 0.8f);
+        }
+
         foreach (var (def, button, label) in _towerButtons)
         {
             bool affordable = TDEconomy.Credits >= def.cost;
@@ -290,8 +305,14 @@ public class TDHud : MonoBehaviour
         }
         else
         {
+            // The director's stage directions take the second line while
+            // they're fresh — a surge or a sputter should be READ, not
+            // deduced from the raider count.
+            string notice = TDDirector.Instance?.Notice;
             int incoming = waves.AliveCount + waves.RemainingToSpawn;
-            _waveButtonLabel.text = $"WAVE {waves.Wave} ATTACKING\n{incoming} raiders left";
+            _waveButtonLabel.text = notice != null
+                ? $"WAVE {waves.Wave} ATTACKING\n{notice}"
+                : $"WAVE {waves.Wave} ATTACKING\n{incoming} raiders left";
         }
         _waveButtonLabel.fontSize = 17;
     }

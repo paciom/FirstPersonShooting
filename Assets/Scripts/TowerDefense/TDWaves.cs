@@ -48,6 +48,10 @@ public class TDWaves : MonoBehaviour
     [SerializeField] float _nextSpawnAt;
     [SerializeField] float _spawnInterval;
     [SerializeField] bool _halted;
+    [SerializeField] float _waveStartedAt;
+    [SerializeField] int _waveBaseCount;
+    [SerializeField] int _leaksThisWave;
+    [SerializeField] bool _bossSpawned;
 
     /// <summary>Raiders on the field. Component-ref lists survive a reload.</summary>
     [SerializeField] List<TDCreep> _alive = new List<TDCreep>();
@@ -55,13 +59,32 @@ public class TDWaves : MonoBehaviour
     RobotRoster _roster;
     float _nextSweep;
 
-    // ------------------------------------------------------------- HUD reads
+    // ------------------------------------------------------- HUD & director reads
 
     public int Wave => _wave;
     public bool IsBuildPhase => !_waveActive;
     public float BuildSecondsLeft => Mathf.Max(0f, _phaseEndsAt - Time.time);
     public int AliveCount => _alive.Count;
     public int RemainingToSpawn => _toSpawn;
+    public float WaveElapsed => _waveActive ? Time.time - _waveStartedAt : 0f;
+    public int WaveBaseCount => _waveBaseCount;
+    public int LeaksThisWave => _leaksThisWave;
+
+    // ------------------------------------------------------- director's hands
+
+    /// <summary>The gate surges: more raiders join a wave already running.</summary>
+    public void AddSpawns(int extra)
+    {
+        if (_waveActive && !_halted && extra > 0)
+            _toSpawn += extra;
+    }
+
+    /// <summary>The gate sputters: most of what hasn't spawned stays home.</summary>
+    public void CutSpawnsTo(int remaining)
+    {
+        if (_waveActive)
+            _toSpawn = Mathf.Min(_toSpawn, Mathf.Max(0, remaining));
+    }
 
     void Awake()
     {
@@ -99,11 +122,16 @@ public class TDWaves : MonoBehaviour
     /// <summary>
     /// A raider that reached the Core, reporting synchronously BEFORE its
     /// death effect fires — struck from the ledger here so the de-rez that
-    /// follows can never read as a kill and pay a bounty on it.
+    /// follows can never read as a kill and pay a bounty on it. Also the
+    /// director's leak counter, for the same reason: counted at the moment
+    /// it happens, by the raider itself.
     /// </summary>
     public static void NotifyLeaked(TDCreep creep)
     {
-        Instance?._alive.Remove(creep);
+        if (Instance == null)
+            return;
+        if (Instance._alive.Remove(creep))
+            Instance._leaksThisWave++;
     }
 
     void Update()
@@ -119,11 +147,14 @@ public class TDWaves : MonoBehaviour
         }
 
         // Spawning: one raider per interval until the wave is all aboard.
+        // The boss flag latches: a director surge on the final wave refills
+        // _toSpawn after the boss walked, and "last spawn of wave ten" must
+        // not come true twice.
         if (_toSpawn > 0 && Time.time >= _nextSpawnAt)
         {
             _nextSpawnAt = Time.time + _spawnInterval;
             _toSpawn--;
-            SpawnOne(isBoss: _wave == TotalWaves && _toSpawn == 0);
+            SpawnOne(isBoss: _wave == TotalWaves && _toSpawn == 0 && !_bossSpawned);
         }
 
         // The ledger sweep: drop the destroyed (a reload can orphan a death
@@ -142,16 +173,23 @@ public class TDWaves : MonoBehaviour
     {
         _wave++;
         _waveActive = true;
-        var recipe = ThemeFor(_wave);
+        var recipe = ScaledRecipe(_wave);
         _toSpawn = recipe.count;
         _spawnInterval = recipe.interval;
         _nextSpawnAt = Time.time;   // first raider steps through immediately
+        _waveStartedAt = Time.time;
+        _waveBaseCount = recipe.count;
+        _leaksThisWave = 0;
+        _bossSpawned = false;
+        TDDirector.Instance?.OnWaveStarted();
         VfxUtil.Explosion(TDMap.PortalSite + Vector3.up * 2.5f, new Color(1f, 0.3f, 0.9f), 1.4f);
     }
 
     void FinishWave()
     {
         _waveActive = false;
+        TDDirector.Instance?.OnWaveFinished(_waveBaseCount, Time.time - _waveStartedAt,
+            _leaksThisWave);
         // The clear bonus: the wave's worth, paid on a swept field.
         TDEconomy.Grant(60 + 10 * _wave);
         if (_wave >= TotalWaves)
@@ -163,15 +201,37 @@ public class TDWaves : MonoBehaviour
         _phaseEndsAt = Time.time + BuildSeconds;
     }
 
+    /// <summary>
+    /// The wave recipe with the director's dial applied: headcount scales
+    /// with pressure in full, per-raider strength gently. Bounty rides the
+    /// strength scale — tougher raiders pay better, so a hard dial is also
+    /// a rich one. Called per spawn and per wave start with the same wave
+    /// number; the dial only moves between waves, so both read one truth.
+    /// </summary>
+    Recipe ScaledRecipe(int wave)
+    {
+        var recipe = ThemeFor(wave);
+        var director = TDDirector.Instance;
+        if (director != null)
+        {
+            recipe.count = Mathf.Max(3, Mathf.RoundToInt(recipe.count * director.CountScale));
+            recipe.hp *= director.PowerScale;
+            recipe.damage *= director.PowerScale;
+            recipe.bounty = Mathf.RoundToInt(recipe.bounty * director.PowerScale);
+        }
+        return recipe;
+    }
+
     void SpawnOne(bool isBoss)
     {
-        var recipe = ThemeFor(_wave);
+        var recipe = ScaledRecipe(_wave);
 
         float scale = 1f;
         if (isBoss)
         {
             // The finale walks in at half speed and half a head taller,
             // with a whole wave's shield on its own back and a gun to match.
+            _bossSpawned = true;
             recipe.hp *= 12f;
             recipe.speed = 2.3f;
             recipe.damage *= 2f;

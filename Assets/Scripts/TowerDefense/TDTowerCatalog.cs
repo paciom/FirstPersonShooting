@@ -78,40 +78,44 @@ public static class TDTowerCatalog
             {
                 _all = new[]
                 {
+                    // Shields sized for a world where raiders SHOOT BACK:
+                    // a passing wave scorches a tower, a neglected one dies.
+                    // Building regen (6/s after 8 s calm) heals the scorch
+                    // between waves — chip damage is pressure, not attrition.
                     new TDTowerDefinition
                     {
                         key = Pulse, kind = TDTowerKind.Pulse, cost = 100,
                         range = 15f, damage = 7f, shotsPerSecond = 3.5f,
                         building = Structure(Pulse, "PULSE TURRET", "turret",
-                            new Vector2(2.2f, 2.2f), 2.6f, 260f, new Color(1f, 0.35f, 0.3f)),
+                            new Vector2(2.2f, 2.2f), 2.6f, 500f, new Color(1f, 0.35f, 0.3f)),
                     },
                     new TDTowerDefinition
                     {
                         key = Rail, kind = TDTowerKind.Rail, cost = 260,
                         range = 26f, damage = 45f, shotsPerSecond = 0.55f,
                         building = Structure(Rail, "RAIL SPIRE", "tech",
-                            new Vector2(2.6f, 2.6f), 3.6f, 300f, new Color(0.4f, 0.75f, 1f)),
+                            new Vector2(2.6f, 2.6f), 3.6f, 550f, new Color(0.4f, 0.75f, 1f)),
                     },
                     new TDTowerDefinition
                     {
                         key = Mortar, kind = TDTowerKind.Mortar, cost = 220,
                         range = 19f, damage = 16f, shotsPerSecond = 0.8f,
                         building = Structure(Mortar, "PLASMA MORTAR", "factory",
-                            new Vector2(3f, 3f), 3f, 300f, new Color(0.9f, 0.5f, 1f)),
+                            new Vector2(3f, 3f), 3f, 550f, new Color(0.9f, 0.5f, 1f)),
                     },
                     new TDTowerDefinition
                     {
                         key = Stasis, kind = TDTowerKind.Stasis, cost = 140,
                         range = 8.5f, slowFactor = 0.5f, slowSeconds = 2f,
                         building = Structure(Stasis, "STASIS COIL", "power",
-                            new Vector2(2.4f, 2.4f), 2.8f, 260f, new Color(0.55f, 1f, 0.4f)),
+                            new Vector2(2.4f, 2.4f), 2.8f, 450f, new Color(0.55f, 1f, 0.4f)),
                     },
                     new TDTowerDefinition
                     {
                         key = Refinery, kind = TDTowerKind.Refinery, cost = 150,
                         incomePerTick = 6, tickSeconds = 2f,
                         building = Structure(Refinery, "PHOTON REFINERY", "refinery",
-                            new Vector2(3f, 2.4f), 2.8f, 300f, new Color(1f, 0.72f, 0.25f)),
+                            new Vector2(3f, 2.4f), 2.8f, 550f, new Color(1f, 0.72f, 0.25f)),
                     },
                 };
             }

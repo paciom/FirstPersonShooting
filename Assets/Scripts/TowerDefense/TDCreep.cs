@@ -64,6 +64,10 @@ public class TDCreep : CommanderUnit
         creep.GetComponent<NavMeshAgent>().speed = speed;
         creep.gameObject.AddComponent<TDPace>().Init(speed);
 
+        // The drive-by gun: pot-shots at rim structures while the march
+        // rolls on. A sibling for the same reason TDPace is one.
+        creep.gameObject.AddComponent<TDRaiderGun>();
+
         // Bosses read as bosses by silhouette alone. The capsule collider
         // scales with the root; the agent's radius doesn't, which only
         // means a boss brushes the canyon walls — suitably monstrous.
