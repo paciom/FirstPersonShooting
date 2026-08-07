@@ -116,9 +116,13 @@ public class Dogfight : MonoBehaviour
     Transform _tapLock;
     // Generous on purpose: the lock is the missile's tutorial, and a cone a
     // maneuvering AI keeps slipping out of is a tutorial nobody finishes.
+    // These are the CONTENDER numbers; the difficulty pick re-dials the
+    // fields in Setup (wider and quicker below, tighter above).
     const float PlayerLockSeconds = 0.5f;
     const float PlayerLockCone = 16f;
     const float PlayerLockRange = 115f;
+    float _lockSeconds = PlayerLockSeconds;
+    float _lockCone = PlayerLockCone;
 
     public static Dogfight Begin(GameModeController owner, RobotRoster roster,
         int cyanRobot, int magentaRobot, bool playerControls)
@@ -140,6 +144,14 @@ public class Dogfight : MonoBehaviour
     {
         _teamSize = DogfightTeamSize.PerTeam;
         _killsToWin = Mathf.Min(KillsCap, KillsPerPilot * _teamSize);
+
+        // The difficulty dials. Only the player card reads the pick; the AI
+        // war always flies the baseline, so its fights stay the exhibition
+        // they were tuned to be.
+        var dials = DogfightDifficulty.Get(_playerControls
+            ? DogfightDifficulty.Chosen : DogfightDifficulty.Baseline);
+        _lockSeconds = dials.lockSeconds;
+        _lockCone = dials.lockCone;
 
         var player = FindFirstObjectByType<PlayerBrain>();
         if (player != null)
@@ -211,6 +223,10 @@ public class Dogfight : MonoBehaviour
         if (_playerControls)
             DogfightSticks.Build(transform);
 
+        // The player's tube reloads on the level's clock.
+        if (_playerControls && Hero != null)
+            Hero.missileCooldownScale = dials.playerReload;
+
         _stage = Stage.Intro;
         _stageStart = Time.time;
     }
@@ -220,7 +236,16 @@ public class Dogfight : MonoBehaviour
         var entry = _roster != null && _roster.HasRobots
             ? _roster.Get(robotIndex)
             : default;
-        var pawn = JetPawn.Spawn(entry, JetStagesFor(entry), teamId, position, yaw, JetShield);
+        // The difficulty's hand on the hulls, player card only: below the
+        // baseline the enemy team thins and the player's team thickens, so a
+        // ROOKIE sortie is short bursts to kill and forgiven mistakes.
+        float hull = JetShield;
+        if (_playerControls)
+        {
+            var dials = DogfightDifficulty.Get(DogfightDifficulty.Chosen);
+            hull *= teamId == 0 ? dials.allyShield : dials.enemyShield;
+        }
+        var pawn = JetPawn.Spawn(entry, JetStagesFor(entry), teamId, position, yaw, hull);
         pawn.OnWrecked += Wrecked;
         pawn.OnWreckLanded += WreckLanded;
         team.Add(new Slot { pawn = pawn });
@@ -416,6 +441,11 @@ public class Dogfight : MonoBehaviour
         brain.pawn = pawn;
         brain.quarry = quarry;
         brain.breakSign = breakSign;
+        // Every CPU seat — wingmates included — flies the picked level: a
+        // ROOKIE sky is sloppy everywhere, which leaves the kills to the
+        // player instead of handing the sortie to sharp allies.
+        brain.ApplySkill(_playerControls
+            ? DogfightDifficulty.Chosen : DogfightDifficulty.Baseline);
     }
 
     /// <summary>
@@ -512,7 +542,7 @@ public class Dogfight : MonoBehaviour
 
         UpdatePlayerLock();
         if ((Input.GetMouseButtonDown(1) || DogfightSticks.MissileTapped)
-            && _lockProgress >= PlayerLockSeconds)
+            && _lockProgress >= _lockSeconds)
             hero.TryFireMissile(_lockCandidate);
     }
 
@@ -634,7 +664,7 @@ public class Dogfight : MonoBehaviour
                 _lockCandidateCenter = pawn != null ? pawn.Center
                     : battery != null ? battery.Center
                     : WeaponUtil.Center(shield);
-                _lockProgress = PlayerLockSeconds;
+                _lockProgress = _lockSeconds;
                 hero.FocusTarget = _tapLock;
                 return;
             }
@@ -643,7 +673,7 @@ public class Dogfight : MonoBehaviour
 
         Transform best = null;
         Vector3 bestCenter = Vector3.zero;
-        float bestAngle = PlayerLockCone;
+        float bestAngle = _lockCone;
 
         Vector3 seeker = hero.AimDirection;
         var enemy = JetPawn.NearestEnemy(hero.transform.position, 0, PlayerLockRange);
@@ -887,7 +917,7 @@ public class Dogfight : MonoBehaviour
                 _lockCandidate != null
                     ? _camera.WorldToViewportPoint(_lockCandidateCenter)
                     : Vector3.back,
-                _lockCandidate == null ? 0 : _lockProgress >= PlayerLockSeconds ? 2 : 1);
+                _lockCandidate == null ? 0 : _lockProgress >= _lockSeconds ? 2 : 1);
             WarnOfMissiles();
         }
     }

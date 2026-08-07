@@ -101,6 +101,26 @@ public class JetBrain : MonoBehaviour
     /// one make a queue.</summary>
     public float breakSign = 1f;
 
+    /// <summary>The CPU level this pilot flies (public: survives a mid-Play
+    /// recompile with the other seat assignments). Defaults to the baseline,
+    /// so the AI war and any brain nobody configured fly the shipped tuning.</summary>
+    public int skillLevel = DogfightDifficulty.Baseline;
+
+    DogfightDifficulty.Level Dials => DogfightDifficulty.Get(skillLevel);
+
+    /// <summary>Take a level: re-roll every personality knob the level owns.
+    /// Called right after AddComponent — Awake has already rolled baseline
+    /// values by then, so this simply rolls again inside the level's bounds.</summary>
+    public void ApplySkill(int level)
+    {
+        skillLevel = level;
+        var dials = Dials;
+        _think = Random.Range(dials.thinkMin, dials.thinkMax);
+        _jitterDegrees = Random.Range(dials.jitterMin, dials.jitterMax);
+        _missileAt = Time.time
+            + Random.Range(dials.missileEveryMin, dials.missileEveryMax) * 0.7f;
+    }
+
     // -------------------------------------------------------- rolled at wake-up
 
     float _think;           // seconds between decisions
@@ -120,6 +140,10 @@ public class JetBrain : MonoBehaviour
     DogfightMissile _threat;
     float _flareAt = -1f;
     float _nextFlareAllowed;
+    // Rolled per THREAT, not per pilot: a low-level squadron where the same
+    // jet always eats every missile reads as one broken pilot, not a level.
+    bool _evadesThreat;
+    bool _flaresThreat;
 
     readonly float[] _ranges = new float[RangeMemory];
     int _rangeCount;
@@ -182,8 +206,9 @@ public class JetBrain : MonoBehaviour
 
         // Break only for a missile that is actually ARRIVING; a distant
         // launch is tracked (and flared if it gets close) while the fight
-        // goes on.
-        if (_threat != null
+        // goes on. Whether THIS pilot breaks at all was rolled when the
+        // threat appeared — low levels mostly fly on and eat it.
+        if (_threat != null && _evadesThreat
             && Vector3.Distance(_threat.transform.position, pawn.transform.position)
                < EvadeRange)
             EvadeMissile();
@@ -290,7 +315,8 @@ public class JetBrain : MonoBehaviour
             else if (Time.time - _coneHeldSince >= MissileHoldSeconds
                      && Time.time >= _missileAt
                      && pawn.TryFireMissile(quarry.transform))
-                _missileAt = Time.time + Random.Range(6f, 9f);
+                _missileAt = Time.time
+                    + Random.Range(Dials.missileEveryMin, Dials.missileEveryMax);
         }
 
         // Tails and carousels are sky problems; forget them down here.
@@ -323,6 +349,10 @@ public class JetBrain : MonoBehaviour
                 continue;
             _threat = missile;
             _flareAt = -1f;
+            // The level's dice, thrown once per threat: does this pilot
+            // notice in time to break, and does the flare hand move?
+            _evadesThreat = Random.value < Dials.evadeChance;
+            _flaresThreat = Random.value < Dials.flareChance;
             break;
         }
     }
@@ -340,7 +370,7 @@ public class JetBrain : MonoBehaviour
             pawn.transform.position);
 
         pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 6f) * 0.8f);
-        pawn.Throttle = 1f;
+        pawn.Throttle = Dials.throttleCap;
 
         TickFlares(distance);
 
@@ -354,7 +384,8 @@ public class JetBrain : MonoBehaviour
     /// whole pocket at one threat. Shared by the break and the deck.</summary>
     void TickFlares(float threatDistance)
     {
-        if (threatDistance >= FlareRange || Time.time < _nextFlareAllowed)
+        if (!_flaresThreat || threatDistance >= FlareRange
+            || Time.time < _nextFlareAllowed)
             return;
         if (_flareAt < 0f)
         {
@@ -517,7 +548,7 @@ public class JetBrain : MonoBehaviour
         if (breaking)
         {
             pawn.Steer = new Vector2(breakSign, Mathf.Sin(Time.time * 5f) * 0.6f);
-            pawn.Throttle = 1f;
+            pawn.Throttle = Dials.throttleCap;
             pawn.Firing = false;
             _coneHeldSince = -1f;
             return;
@@ -536,7 +567,10 @@ public class JetBrain : MonoBehaviour
             ? Vector3.Distance(me, quarry.transform.position)
             : toGoal.magnitude;
         bool cutting = Time.time < _cutUntil;
-        pawn.Throttle = cutting || distance > 45f ? 1f : distance < 16f ? -0.5f : 0f;
+        // The burner is a level privilege: a ROOKIE trundles at near-cruise,
+        // which is what makes it a target a first-timer can track.
+        pawn.Throttle = cutting || distance > 45f
+            ? Dials.throttleCap : distance < 16f ? -0.5f : 0f;
 
         FightGuns(me);
     }
@@ -612,7 +646,8 @@ public class JetBrain : MonoBehaviour
                  && Time.time >= _missileAt
                  && pawn.TryFireMissile(lockRoot))
         {
-            _missileAt = Time.time + Random.Range(6f, 9f);
+            _missileAt = Time.time
+                + Random.Range(Dials.missileEveryMin, Dials.missileEveryMax);
         }
     }
 }

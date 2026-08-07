@@ -158,6 +158,11 @@ public class JetPawn : MonoBehaviour
     public const float AssistRange = 90f;
 
     public const float MissileCooldown = 5f;
+
+    /// <summary>Scale on this pawn's missile reload — the difficulty picker's
+    /// hand on the player's tube (public: survives a mid-Play recompile).</summary>
+    public float missileCooldownScale = 1f;
+
     public const int FlareChargesMax = 3;
     const float FlareRechargeSeconds = 7f;
 
@@ -288,7 +293,8 @@ public class JetPawn : MonoBehaviour
     public bool MissileReady => Time.time >= _missileReadyAt;
 
     public float MissileReadyFraction =>
-        Mathf.Clamp01(1f - (_missileReadyAt - Time.time) / MissileCooldown);
+        Mathf.Clamp01(1f - (_missileReadyAt - Time.time)
+                           / (MissileCooldown * missileCooldownScale));
 
     public int FlareCharges => _flareCharges;
 
@@ -1414,7 +1420,7 @@ public class JetPawn : MonoBehaviour
     {
         if (!MissileReady || IsDown || !FlightOn || Morphing || lockRoot == null)
             return false;
-        _missileReadyAt = Time.time + MissileCooldown;
+        _missileReadyAt = Time.time + MissileCooldown * missileCooldownScale;
         Vector3 from = CurrentForm == Form.Jet
             ? Center - transform.up * 0.45f + transform.forward * 1.0f
             : Center + Vector3.up * 1.4f;

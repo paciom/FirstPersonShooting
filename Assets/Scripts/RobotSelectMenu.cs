@@ -171,9 +171,12 @@ public static class RobotSelectMenu
         if (pendingMode == GameMode.Dogfight || pendingMode == GameMode.DogfightWar)
         {
             BuildDogfightSizePicker(canvasGo.transform, pendingMode == GameMode.Dogfight);
-            // The battlefield chips sit where BRAWL keeps its CPU levels —
-            // the two mode families never share a select screen.
+            // The battlefield chips (and, on the player card, the CPU level
+            // row under them) share the strip right of START with BRAWL's
+            // level picker — the two mode families never share a screen.
             BuildMapPicker(canvasGo.transform);
+            if (pendingMode == GameMode.Dogfight)
+                BuildDogfightLevelPicker(canvasGo.transform);
         }
 
         inspector.BuildUI(canvasGo.transform);
@@ -584,16 +587,14 @@ public static class RobotSelectMenu
     }
 
     /// <summary>
-    /// DOGFIGHT's battlefield chips, on the Brawl level picker's strip right
-    /// of START: one per <see cref="DogfightMapKind"/>, the chosen one lit.
-    /// Remembered between sorties the way every other picker here is.
+    /// DOGFIGHT's battlefield chips, on the strip right of START: one per
+    /// <see cref="DogfightMapKind"/>, the chosen one lit. Remembered between
+    /// sorties the way every other picker here is. The row starts clear of
+    /// START's right edge (x = 210) and leaves the band below for the player
+    /// card's CPU level row.
     /// </summary>
     static void BuildMapPicker(Transform parent)
     {
-        MakeText(parent, "MapTitle", "BATTLEFIELD", 18,
-            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
-            new Vector2(0.5f, 0.5f), new Vector2(385f, -312f), new Vector2(560f, 24f));
-
         var chips = new Image[DogfightMapPick.All.Length];
         var labels = new Text[chips.Length];
 
@@ -616,8 +617,8 @@ public static class RobotSelectMenu
             var chip = MakeImage(parent, $"Map_{kind}", CardColor);
             var rect = chip.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = new Vector2(385f + (i - 1) * 192f, -352f);
-            rect.sizeDelta = new Vector2(184f, 52f);
+            rect.anchoredPosition = new Vector2(305f + i * 158f, -330f);
+            rect.sizeDelta = new Vector2(150f, 40f);
             chips[i] = chip;
 
             var button = chip.gameObject.AddComponent<Button>();
@@ -628,12 +629,65 @@ public static class RobotSelectMenu
                 Refresh();
             });
 
-            labels[i] = MakeText(chip.transform, "Label", DogfightMapPick.NameOf(kind), 17,
+            labels[i] = MakeText(chip.transform, "Label", DogfightMapPick.NameOf(kind), 15,
                 Color.white, FontStyle.Bold,
-                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(180f, 48f));
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(146f, 36f));
             // "DONUT  STATION" is the widest label; wrapped it would break
             // onto two lines and only that one chip would look wrong.
             labels[i].horizontalOverflow = HorizontalWrapMode.Overflow;
+        }
+        Refresh();
+    }
+
+    /// <summary>
+    /// The CPU level for the DOGFIGHT player card: 1–5 chips under the
+    /// battlefield row with the chosen level's name spelled out beside them.
+    /// The war card never shows this — its pilots always fly the baseline.
+    /// </summary>
+    static void BuildDogfightLevelPicker(Transform parent)
+    {
+        var chips = new Image[DogfightDifficulty.Levels.Length];
+        var labels = new Text[chips.Length];
+        var title = MakeText(parent, "LevelName", "", 16,
+            new Color(1f, 1f, 1f, 0.55f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), new Vector2(760f, -378f), new Vector2(340f, 24f));
+        title.alignment = TextAnchor.MiddleLeft;
+
+        void Refresh()
+        {
+            int selected = DogfightDifficulty.Chosen;
+            title.text = "CPU  —  " + DogfightDifficulty.NameOf(selected);
+            for (int i = 0; i < chips.Length; i++)
+            {
+                bool on = i + 1 == selected;
+                chips[i].color = on
+                    ? new Color(HoloCyan.r * 0.35f, HoloCyan.g * 0.35f, HoloCyan.b * 0.35f, 0.95f)
+                    : CardColor;
+                labels[i].color = on ? HoloCyan : new Color(1f, 1f, 1f, 0.55f);
+            }
+        }
+
+        for (int i = 0; i < chips.Length; i++)
+        {
+            int level = i + 1;
+            var chip = MakeImage(parent, $"JetLevel_{level}", CardColor);
+            var rect = chip.rectTransform;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = new Vector2(249f + i * 68f, -378f);
+            rect.sizeDelta = new Vector2(60f, 36f);
+            chips[i] = chip;
+
+            var button = chip.gameObject.AddComponent<Button>();
+            button.targetGraphic = chip;
+            button.onClick.AddListener(() =>
+            {
+                DogfightDifficulty.Chosen = level;
+                Refresh();
+            });
+
+            labels[i] = MakeText(chip.transform, "Label", level.ToString(), 20,
+                Color.white, FontStyle.Bold,
+                new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 32f));
         }
         Refresh();
     }
