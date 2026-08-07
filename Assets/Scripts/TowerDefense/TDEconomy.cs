@@ -13,8 +13,13 @@ using System;
 /// </summary>
 public static class TDEconomy
 {
-    /// <summary>Two Pulse Turrets and change — the classic TD opening hand.</summary>
-    public const int StartingCredits = 260;
+    /// <summary>
+    /// The opening hand: two turrets, a robot or two, and change. Sized for
+    /// the game as it IS — waves that shoot back need a defense in depth
+    /// from minute one, and 260 (the old figure, priced for pacifist
+    /// raiders) bought exactly half of one.
+    /// </summary>
+    public const int StartingCredits = 500;
 
     static int _credits;
 

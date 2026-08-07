@@ -29,8 +29,13 @@ public class TDDirector : MonoBehaviour
     /// <summary>Rubric points move the dial this much each — max swing ±0.25 a wave.</summary>
     const float NudgePerPoint = 0.05f;
 
-    /// <summary>A comfortable bank at wave's end reads as "too easy".</summary>
-    const int RichThreshold = 350;
+    /// <summary>
+    /// A comfortable bank at wave's end reads as "too easy". Above the
+    /// starting stake on purpose: holding most of the opening hand through
+    /// wave one is prudence, not coasting, and must not read as a reason
+    /// to bear down.
+    /// </summary>
+    const int RichThreshold = 550;
 
     /// <summary>Core lost in ONE wave that triggers the mid-wave mercy cut.</summary>
     const int SputterCoreLoss = 3;

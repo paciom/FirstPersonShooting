@@ -21,8 +21,11 @@ public class TDWaves : MonoBehaviour
 
     public const int TotalWaves = 10;
 
-    /// <summary>Thinking room before the first wave; less once the map is known.</summary>
-    const float FirstBuildSeconds = 20f;
+    /// <summary>
+    /// Thinking room before the first wave — a bigger opening hand takes
+    /// longer to place well; less once the map is known.
+    /// </summary>
+    const float FirstBuildSeconds = 25f;
     const float BuildSeconds = 14f;
 
     /// <summary>Early-call reward per banked second — patience priced against tempo.</summary>
@@ -269,7 +272,10 @@ public class TDWaves : MonoBehaviour
         float baseHp = 55f * Mathf.Pow(1.22f, wave - 1);
         var recipe = new Recipe
         {
-            count = 8 + 2 * wave,
+            // 4+2w, not the old 8+2w: the flat 8 fell on wave one hardest —
+            // ten shooting raiders against an opening-hand defense. The
+            // slope carries the late game; the intercept was just cruelty.
+            count = 4 + 2 * wave,
             interval = 0.9f,
             hp = baseHp,
             speed = 3.5f,
