@@ -34,6 +34,8 @@ public class WeaponDebugConsole : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
     {
+        if (UnattendedRender.Active)
+            return;
         if (Instance == null)
             new GameObject("WeaponDebugConsole").AddComponent<WeaponDebugConsole>();
     }

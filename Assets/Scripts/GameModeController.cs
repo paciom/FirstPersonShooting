@@ -155,7 +155,8 @@ public class GameModeController : MonoBehaviour
 
     void Update()
     {
-        if (Mode != GameMode.Menu && Input.GetKeyDown(KeyCode.Escape))
+        if (Mode != GameMode.Menu && Input.GetKeyDown(KeyCode.Escape)
+            && !UnattendedRender.Active)
         {
             // In Commander, Escape unwinds one intent at a time before it
             // exits the mode: first a build ghost, then an armed attack-move.

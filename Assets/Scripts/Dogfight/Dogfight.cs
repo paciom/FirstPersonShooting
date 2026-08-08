@@ -124,6 +124,14 @@ public class Dogfight : MonoBehaviour
     float _lockSeconds = PlayerLockSeconds;
     float _lockCone = PlayerLockCone;
 
+    /// <summary>The running match, if any — how the offline render rig
+    /// (DogfightRender) finds the fight without a reference through the
+    /// mode controller.</summary>
+    public static Dogfight Active { get; private set; }
+
+    /// <summary>True once a side has taken the sky and the OVER card is up.</summary>
+    public bool MatchOver => _stage == Stage.Over;
+
     public static Dogfight Begin(GameModeController owner, RobotRoster roster,
         int cyanRobot, int magentaRobot, bool playerControls)
     {
@@ -135,6 +143,7 @@ public class Dogfight : MonoBehaviour
         fight._magentaRobot = magentaRobot;
         fight._playerControls = playerControls;
         fight.Setup();
+        Active = fight;
         return fight;
     }
 
@@ -715,6 +724,8 @@ public class Dogfight : MonoBehaviour
     /// gets the cockpit too, which is half the point of the card.</summary>
     void ReadCameraKeys()
     {
+        if (UnattendedRender.Active)
+            return;
         if (Input.GetKeyDown(KeyCode.C))
             _director.ToggleView();
         // SPACE is the trigger in the player's seat; the broadcast alone
@@ -978,6 +989,8 @@ public class Dogfight : MonoBehaviour
 
     public void Teardown()
     {
+        if (Active == this)
+            Active = null;
         // The ordnance first — a live homing missile outliving the mode would
         // happily chase the menu's robots — then every other scene-root actor,
         // none of which is swept by destroying anything else.
