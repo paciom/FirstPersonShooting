@@ -41,7 +41,7 @@ static class DogfightRenderRunner
     /// <summary>Give up after this long in play mode — a 4v4 runs to twenty
     /// kills and can honestly take a while, but a carousel must not hold a
     /// headless-launched editor open forever. The tape is saved either way.</summary>
-    const double TimeoutSeconds = 30 * 60;
+    const double TimeoutSeconds = 45 * 60;
 
     /// <summary>Seconds of tape after the OVER card: the winner banner's
     /// flash and the match-point mushroom both live in this window.</summary>
