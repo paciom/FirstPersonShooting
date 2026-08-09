@@ -41,7 +41,11 @@ static class DogfightRenderRunner
     /// <summary>Give up after this long in play mode — a 4v4 runs to twenty
     /// kills and can honestly take a while, but a carousel must not hold a
     /// headless-launched editor open forever. The tape is saved either way.</summary>
-    const double TimeoutSeconds = 45 * 60;
+    // Slow matchups (defensive pilots, big maps) can spend 45+ minutes
+    // reaching 20 kills — four of the first batch's tapes cut off at match
+    // point. The ceiling is a hang-guard, not a target; give real matches
+    // room to finish.
+    const double TimeoutSeconds = 75 * 60;
 
     /// <summary>Seconds of tape after the OVER card: the winner banner's
     /// flash and the match-point mushroom both live in this window.</summary>

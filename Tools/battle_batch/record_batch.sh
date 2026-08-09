@@ -12,7 +12,7 @@
 UNITY="/c/Program Files/Unity/Hub/Editor/6000.5.0f1/Editor/Unity.exe"
 ROOT="D:/Claude/FirstPersongShooting"
 LOGS="$ROOT/Tools/battle_batch/logs"
-WALL_LIMIT=3600   # seconds a single recording may hold the editor
+WALL_LIMIT=5100   # seconds a single recording may hold the editor
 mkdir -p "$LOGS"
 
 unity_count() {
