@@ -149,6 +149,10 @@ def main():
     parser.add_argument("out")
     parser.add_argument("--prompt-file", required=True)
     parser.add_argument("--model", choices=sorted(MODELS), default="hailuo")
+    parser.add_argument("--duration", type=int, default=0,
+                        help="ask the API for this length (hailuo: 6 or 10)")
+    parser.add_argument("--resolution", default="",
+                        help="ask the API for this size (hailuo: 512P/768P/1080P)")
     parser.add_argument("--seconds", type=float, default=0,
                         help="retime the result to this length (0 = keep)")
     parser.add_argument("--height", type=int, default=0,
@@ -161,7 +165,11 @@ def main():
     with open(args.prompt_file, encoding="utf-8") as handle:
         prompt = handle.read().strip()
 
-    spec = MODELS[args.model]
+    spec = dict(MODELS[args.model])
+    if args.duration:
+        spec["duration"] = args.duration
+    if args.resolution:
+        spec["resolution"] = args.resolution
     print(f"seed   {args.seed}\nmodel  {spec['name']} "
           f"{spec.get('duration', 6)}s {spec.get('resolution', '720P')}")
     task = create(args.seed, prompt, spec, key)
