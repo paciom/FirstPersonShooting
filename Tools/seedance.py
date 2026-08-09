@@ -30,7 +30,7 @@ import urllib.request
 HOST = "https://ark.ap-southeast.bytepluses.com"
 CREATE_URL = HOST + "/api/v3/contents/generations/tasks"
 QUERY_URL = HOST + "/api/v3/contents/generations/tasks/{}"
-MODELS = ["dreamina-seedance-2-5-260807", "dreamina-seedance-2-0-260128"]
+MODELS = ["dreamina-seedance-2-5-260628", "dreamina-seedance-2-0-260128"]
 POLL_SECONDS = 15
 POLL_LIMIT = 160
 
