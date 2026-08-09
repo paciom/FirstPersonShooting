@@ -44,8 +44,13 @@ static class DogfightRenderRunner
     // Slow matchups (defensive pilots, big maps) can spend 45+ minutes
     // reaching 20 kills — four of the first batch's tapes cut off at match
     // point. The ceiling is a hang-guard, not a target; give real matches
-    // room to finish.
-    const double TimeoutSeconds = 75 * 60;
+    // room to finish. NOTE this counts EDITOR wall-clock, and the sim often
+    // runs below real time, so a 75-minute ceiling can be only ~50 match
+    // minutes — override per run with `-dogfightWallMin <minutes>` for
+    // matchups that stalemate (Panther v Samurai reached 17-17 twice).
+    static readonly double TimeoutSeconds =
+        double.TryParse(ArgAfter("-dogfightWallMin"), out double minutes)
+            ? minutes * 60 : 75 * 60;
 
     /// <summary>Seconds of tape after the OVER card: the winner banner's
     /// flash and the match-point mushroom both live in this window.</summary>
