@@ -85,8 +85,14 @@ public class TankPickup : MonoBehaviour
     /// <summary>
     /// A floating shape and the light that finds it. Read at eighteen metres up
     /// by SILHOUETTE and COLOUR rather than by any detail: the pod is an amber
-    /// box turning on its corner, the kit a green cross. Nothing here carries a
-    /// collider — see the class note.
+    /// crate turning on its corner, the kit a white case with a green cross.
+    /// Nothing here carries a collider — see the class note.
+    ///
+    /// The BODIES ARE LIT, only the accents glow. An all-emissive shape under
+    /// this camera's bloom is a flat blob of colour with no shading at all —
+    /// which reads not as a glow but as a model whose texture failed to load.
+    /// The field's own key light does the shaping; a thin emissive band or lamp
+    /// keeps the colour readable from across the field.
     /// </summary>
     void Compose()
     {
@@ -101,30 +107,42 @@ public class TankPickup : MonoBehaviour
             // pickups that all read white are three the player cannot tell apart
             // from across the field.
             1.8f);
+        var body = ArenaMaterials.Lit($"tank-pickup-body-{Sort}", color * 0.85f, 0.45f, 0.35f);
+        var casing = ArenaMaterials.Lit("tank-pickup-case",
+            new Color(0.92f, 0.93f, 0.95f), 0.4f);
 
         switch (Sort)
         {
-            // A crate on its corner.
+            // A shaded crate on its corner, strapped with two glowing bands.
             case Kind.Weapon:
-                Shape(_spinner, PrimitiveType.Cube, Vector3.zero, Vector3.one * 0.85f, glow,
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero, Vector3.one * 0.85f, body,
                     new Vector3(35f, 0f, 35f));
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
+                    new Vector3(0.88f, 0.88f, 0.2f), glow, new Vector3(35f, 0f, 35f));
+                Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
+                    new Vector3(0.2f, 0.88f, 0.88f), glow, new Vector3(35f, 0f, 35f));
                 break;
 
-            // A cross.
+            // A medkit: white case, green cross standing proud of the lid.
             case Kind.Repair:
                 Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
-                    new Vector3(1.1f, 0.34f, 0.34f), glow, null);
-                Shape(_spinner, PrimitiveType.Cube, Vector3.zero,
-                    new Vector3(0.34f, 1.1f, 0.34f), glow, null);
+                    new Vector3(1f, 0.5f, 0.72f), casing, null);
+                Shape(_spinner, PrimitiveType.Cube, new Vector3(0f, 0.26f, 0f),
+                    new Vector3(0.66f, 0.06f, 0.22f), glow, null);
+                Shape(_spinner, PrimitiveType.Cube, new Vector3(0f, 0.26f, 0f),
+                    new Vector3(0.22f, 0.06f, 0.66f), glow, null);
                 break;
 
-            // A chevron pointing up the field: the shape armies mark their own
-            // vehicles with, and the only pickup here that gives you one.
+            // A chevron pointing up the field — the shape armies mark their own
+            // vehicles with, and the only pickup here that gives you one — with
+            // a beacon lamp above it.
             default:
                 Shape(_spinner, PrimitiveType.Cube, new Vector3(-0.26f, 0f, 0f),
-                    new Vector3(0.9f, 0.3f, 0.3f), glow, new Vector3(0f, 40f, 0f));
+                    new Vector3(0.9f, 0.3f, 0.3f), body, new Vector3(0f, 40f, 0f));
                 Shape(_spinner, PrimitiveType.Cube, new Vector3(0.26f, 0f, 0f),
-                    new Vector3(0.9f, 0.3f, 0.3f), glow, new Vector3(0f, -40f, 0f));
+                    new Vector3(0.9f, 0.3f, 0.3f), body, new Vector3(0f, -40f, 0f));
+                Shape(_spinner, PrimitiveType.Sphere, new Vector3(0f, 0.42f, 0f),
+                    Vector3.one * 0.3f, glow, null);
                 break;
         }
 
