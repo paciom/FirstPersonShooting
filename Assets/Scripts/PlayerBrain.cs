@@ -26,6 +26,7 @@ public class PlayerBrain : MonoBehaviour
     WeaponLoadout _loadout;
     TransformMode _vehicle;
     SniperScope _sniper;
+    AimAssist _assist;
     MartialArts _martial;
     int _loadoutVersion = -1;
     int _activeWeapon;
@@ -69,6 +70,10 @@ public class PlayerBrain : MonoBehaviour
         _sniper = GetComponent<SniperScope>();
         if (_sniper == null)
             _sniper = gameObject.AddComponent<SniperScope>();
+        // After the scope: the assist reads it to know when it is wanted.
+        _assist = GetComponent<AimAssist>();
+        if (_assist == null)
+            _assist = gameObject.AddComponent<AimAssist>();
         _martial = GetComponent<MartialArts>();
         if (_martial == null)
             _martial = gameObject.AddComponent<MartialArts>();
@@ -124,16 +129,29 @@ public class PlayerBrain : MonoBehaviour
         // can't hold steady is worse than no scope.
         float lookScale = _sniper != null ? _sniper.LookScale : 1f;
 
+        // One look delta from either scheme, then one place the assist reads
+        // it. Correcting each branch separately is how a stick and a mouse end
+        // up aiming by different rules.
+        Vector2 look = Vector2.zero;
         if (touch != null)
         {
-            _motor.AddLook(touch.LookDelta * lookScale);
+            look = touch.LookDelta * lookScale;
         }
         else if (Cursor.lockState == CursorLockMode.Locked)
         {
-            _motor.AddLook(new Vector2(
+            look = new Vector2(
                 Input.GetAxis("Mouse X") * mouseSensitivity,
-                Input.GetAxis("Mouse Y") * mouseSensitivity) * lookScale);
+                Input.GetAxis("Mouse Y") * mouseSensitivity) * lookScale;
         }
+
+        // Scoped, the computer does the last few degrees — see AimAssist for
+        // what keeps that from taking the aim away from the player. Fed through
+        // AddLook like any other input, so freeze, ice and the vehicle rules all
+        // still apply to an assisted turn.
+        if (_assist != null)
+            look = _assist.Steer(look, Time.deltaTime);
+        if (look != Vector2.zero)
+            _motor.AddLook(look);
 
         var move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
         bool sprint = Input.GetKey(KeyCode.LeftShift);
@@ -234,13 +252,30 @@ public class PlayerBrain : MonoBehaviour
         bool debugCapturing = WeaponDebugConsole.Instance != null
             && WeaponDebugConsole.Instance.AwaitingSecondDigit;
 
-        // Slot 1 and 2 are the basics; slot 3 appears while an airdropped
-        // Weapon Pod is running. Scroll and Q/E cycle the same short list.
+        // The number keys mean the SHORTCUT BAR wherever one has been built,
+        // and the raw slot list otherwise.
+        //
+        // Which is the whole point of the bar: with sixty weapons carried, keys
+        // 1-9 reaching catalogue entries one to nine is an accident of ordering,
+        // not a control — nobody wants "the ninth weapon", they want the four
+        // they chose. Where no bar exists (every other mode, two basics and a
+        // pod) the old meaning is the only one that makes sense.
+        var shortcuts = WeaponShortcuts.Of(this);
         if (!debugCapturing)
         {
-            for (int i = 0; i < weapons.Length && i < 9; i++)
-                if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+            for (int i = 0; i < 9; i++)
+            {
+                if (!Input.GetKeyDown(KeyCode.Alpha1 + i))
+                    continue;
+                // Per KEY, not per mode: the bar wins on the keys it has filled
+                // and the slot list keeps the rest, so a half-built bar leaves
+                // 3 and 4 doing what they always did rather than going dead.
+                if (shortcuts != null && i < WeaponShortcuts.SlotCount
+                    && shortcuts.Get(i) != null)
+                    Equip(shortcuts.Get(i));
+                else if (i < weapons.Length)
                     SetActiveWeapon(i);
+            }
         }
 
         // TAB opens the same rack the ARMS button does. In Player v AI the
@@ -248,6 +283,15 @@ public class PlayerBrain : MonoBehaviour
         // arrows are no way to find one gun in sixty.
         if (Input.GetKeyDown(KeyCode.Tab))
             TouchControls.ToggleWeaponRack();
+
+        // A gun tapped on the shortcut bar is the most absolute choice of all —
+        // it names the weapon rather than a position in a list that shifts.
+        if (touch != null && shortcuts != null)
+        {
+            int slot = touch.ConsumeShortcutPick();
+            if (slot >= 0 && Equip(shortcuts.Get(slot)))
+                return;
+        }
 
         // A slot tapped in the on-screen weapon panel is an absolute choice,
         // so it wins over any cycling in the same frame.
@@ -257,6 +301,13 @@ public class PlayerBrain : MonoBehaviour
             if (picked >= 0)
             {
                 SetActiveWeapon(picked);
+                // Choosing from the rack is also how the bar gets built: the
+                // gun you just picked drops into the slot that was glowing, and
+                // the glow moves along. Assign refuses a duplicate and refuses
+                // once the bar is full, so a mid-match rack visit is just a
+                // weapon switch — which is what it should be by then.
+                if (shortcuts != null)
+                    shortcuts.Assign(ActiveWeapon());
                 return;
             }
         }
@@ -287,6 +338,25 @@ public class PlayerBrain : MonoBehaviour
         // fired (idle weapons do nothing until their TryFire is called), so we
         // just move the selection index — no GameObject toggling needed.
         _activeWeapon = Mathf.Clamp(index, 0, weapons.Length - 1);
+    }
+
+    /// <summary>
+    /// Take a specific weapon into hand. Returns false when this character is
+    /// not carrying it — which is how a shortcut bar built in one match behaves
+    /// harmlessly in a mode that hands out fewer guns.
+    /// </summary>
+    public bool Equip(Weapon weapon)
+    {
+        if (weapon == null || weapons == null)
+            return false;
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            if (weapons[i] != weapon)
+                continue;
+            SetActiveWeapon(i);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -132,6 +132,11 @@ public class GameModeController : MonoBehaviour
             // is first person.
             if (_player.GetComponent<FirstPersonBody>() == null)
                 _player.AddComponent<FirstPersonBody>();
+            // The four-gun bar. Added here for the same reason, and left empty:
+            // it is filled by choosing, once a match that hands out the whole
+            // catalogue has started.
+            if (_player.GetComponent<WeaponShortcuts>() == null)
+                _player.AddComponent<WeaponShortcuts>();
             // ...and the gun in front of it becomes whichever one is selected,
             // rather than the laser blaster the whole arsenal happens to be
             // bolted to.
@@ -742,6 +747,12 @@ public class GameModeController : MonoBehaviour
         // three allies. Before the brains come on and after the arena loaded:
         // slots are read off the live arena's spawn lines.
         TeamRoster.Apply(TeamSize.PerTeam, playerPlays: true);
+
+        // A fresh bar every match: four guns carried over from the last one are
+        // four the player did not choose for this one.
+        var bar = _player != null ? _player.GetComponent<WeaponShortcuts>() : null;
+        if (bar != null)
+            bar.Clear();
 
         // Everyone gets everything here — the player picks from the ARMS rack,
         // the bots roll the whole catalogue. Only this mode: elsewhere a Weapon

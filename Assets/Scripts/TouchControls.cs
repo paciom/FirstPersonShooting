@@ -165,7 +165,14 @@ public class TouchControls : MonoBehaviour
 
     /// <summary>The form dial on TransformCast's canvas; tapping it morphs. See SetFormDial.</summary>
     static RectTransform _formDial;
-    Button _weapons, _weaponClose;
+
+    /// <summary>The four-gun bar along the bottom. See BuildShortcutBar.</summary>
+    GameObject _barRoot;
+    readonly List<Button> _shortcuts = new List<Button>();
+    Text _shortcutHint;
+    float _shortcutPulse;
+    int _shortcutPick = -1;
+    Button _weapons, _weaponClose, _weaponReset;
 
     RectTransform _weaponPanel;
     readonly List<Button> _weaponTabs = new List<Button>();
@@ -296,6 +303,14 @@ public class TouchControls : MonoBehaviour
         return picked;
     }
 
+    /// <summary>Shortcut slot tapped on the bar, or -1.</summary>
+    public int ConsumeShortcutPick()
+    {
+        int picked = _shortcutPick;
+        _shortcutPick = -1;
+        return picked;
+    }
+
     /// <summary>True while the weapon panel is covering the screen.</summary>
     public static bool WeaponPanelOpen => Instance != null && Instance._weaponPanelOpen;
 
@@ -379,6 +394,14 @@ public class TouchControls : MonoBehaviour
     void Update()
     {
         UpdateAvailability();
+
+        // The shortcut bar is HUD rather than a control surface, so it is built
+        // and painted OUTSIDE the active gate: keys 1-4 drive the same four guns
+        // with the on-screen controls off, and the choose-your-four flow at the
+        // top of a match is invisible without the slot that is glowing. Only its
+        // taps need the controls on, and Assign is already behind that.
+        EnsureShortcutBar();
+        RefreshShortcuts();
 
         if (!_active)
         {
@@ -487,6 +510,7 @@ public class TouchControls : MonoBehaviour
         _snipePressed = false;
         _weaponCycle = 0;
         _weaponPick = -1;
+        _shortcutPick = -1;
         ToggleWeaponPanel(false);
         if (!_mouseWasSimulated)
         {
@@ -551,6 +575,7 @@ public class TouchControls : MonoBehaviour
             // cover the fly-cam with a modal nobody can dismiss into anything.
             ToggleWeaponPanel(false);
             _weaponPick = -1;
+            _shortcutPick = -1;
         }
         // A jump tapped in the instant before the fold started has nowhere to
         // land now; letting it sit would pop the robot the moment it unfolds.
@@ -708,6 +733,19 @@ public class TouchControls : MonoBehaviour
                 OnButtonDown(candidate);
                 return;
             }
+            // The bar draws OVER this panel while the four are being chosen, so
+            // it is the one thing on screen a thumb can land on that must not be
+            // read as "done". Swallowed and ignored: the bar is a readout during
+            // selection, not a control.
+            foreach (var slot in _shortcuts)
+            {
+                if (!slot.Visible ||
+                    !RectTransformUtility.RectangleContainsScreenPoint(slot.rect, pointer.position, null))
+                    continue;
+                _roles[pointer.id] = RoleNone;
+                return;
+            }
+
             // Tap anywhere else backs out. The finger is swallowed rather than
             // released into the world, so the dismissing tap can't also shoot.
             ToggleWeaponPanel(false);
@@ -782,7 +820,7 @@ public class TouchControls : MonoBehaviour
     }
 
     bool IsWeaponPanelButton(Button button) =>
-        button != null && (button == _weaponClose
+        button != null && (button == _weaponClose || button == _weaponReset
                            || _weaponCells.Contains(button)
                            || _weaponTabs.Contains(button));
 
@@ -793,11 +831,25 @@ public class TouchControls : MonoBehaviour
         {
             // An empty cell is a miss, not a dismissal: fat-thumbing the gap in
             // a short family should not close the rack you just opened.
-            if (_cellSlot[cell] >= 0)
-            {
-                _weaponPick = _cellSlot[cell];
+            if (_cellSlot[cell] < 0)
+                return;
+
+            _weaponPick = _cellSlot[cell];
+
+            // While the bar is still being built the rack STAYS UP. Choosing
+            // four guns is four picks, and closing after each one would make it
+            // four picks plus three trips back — with the bar drawn over the
+            // backdrop, the player watches the slots fill and the glow step
+            // along without ever leaving the screen they are choosing on.
+            //
+            // Read one pick ahead: PlayerBrain fills the slot on ITS update,
+            // after this, so "will this be the last one" is the question, not
+            // "was it".
+            var bar = PlayerBrain.Local != null ? WeaponShortcuts.Of(PlayerBrain.Local) : null;
+            bool stillChoosing = bar != null && WeaponLoadout.FullArsenalMatch
+                                 && bar.NextEmpty >= 0 && bar.NextEmpty < WeaponShortcuts.SlotCount - 1;
+            if (!stillChoosing)
                 ToggleWeaponPanel(false);
-            }
             return;
         }
 
@@ -809,11 +861,35 @@ public class TouchControls : MonoBehaviour
             return;
         }
 
+        int shortcut = _shortcuts.IndexOf(button);
+        if (shortcut >= 0)
+        {
+            var shortcuts = PlayerBrain.Local != null
+                ? WeaponShortcuts.Of(PlayerBrain.Local) : null;
+            var weapon = shortcuts != null ? shortcuts.Get(shortcut) : null;
+            if (weapon != null)
+                _shortcutPick = shortcut;
+            else
+                // An empty slot IS the way into the rack. The player who taps
+                // the glowing circle is asking the only question it can answer.
+                ToggleWeaponPanel(true);
+            return;
+        }
+
         // Only ever opens: while the panel is up it swallows every tap outside
         // itself, ARMS included, so backing out goes through CLOSE or the
         // backdrop rather than through this button a second time.
         if (button == _weapons) ToggleWeaponPanel(true);
         else if (button == _weaponClose) ToggleWeaponPanel(false);
+        else if (button == _weaponReset)
+        {
+            var bar = PlayerBrain.Local != null ? WeaponShortcuts.Of(PlayerBrain.Local) : null;
+            if (bar != null)
+                bar.Clear();
+            // Stays open: the player who just emptied the bar is here to fill
+            // it, and closing on them would only cost a tap to come back.
+            RefreshWeaponPanel();
+        }
         else if (button == _jump) _jumpPressed = true;
         else if (button == _martial) _martialPressed = true;
         else if (button == _snipe) _snipePressed = true;
@@ -905,7 +981,8 @@ public class TouchControls : MonoBehaviour
             // The rack paints itself — cells in their gun's own colour, tabs by
             // which one is open — and the standard idle/held wash would just
             // erase that every frame.
-            if (_weaponCells.Contains(button) || _weaponTabs.Contains(button))
+            if (_weaponCells.Contains(button) || _weaponTabs.Contains(button)
+                || _shortcuts.Contains(button))
                 continue;
             Color target = button.dimmed ? ButtonDim : (button.held ? ButtonHeld : ButtonIdle);
             button.image.color = Color.Lerp(button.image.color, target, blend);
@@ -965,6 +1042,158 @@ public class TouchControls : MonoBehaviour
         _menu = MakeRoundButton("Menu", "MENU", new Vector2(0, 1), new Vector2(130, -110), 150);
 
         BuildWeaponPanel();
+    }
+
+    /// <summary>
+    /// The shortcut bar: four guns along the bottom of the screen, one tap each.
+    ///
+    /// Bottom CENTRE, which is the one part of the layout nothing else wanted —
+    /// the move stick owns the lower left, the aim stick and the action buttons
+    /// the lower right, and a bar under the crosshair is where every shooter has
+    /// put its weapon slots for thirty years.
+    ///
+    /// Empty at the start of a match and filled by choosing from the rack. The
+    /// slot waiting to be filled pulses; see <see cref="RefreshShortcuts"/> for
+    /// why that pulse is the entire instruction manual for the feature.
+    /// </summary>
+    void EnsureShortcutBar()
+    {
+        if (_barRoot != null)
+            return;
+
+        // Its OWN canvas, not the control root's: that one is switched off the
+        // moment the on-screen controls hand back to mouse and keyboard, and
+        // this has to stay readable there.
+        //
+        // ABOVE the on-screen controls (15) rather than below, because the rack
+        // stays open while the four are being chosen and the whole point is
+        // watching the slots fill through it. Still under the menu (20). It sits
+        // at the bottom centre where none of the controls are, so drawing over
+        // them costs nothing.
+        _barRoot = new GameObject("TouchShortcutBar");
+        _barRoot.transform.SetParent(transform, false);
+        var canvas = _barRoot.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 16;
+        var scaler = _barRoot.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(RefWidth, RefHeight);
+        scaler.matchWidthOrHeight = 0.5f;
+        var barRect = _barRoot.GetComponent<RectTransform>();
+
+        for (int i = 0; i < WeaponShortcuts.SlotCount; i++)
+        {
+            var slot = MakeRoundButton($"Shortcut{i + 1}", "", new Vector2(0.5f, 0f),
+                new Vector2((i - (WeaponShortcuts.SlotCount - 1) * 0.5f) * 132f, 118f), 118f,
+                barRect);
+
+            // Under the label so the number still reads over a dark gun.
+            var iconGo = new GameObject("Icon");
+            iconGo.transform.SetParent(slot.rect, false);
+            iconGo.transform.SetSiblingIndex(1);
+            var icon = iconGo.AddComponent<RawImage>();
+            icon.raycastTarget = false;
+            var iconRect = icon.rectTransform;
+            iconRect.anchorMin = Vector2.zero;
+            iconRect.anchorMax = Vector2.one;
+            // Inset so the round rim stays a rim rather than a frame around a
+            // square picture butting up against it.
+            iconRect.offsetMin = new Vector2(11f, 11f);
+            iconRect.offsetMax = new Vector2(-11f, -11f);
+            slot.icon = icon;
+
+            // The key that does the same thing, tucked into the corner. Small on
+            // purpose: it is a footnote for the keyboard, not the label.
+            var key = MakeLabel(slot.rect, "Key", (i + 1).ToString(), 18,
+                Vector2.zero, Vector2.zero);
+            key.alignment = TextAnchor.LowerRight;
+            var keyRect = key.rectTransform;
+            keyRect.anchorMin = Vector2.zero;
+            keyRect.anchorMax = Vector2.one;
+            keyRect.offsetMin = new Vector2(0f, 6f);
+            keyRect.offsetMax = new Vector2(-12f, 0f);
+
+            _shortcuts.Add(slot);
+        }
+
+        // One line of instruction, and only while it is true.
+        _shortcutHint = MakeLabel(barRect, "ShortcutHint", "", 26,
+            new Vector2(0f, 200f), new Vector2(900f, 34f));
+        _shortcutHint.color = new Color(1f, 1f, 1f, 0.65f);
+        var hintRect = _shortcutHint.rectTransform;
+        hintRect.anchorMin = hintRect.anchorMax = new Vector2(0.5f, 0f);
+    }
+
+    /// <summary>
+    /// Paint the bar: the guns that have been chosen, and the slot waiting for
+    /// the next one.
+    ///
+    /// THE PULSE IS THE INSTRUCTION. Nothing tells the player "now pick four
+    /// weapons" — one slot glows, they open the rack, they tap a gun, the glow
+    /// moves along. The rule is learned by watching it happen once, which is the
+    /// only kind of tutorial that survives a seven-year-old.
+    /// </summary>
+    void RefreshShortcuts()
+    {
+        var player = PlayerBrain.Local;
+        var shortcuts = player != null ? WeaponShortcuts.Of(player) : null;
+
+        // Only where the whole catalogue is carried. A bar of four is the answer
+        // to sixty weapons; against the two basics and a pod every other mode
+        // hands out it is four slots that can never all be filled, and a hint
+        // that would pulse "2 MORE" for the rest of the match.
+        if (!WeaponLoadout.FullArsenalMatch)
+            shortcuts = null;
+
+        if (shortcuts == null)
+        {
+            foreach (var slot in _shortcuts)
+                SetVisible(slot, false);
+            SetVisible(_shortcutHint != null ? _shortcutHint.rectTransform : null, false);
+            return;
+        }
+
+        int next = shortcuts.NextEmpty;
+        var held = player.ActiveWeapon();
+        _shortcutPulse = Mathf.PingPong(Time.unscaledTime * 1.6f, 1f);
+
+        for (int i = 0; i < _shortcuts.Count; i++)
+        {
+            var slot = _shortcuts[i];
+            SetVisible(slot, true);
+
+            var weapon = shortcuts.Get(i);
+            slot.icon.texture = weapon != null ? WeaponIcons.IconFor(weapon) : null;
+            slot.icon.enabled = slot.icon.texture != null;
+            slot.label.text = weapon != null ? "" : "+";
+
+            bool waiting = i == next;
+            Color tint = weapon != null ? weapon.color : HoloCyan;
+
+            // Three states, three fills: waiting (breathing), holding this gun
+            // (its own colour), and everything else (the standard idle wash).
+            slot.image.color = slot.held
+                ? new Color(tint.r, tint.g, tint.b, 0.85f)
+                : waiting
+                    ? Color.Lerp(ButtonIdle, new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.55f),
+                                 _shortcutPulse)
+                    : weapon != null && weapon == held
+                        ? new Color(tint.r, tint.g, tint.b, 0.5f)
+                        : ButtonIdle;
+            slot.rim.color = new Color(tint.r, tint.g, tint.b,
+                waiting ? Mathf.Lerp(0.5f, 1f, _shortcutPulse)
+                        : weapon != null && weapon == held ? 0.95f : 0.45f);
+            slot.label.color = new Color(1f, 1f, 1f, waiting ? 0.9f : 0.5f);
+        }
+
+        bool choosing = shortcuts.Choosing;
+        SetVisible(_shortcutHint.rectTransform, choosing);
+        if (choosing)
+            _shortcutHint.text = _weaponPanelOpen
+                ? $"TAP  A  WEAPON  —  {WeaponShortcuts.SlotCount - next}  TO  GO"
+                : next == 0
+                    ? "CHOOSE  4  WEAPONS  —  OPEN  ARMS"
+                    : $"{WeaponShortcuts.SlotCount - next}  MORE";
     }
 
     /// <summary>
@@ -1043,6 +1272,15 @@ public class TouchControls : MonoBehaviour
         // Round buttons parent themselves to the canvas; this one belongs to the
         // panel, so it hides and shows with it.
         _weaponClose.rect.SetParent(_weaponPanel, false);
+
+        // The only way to change a choice, and it changes all four: reassigning
+        // one slot needs the player to say WHICH slot, and not having to say
+        // that is the whole reason the bar fills in order. Redoing four picks
+        // costs four taps, which is cheaper than the interface that would let
+        // you redo one.
+        _weaponReset = MakeRoundButton("WeaponReset", "REDO  4", new Vector2(0.5f, 0.5f),
+            new Vector2(230f, -465f), 130);
+        _weaponReset.rect.SetParent(_weaponPanel, false);
 
         _weaponPanel.gameObject.SetActive(false);
     }
@@ -1204,6 +1442,7 @@ public class TouchControls : MonoBehaviour
 
         var tabs = WeaponCatalog.Tabs;
         var loadout = player.GetComponent<WeaponLoadout>();
+        var bar = WeaponShortcuts.Of(player);
         int active = player.ActiveSlot;
 
         // A tab with nothing behind it is dimmed rather than hidden: which
@@ -1258,10 +1497,12 @@ public class TouchControls : MonoBehaviour
             string tail = "";
             if (loadout != null && loadout.Special != null && weapon == loadout.Special)
                 tail = $"\n{Mathf.CeilToInt(loadout.SpecialSecondsLeft)}s";
-            // Slot numbers only while the keyboard can reach them — with sixty
-            // weapons carried, "37" next to a gun the number keys cannot select
-            // is a promise the controls do not keep.
-            cell.label.text = slot < 9 ? $"{slot + 1}  ·  {name}{tail}" : $"{name}{tail}";
+            // A gun already on the bar says which key it is under. Picking it
+            // again is a no-op by design — Assign refuses duplicates — and a
+            // tap that appears to do nothing is only baffling if nothing on the
+            // card explains why.
+            int barSlot = bar != null ? bar.SlotOf(weapon) : -1;
+            cell.label.text = barSlot >= 0 ? $"{barSlot + 1}  ·  {name}{tail}" : $"{name}{tail}";
 
             // The held weapon reads as held: its own colour on the cell, rather
             // than a tick somewhere that a thumb would cover.
@@ -1389,10 +1630,11 @@ public class TouchControls : MonoBehaviour
         rect.sizeDelta = new Vector2(700, 60);
     }
 
-    Button MakeRoundButton(string name, string label, Vector2 anchor, Vector2 position, float size)
+    Button MakeRoundButton(string name, string label, Vector2 anchor, Vector2 position, float size,
+                           Transform parent = null)
     {
         var go = new GameObject($"Touch_{name}");
-        go.transform.SetParent(_root.transform, false);
+        go.transform.SetParent(parent != null ? parent : _root.transform, false);
         var image = go.AddComponent<Image>();
         image.sprite = DiscSprite();
         image.color = ButtonIdle;
