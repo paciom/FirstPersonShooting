@@ -11,6 +11,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from songs_a import SONGS_A
@@ -41,6 +42,7 @@ def main():
 
         if not os.path.exists(base + ".mp3"):
             print(f"generate {song['id']} \"{song['title']}\"", flush=True)
+            time.sleep(20)  # stay under the API's requests-per-minute cap
             result = subprocess.run(
                 [sys.executable, os.path.join(TOOLS, "minimaxmusic.py"),
                  base + ".mp3", "--prompt-file", base + "_style.txt",

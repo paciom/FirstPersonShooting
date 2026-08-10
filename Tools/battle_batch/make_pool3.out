@@ -1,0 +1,305 @@
+60 songs in pool
+align    s01
+  153 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s01_sub.json (24/24 lines timed)
+align    s02
+  147 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s02_sub.json (24/24 lines timed)
+align    s03
+  135 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s03_sub.json (24/24 lines timed)
+align    s04
+  144 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s04_sub.json (24/24 lines timed)
+align    s05
+  149 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s05_sub.json (24/24 lines timed)
+align    s06
+  123 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s06_sub.json (24/24 lines timed)
+align    s07
+  132 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s07_sub.json (24/24 lines timed)
+align    s08
+  132 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s08_sub.json (24/24 lines timed)
+align    s09
+  140 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s09_sub.json (24/24 lines timed)
+align    s10
+  122 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s10_sub.json (24/24 lines timed)
+align    s11
+  138 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s11_sub.json (24/24 lines timed)
+align    s12
+  109 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s12_sub.json (24/24 lines timed)
+align    s13
+  152 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s13_sub.json (24/24 lines timed)
+align    s14
+  127 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s14_sub.json (24/24 lines timed)
+align    s15
+  127 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s15_sub.json (24/24 lines timed)
+align    s16
+  123 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s16_sub.json (24/24 lines timed)
+align    s17
+  144 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s17_sub.json (24/24 lines timed)
+align    s18
+  132 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s18_sub.json (24/24 lines timed)
+align    s19
+  167 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s19_sub.json (24/24 lines timed)
+align    s20
+  130 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s20_sub.json (24/24 lines timed)
+align    s21
+  140 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s21_sub.json (24/24 lines timed)
+align    s22
+  93 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s22_sub.json (24/24 lines timed)
+align    s23
+  121 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s23_sub.json (24/24 lines timed)
+align    s24
+  118 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s24_sub.json (24/24 lines timed)
+align    s25
+  105 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s25_sub.json (24/24 lines timed)
+align    s26
+  120 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s26_sub.json (24/24 lines timed)
+align    s27
+  120 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s27_sub.json (24/24 lines timed)
+align    s28
+  110 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s28_sub.json (24/24 lines timed)
+align    s29
+  107 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s29_sub.json (24/24 lines timed)
+align    s30
+  112 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s30_sub.json (24/24 lines timed)
+align    s31
+  112 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s31_sub.json (24/24 lines timed)
+generate s32 "Wide Awake"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s32.mp3
+align    s32
+  113 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s32_sub.json (24/24 lines timed)
+generate s33 "Supernova"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s33.mp3
+align    s33
+  103 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s33_sub.json (24/24 lines timed)
+generate s34 "Bloom"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s34.mp3
+align    s34
+  120 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s34_sub.json (24/24 lines timed)
+generate s35 "Thunder in Us"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s35.mp3
+align    s35
+  118 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s35_sub.json (24/24 lines timed)
+generate s36 "Alive Tonight"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s36.mp3
+align    s36
+  117 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s36_sub.json (24/24 lines timed)
+generate s37 "Runway"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s37.mp3
+align    s37
+  125 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s37_sub.json (24/24 lines timed)
+generate s38 "Gold Rush"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s38.mp3
+align    s38
+  139 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s38_sub.json (24/24 lines timed)
+generate s39 "Static Free"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s39.mp3
+align    s39
+  97 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s39_sub.json (24/24 lines timed)
+generate s40 "Confetti"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s40.mp3
+align    s40
+  112 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s40_sub.json (24/24 lines timed)
+generate s41 "Titanium Will"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s41.mp3
+align    s41
+  123 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s41_sub.json (24/24 lines timed)
+generate s42 "Warrior Heart"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s42.mp3
+align    s42
+  122 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s42_sub.json (24/24 lines timed)
+generate s43 "Earthquake"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s43.mp3
+align    s43
+  167 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s43_sub.json (24/24 lines timed)
+generate s44 "Phoenix"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s44.mp3
+align    s44
+  113 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s44_sub.json (24/24 lines timed)
+generate s45 "Maximum"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s45.mp3
+align    s45
+  77 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s45_sub.json (24/24 lines timed)
+generate s46 "Groove Machine"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s46.mp3
+align    s46
+  111 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s46_sub.json (24/24 lines timed)
+generate s47 "Midnight Shift"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s47.mp3
+align    s47
+  119 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s47_sub.json (24/24 lines timed)
+generate s48 "Magnetic"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s48.mp3
+align    s48
+  100 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s48_sub.json (24/24 lines timed)
+generate s49 "Undefeated"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s49.mp3
+align    s49
+  95 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s49_sub.json (24/24 lines timed)
+generate s50 "Flow State"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s50.mp3
+align    s50
+  111 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s50_sub.json (24/24 lines timed)
+generate s51 "Step Up"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s51.mp3
+align    s51
+  106 transcript words vs 24 lyric lines
+  wrote D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s51_sub.json (24/24 lines timed)
+generate s52 "Signal"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s53 "Brighter"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s54 "Own Lane"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s55 "Sunrise Garage"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s56 "Hands to the Sky"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s57 "Legends"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s58 "One More Round"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s59 "Electric Hearts"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s60 "Forever Young Tonight"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+POOL: 51/60 generated, FAILURES: ['s52', 's53', 's54', 's55', 's56', 's57', 's58', 's59', 's60']

@@ -1,0 +1,292 @@
+60 songs in pool
+generate s32 "Wide Awake"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s33 "Supernova"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s34 "Bloom"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s35 "Thunder in Us"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s36 "Alive Tonight"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s37 "Runway"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s38 "Gold Rush"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s39 "Static Free"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s40 "Confetti"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s41 "Titanium Will"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s42 "Warrior Heart"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s43 "Earthquake"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s44 "Phoenix"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s45 "Maximum"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s46 "Groove Machine"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s47 "Midnight Shift"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s48 "Magnetic"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s49 "Undefeated"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s50 "Flow State"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s51 "Step Up"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s52 "Signal"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s53 "Brighter"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s54 "Own Lane"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s55 "Sunrise Garage"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s56 "Hands to the Sky"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s57 "Legends"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s58 "One More Round"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s59 "Electric Hearts"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s60 "Forever Young Tonight"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+POOL: 31/60 generated, FAILURES: ['s32', 's33', 's34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43', 's44', 's45', 's46', 's47', 's48', 's49', 's50', 's51', 's52', 's53', 's54', 's55', 's56', 's57', 's58', 's59', 's60']

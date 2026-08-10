@@ -1,0 +1,385 @@
+60 songs in pool
+generate s01 "Rise Up"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s01.mp3
+generate s02 "Unstoppable"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s02.mp3
+generate s03 "Louder"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s03.mp3
+generate s04 "Golden Hour"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s04.mp3
+generate s05 "No Limits"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s05.mp3
+generate s06 "Heartbeat"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s06.mp3
+generate s07 "Brand New Day"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s07.mp3
+generate s08 "Gravity Off"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s08.mp3
+generate s09 "Momentum"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s09.mp3
+generate s10 "Fireproof"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s10.mp3
+generate s11 "Neon Pulse"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s11.mp3
+generate s12 "Voltage"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s12.mp3
+generate s13 "North Star"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s13.mp3
+generate s14 "Afterglow"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s14.mp3
+generate s15 "Deeper"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s15.mp3
+generate s16 "Bounce Back"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s16.mp3
+generate s17 "Level Up"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s17.mp3
+generate s18 "Heavy Crown"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s18.mp3
+generate s19 "Turn It Up"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s19.mp3
+generate s20 "Solid Gold"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s20.mp3
+generate s21 "Full Speed"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s21.mp3
+generate s22 "Featherweight"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s22.mp3
+generate s23 "Chase the Sun"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s23.mp3
+generate s24 "Adrenaline"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s24.mp3
+generate s25 "Marathon"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s25.mp3
+generate s26 "Horizon"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s26.mp3
+generate s27 "Skyline"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s27.mp3
+generate s28 "Aurora"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s28.mp3
+generate s29 "Ignition Key"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s29.mp3
+generate s30 "Infinite"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s30.mp3
+generate s31 "Sparks"
+model  music-3.0
+wrote  D:\Claude\FirstPersongShooting\Tools\battle_batch\pool\s31.mp3
+generate s32 "Wide Awake"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s33 "Supernova"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s34 "Bloom"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s35 "Thunder in Us"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s36 "Alive Tonight"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s37 "Runway"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s38 "Gold Rush"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s39 "Static Free"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s40 "Confetti"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s41 "Titanium Will"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s42 "Warrior Heart"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s43 "Earthquake"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s44 "Phoenix"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s45 "Maximum"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s46 "Groove Machine"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s47 "Midnight Shift"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s48 "Magnetic"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s49 "Undefeated"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s50 "Flow State"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s51 "Step Up"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s52 "Signal"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s53 "Brighter"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s54 "Own Lane"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+every model refused
+generate s55 "Sunrise Garage"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s56 "Hands to the Sky"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s57 "Legends"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s58 "One More Round"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s59 "Electric Hearts"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+generate s60 "Forever Young Tonight"
+model  music-3.0
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-3.0-free
+  refused: 1002: rate limit exceeded(RPM)
+model  music-2.6
+  refused: 2056: Token Plan usage limit reached: Upgrade your Token Plan or purchase Credits for more usage.
+model  music-2.6-free
+  refused: 1002: rate limit exceeded(RPM)
+every model refused
+POOL: 31/60 generated, FAILURES: ['s32', 's33', 's34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43', 's44', 's45', 's46', 's47', 's48', 's49', 's50', 's51', 's52', 's53', 's54', 's55', 's56', 's57', 's58', 's59', 's60']

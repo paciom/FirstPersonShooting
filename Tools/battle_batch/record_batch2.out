@@ -1,0 +1,25 @@
+SKIP battle01 (already 570s)
+SKIP battle02 (already 348s)
+SKIP battle03 (already 1278s)
+SKIP battle04 (already 428s)
+SKIP battle05 (already 2048s)
+LAUNCH battle06 19:36:44
+OK battle06 duration=2990s attempt=1 20:54:37
+SKIP battle07 (already 397s)
+SKIP battle08 (already 953s)
+LAUNCH battle09 20:54:48
+OK battle09 duration=3775s attempt=1 22:06:09
+SKIP battle10 (already 435s)
+SKIP battle11 (already 2169s)
+LAUNCH battle12 22:06:20
+OK battle12 duration=859s attempt=1 22:52:37
+SKIP battle13 (already 480s)
+SKIP battle14 (already 917s)
+LAUNCH battle15 22:52:48
+OK battle15 duration=1150s attempt=1 23:14:02
+SKIP battle16 (already 422s)
+SKIP battle17 (already 1642s)
+SKIP battle18 (already 1341s)
+SKIP battle19 (already 565s)
+SKIP battle20 (already 2384s)
+BATCH COMPLETE 23:14:03

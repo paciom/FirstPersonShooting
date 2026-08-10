@@ -1,0 +1,44 @@
+LAUNCH battle01 07:27:33
+OK battle01 duration=570s attempt=1 07:42:16
+LAUNCH battle02 07:42:26
+FAIL battle02 attempt=1 duration=MISSINGs
+LAUNCH battle02 08:29:24
+OK battle02 duration=348s attempt=2 08:38:36
+LAUNCH battle03 08:38:47
+OK battle03 duration=1278s attempt=1 09:02:31
+LAUNCH battle04 09:02:42
+OK battle04 duration=428s attempt=1 09:11:54
+LAUNCH battle05 09:12:04
+OK battle05 duration=2048s attempt=1 09:48:20
+LAUNCH battle06 09:48:31
+OK battle06 duration=2669s attempt=1 10:35:48
+LAUNCH battle07 10:35:59
+OK battle07 duration=397s attempt=1 10:44:41
+LAUNCH battle08 10:44:51
+OK battle08 duration=953s attempt=1 11:03:35
+LAUNCH battle09 11:03:45
+OK battle09 duration=2654s attempt=1 11:51:02
+LAUNCH battle10 11:51:13
+OK battle10 duration=435s attempt=1 12:00:25
+LAUNCH battle11 12:00:36
+OK battle11 duration=2169s attempt=1 12:38:52
+LAUNCH battle12 12:39:02
+OK battle12 duration=2685s attempt=1 13:25:49
+LAUNCH battle13 13:26:00
+Tools/battle_batch/record_batch.sh: line 38: 145806 Segmentation fault      "$UNITY" -projectPath "$ROOT" -executeMethod DogfightRender.Render -dogfightWar -dogfightSize 4 -dogfightRobots "$2,$3" -dogfightMap "$4" -dogfightOut "$1" -silent-crashes -logFile "$5" < /dev/null
+OK battle13 duration=480s attempt=1 13:36:42
+LAUNCH battle14 13:36:53
+OK battle14 duration=917s attempt=1 13:54:36
+LAUNCH battle15 13:54:47
+OK battle15 duration=2682s attempt=1 14:42:04
+LAUNCH battle16 14:42:15
+OK battle16 duration=422s attempt=1 14:51:27
+LAUNCH battle17 14:51:38
+OK battle17 duration=1642s attempt=1 15:20:23
+LAUNCH battle18 15:20:33
+OK battle18 duration=1341s attempt=1 15:45:18
+LAUNCH battle19 15:45:28
+OK battle19 duration=565s attempt=1 15:57:11
+LAUNCH battle20 15:57:21
+OK battle20 duration=2384s attempt=1 16:39:37
+BATCH COMPLETE 16:39:37
