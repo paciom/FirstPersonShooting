@@ -2,7 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// Human input → CharacterMotor + Weapon. LMB fires the held weapon, RMB
-/// engages the X-Ray scope, T folds into tank form and back. Uses the legacy Input API for now (active input
+/// engages the X-Ray scope, T folds into tank form and back, F throws the
+/// martial-arts dash combo. Uses the legacy Input API for now (active input
 /// handling is "Both"); Input System migration is planned for the polish phase.
 ///
 /// On a touch screen <see cref="TouchControls"/> takes over completely — see
@@ -25,6 +26,7 @@ public class PlayerBrain : MonoBehaviour
     WeaponLoadout _loadout;
     TransformMode _vehicle;
     SniperScope _sniper;
+    MartialArts _martial;
     int _loadoutVersion = -1;
     int _activeWeapon;
     bool _warnedNoVehicle;
@@ -67,6 +69,9 @@ public class PlayerBrain : MonoBehaviour
         _sniper = GetComponent<SniperScope>();
         if (_sniper == null)
             _sniper = gameObject.AddComponent<SniperScope>();
+        _martial = GetComponent<MartialArts>();
+        if (_martial == null)
+            _martial = gameObject.AddComponent<MartialArts>();
         RefreshLoadout();
         SetActiveWeapon(0);
     }
@@ -172,6 +177,12 @@ public class PlayerBrain : MonoBehaviour
         if (_sniper != null
             && (Input.GetKeyDown(KeyCode.Z) || (touch != null && touch.ConsumeSnipe())))
             _sniper.Toggle();
+
+        // F throws the martial-arts combo: a forward lunge with close-range
+        // strikes. MartialArts owns every refusal (cooldown, tank form, ice).
+        if (_martial != null
+            && (Input.GetKeyDown(KeyCode.F) || (touch != null && touch.ConsumeMartial())))
+            _martial.TryStrike();
 
         HandleWeaponSwitch(touch);
 

@@ -46,7 +46,7 @@ public static class MainMenu
     const float DeckEdge = 868f;                 // outer edge of the card decks
 
     const string DesktopHint =
-        "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope";
+        "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope   ·   F martial arts";
 
     static Text _hint;
     static InputField _seedField;

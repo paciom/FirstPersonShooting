@@ -161,7 +161,7 @@ public class TouchControls : MonoBehaviour
     Vector2 _aimCenter;
 
     readonly List<Button> _buttons = new List<Button>();
-    Button _fireLeft, _fireRight, _jump, _scope, _snipe, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
+    Button _fireLeft, _fireRight, _jump, _martial, _scope, _snipe, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
 
     /// <summary>The form dial on TransformCast's canvas; tapping it morphs. See SetFormDial.</summary>
     static RectTransform _formDial;
@@ -185,6 +185,7 @@ public class TouchControls : MonoBehaviour
     Vector2 _stickCenter;
 
     bool _jumpPressed;
+    bool _martialPressed;
     int _weaponCycle;
     bool _morphPressed;
     bool _snipePressed;
@@ -367,6 +368,14 @@ public class TouchControls : MonoBehaviour
         return pressed;
     }
 
+    /// <summary>Martial-arts combo edge — the on-screen half of the F key.</summary>
+    public bool ConsumeMartial()
+    {
+        bool pressed = _martialPressed;
+        _martialPressed = false;
+        return pressed;
+    }
+
     void Update()
     {
         UpdateAvailability();
@@ -473,6 +482,7 @@ public class TouchControls : MonoBehaviour
         // Unread edges die with the mode — otherwise a jump tapped just before
         // the menu opened fires the moment the next match starts.
         _jumpPressed = false;
+        _martialPressed = false;
         _morphPressed = false;
         _snipePressed = false;
         _weaponCycle = 0;
@@ -518,6 +528,8 @@ public class TouchControls : MonoBehaviour
         SetVisible(_fireLeft, playing);
         SetVisible(_fireRight, playing);
         SetVisible(_jump, playing && canJump);
+        // Same rule as JUMP: a tank has no fists either.
+        SetVisible(_martial, playing && canJump);
         SetVisible(_scope, playing);
         SetVisible(_snipe, playing);
         SetVisible(_prevWeapon, playing);
@@ -531,6 +543,7 @@ public class TouchControls : MonoBehaviour
         if (!playing)
         {
             _jumpPressed = false;
+            _martialPressed = false;
             _morphPressed = false;
             _snipePressed = false;
             _weaponCycle = 0;
@@ -542,7 +555,10 @@ public class TouchControls : MonoBehaviour
         // A jump tapped in the instant before the fold started has nowhere to
         // land now; letting it sit would pop the robot the moment it unfolds.
         if (!canJump)
+        {
             _jumpPressed = false;
+            _martialPressed = false;
+        }
 
         // There is no MORPH button any more. The form dial in the top-right is
         // the control — it already had to be on screen to say which form you are
@@ -799,6 +815,7 @@ public class TouchControls : MonoBehaviour
         if (button == _weapons) ToggleWeaponPanel(true);
         else if (button == _weaponClose) ToggleWeaponPanel(false);
         else if (button == _jump) _jumpPressed = true;
+        else if (button == _martial) _martialPressed = true;
         else if (button == _snipe) _snipePressed = true;
         else if (button == _prevWeapon) _weaponCycle = -1;
         else if (button == _nextWeapon) _weaponCycle = 1;
@@ -927,6 +944,8 @@ public class TouchControls : MonoBehaviour
         _fireRight = MakeRoundButton("FireRight", "FIRE", new Vector2(1, 0), new Vector2(-370, 545), 180);
         _fireLeft = MakeRoundButton("FireLeft", "FIRE", new Vector2(0, 0), new Vector2(300, 620), 180);
         _jump = MakeRoundButton("Jump", "JUMP", new Vector2(1, 0), new Vector2(-150, 150), 170);
+        // Between FIRE and ARMS, clear of the aim stick's 200-unit grab zone.
+        _martial = MakeRoundButton("Martial", "MARTIAL\nARTS", new Vector2(1, 0), new Vector2(-560, 480), 150);
         _scope = MakeRoundButton("Scope", "X-RAY", new Vector2(1, 0), new Vector2(-175, 470), 140);
         _snipe = MakeRoundButton("Snipe", "SNIPE", new Vector2(1, 0), new Vector2(-175, 630), 140);
         _prevWeapon = MakeRoundButton("PrevWeapon", "<", new Vector2(1, 0), new Vector2(-700, 150), 110);
