@@ -3,14 +3,20 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 /// <summary>
-/// The form dial: a round button in the top-right corner that says which form
-/// the PLAYER'S robot is in — ROBOT or TANK — plays the stop-motion
-/// transformation whenever they morph, and IS the control that morphs them.
+/// The form dial: a round button in the top-right corner showing the PLAYER'S
+/// robot in whichever form it is currently in, playing the stop-motion
+/// transformation whenever they morph, and doubling as the control that morphs
+/// them.
 ///
 /// WHY IT EXISTS. Player v AI is first person, so you never see your own robot:
 /// pressing Morph had no picture at all, and nothing on screen said which form
 /// you were in afterwards. The dial is the readable copy of an event the camera
 /// cannot show.
+///
+/// NO WORDS ON IT. It used to caption itself ROBOT or TANK. A robot looks like a
+/// robot and a tank looks like a tank — the caption named the one thing the
+/// picture could never fail to say, while taking a third of the circle to say
+/// it. The picture is the whole dial now.
 ///
 /// WHY IT IS ALSO THE BUTTON. It began as a display sitting next to a separate
 /// MORPH button — two widgets for one idea, on a phone screen that has no room
@@ -97,7 +103,6 @@ public class TransformCast : MonoBehaviour
     Image _rim;
     Image _flash;
     RawImage _view;
-    Text _caption;
     Text _hint;
 
     /// <summary>Fades once the player has morphed, and never comes back.</summary>
@@ -298,13 +303,11 @@ public class TransformCast : MonoBehaviour
         if (rig.Show(stage))
             _flashAmount = 1f;
 
-        // Short enough to fit across a 200-wide circle: the old "TRANSFORMING"
-        // and "BACK TO ROBOT" were written for a panel twice this wide, and
-        // naming the DESTINATION says the same thing in a third of the room.
-        _caption.text = _folding
-            ? (_foldToVehicle ? "» TANK" : "» ROBOT")
-            : (_subject != null && _subject.IsVehicle ? "TANK" : "ROBOT");
-        _caption.color = _folding ? new Color(1f, 1f, 1f, 0.8f) : Color.white;
+        // No caption. The dial used to spell out ROBOT or TANK under the
+        // picture, which was a word for something the picture had already said —
+        // a robot looks like a robot and a tank looks like a tank, and the fold
+        // between them is the one thing on this dial that MOVES. Dropping it
+        // also gives the render the whole circle instead of two thirds of it.
     }
 
     // --------------------------------------------------------------------- rigs
@@ -566,26 +569,6 @@ public class TransformCast : MonoBehaviour
         flashRect.anchorMax = Vector2.one;
         flashRect.offsetMin = Vector2.zero;
         flashRect.offsetMax = Vector2.zero;
-
-        // Across the bottom of the disc, over a dark band — the render behind it
-        // is a mid grey and white text alone would sit half-legible on it.
-        var bandGo = new GameObject("CaptionBand");
-        bandGo.transform.SetParent(_dialRect, false);
-        var band = bandGo.AddComponent<Image>();
-        band.color = new Color(0.02f, 0.05f, 0.09f, 0.72f);
-        band.raycastTarget = false;
-        var bandRect = band.rectTransform;
-        bandRect.anchorMin = new Vector2(0f, 0f);
-        bandRect.anchorMax = new Vector2(1f, 0f);
-        bandRect.offsetMin = new Vector2(0f, DialSize * 0.14f);
-        bandRect.offsetMax = new Vector2(0f, DialSize * 0.34f);
-
-        _caption = MakeLabel(_dialRect, "Caption", "ROBOT", 22, FontStyle.Bold, Color.white);
-        var captionRect = _caption.rectTransform;
-        captionRect.anchorMin = bandRect.anchorMin;
-        captionRect.anchorMax = bandRect.anchorMax;
-        captionRect.offsetMin = bandRect.offsetMin;
-        captionRect.offsetMax = bandRect.offsetMax;
 
         // A sibling of the disc rather than a child: the mask would eat the
         // outer edge of a ring drawn exactly at the boundary.
