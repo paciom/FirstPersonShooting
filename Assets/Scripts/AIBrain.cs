@@ -348,8 +348,14 @@ public class AIBrain : MonoBehaviour
         if (turret != null)
             turret.AimAt(targetCenter);
 
+        // The training range: bots chase, loot and hold their aim, but never
+        // pull a trigger — at mines either. The gate sits here, in front of
+        // both fire paths, rather than at each TryFire, so every future shot
+        // this method grows inherits it.
+        bool holdFire = GameModeController.TrainingMatch;
+
         // A mine with an enemy standing next to it beats any shot at the enemy.
-        if (TryShootMine())
+        if (!holdFire && TryShootMine())
             return;
 
         if (hasLineOfSight)
@@ -369,7 +375,7 @@ public class AIBrain : MonoBehaviour
             // Fire a little past preferred range so approaches still shoot —
             // but never before the barrel has caught up, or the tank shoots
             // sideways out of a turret that is visibly still swinging.
-            if (engaged && Time.time - _sawTargetAt >= reactionDelay && _active != null
+            if (engaged && !holdFire && Time.time - _sawTargetAt >= reactionDelay && _active != null
                 && (turret == null || turret.OnTarget))
             {
                 // A tank shoots where its barrel points, bearing AND elevation.

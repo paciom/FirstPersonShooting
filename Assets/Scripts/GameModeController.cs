@@ -734,9 +734,18 @@ public class GameModeController : MonoBehaviour
             scope.InvalidateSilhouettes();
     }
 
+    /// <summary>
+    /// True while the running Player v AI match is the TRAINING RANGE: the
+    /// same arena and bots, but no bot ever fires. AIBrain reads this each
+    /// frame — it is match state, not bot state, so reinforcements spawned
+    /// mid-session obey it without being told.
+    /// </summary>
+    public static bool TrainingMatch { get; private set; }
+
     public void StartPlayerVsAI()
     {
         Mode = GameMode.PlayerVsAI;
+        TrainingMatch = TrainingPick.Training;
         ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
@@ -769,7 +778,9 @@ public class GameModeController : MonoBehaviour
         _treasureSpawner?.BeginMatch();
 
         _menuCanvas.SetActive(false);
-        ShowOverlay("T — Transform   ·   Z — Sniper Scope   ·   ESC — Menu", "");
+        ShowOverlay(TrainingMatch
+            ? "TRAINING RANGE — bots hold fire   ·   T Transform   ·   Z Scope   ·   ESC Menu"
+            : "T — Transform   ·   Z — Sniper Scope   ·   ESC — Menu", "");
         LockCursor(true);
     }
 
@@ -794,6 +805,7 @@ public class GameModeController : MonoBehaviour
         ArenaRuntime.Load(arenaIndex);
 
         Mode = GameMode.OnlinePvP;
+        TrainingMatch = false;
         DestroySpectatorRig();
         ResetMatchState();
         RestoreAllDeRez();
@@ -861,6 +873,7 @@ public class GameModeController : MonoBehaviour
     public void StartAIvAI()
     {
         Mode = GameMode.AIvAI;
+        TrainingMatch = false;
         ResetMatchState();
         RestoreAllDeRez();
         ScoreKeeper.Reset();
