@@ -3,13 +3,23 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 /// <summary>
-/// Top-right corner panel that says which form the PLAYER'S robot is in —
-/// ROBOT or TANK — and plays the stop-motion transformation whenever they morph.
+/// The form dial: a round button in the top-right corner that says which form
+/// the PLAYER'S robot is in — ROBOT or TANK — plays the stop-motion
+/// transformation whenever they morph, and IS the control that morphs them.
 ///
 /// WHY IT EXISTS. Player v AI is first person, so you never see your own robot:
 /// pressing Morph had no picture at all, and nothing on screen said which form
-/// you were in afterwards. The panel is the readable copy of an event the camera
+/// you were in afterwards. The dial is the readable copy of an event the camera
 /// cannot show.
+///
+/// WHY IT IS ALSO THE BUTTON. It began as a display sitting next to a separate
+/// MORPH button — two widgets for one idea, on a phone screen that has no room
+/// to spare, and the display was already showing the exact thing the button
+/// would change. Tapping the thing you are looking at to change it is both
+/// smaller and easier to guess. It is drawn from TouchControls' own disc and
+/// ring sprites at their palette so that it reads as pressable the only way
+/// that reliably works: by looking like the things that already are. A label
+/// under it says so outright until the first morph, then fades for good.
 ///
 /// PLAYER V AI ONLY, and only the player's own robot. Every other mode either
 /// shows the robot already (the spectator camera in AI v AI orbits it in full
@@ -34,8 +44,18 @@ using UnityEngine.UI;
 /// </summary>
 public class TransformCast : MonoBehaviour
 {
-    /// <summary>Side of the rendered square, on the 1920x1080 reference canvas.</summary>
-    const float PanelSize = 200f;
+    /// <summary>
+    /// Diameter of the dial, on the 1920x1080 reference canvas. Bigger than the
+    /// action buttons (140-180): it is the only round button carrying a picture
+    /// rather than a word, and a robot rendered at 140 across is a smudge.
+    /// </summary>
+    const float DialSize = 200f;
+
+    /// <summary>Gap from the top-right corner to the edge of the dial.</summary>
+    const float DialMargin = 40f;
+
+    /// <summary>How fast the press pulse fades, in units of pulse per second.</summary>
+    const float PressFade = 2.6f;
 
     const float FadeInSeconds = 0.2f;
     const float FadeOutSeconds = 0.35f;
@@ -72,11 +92,17 @@ public class TransformCast : MonoBehaviour
     public static TransformCast Instance { get; private set; }
 
     CanvasGroup _group;
-    Image _frame;
+    Image _dial;
+    RectTransform _dialRect;
+    Image _rim;
     Image _flash;
     RawImage _view;
     Text _caption;
-    Text _title;
+    Text _hint;
+
+    /// <summary>Fades once the player has morphed, and never comes back.</summary>
+    bool _hasMorphed;
+    float _press;
 
     FormRig _rig;
 
@@ -149,6 +175,33 @@ public class TransformCast : MonoBehaviour
 
         _flashAmount = Mathf.MoveTowards(_flashAmount, 0f, FlashFade * dt);
         _flash.color = new Color(1f, 1f, 1f, 0.5f * _flashAmount);
+
+        UpdateDial(dt);
+    }
+
+    /// <summary>
+    /// The button half: the press pulse, and the hint that says what pressing it
+    /// does until the player has found out.
+    /// </summary>
+    void UpdateDial(float dt)
+    {
+        _press = Mathf.MoveTowards(_press, 0f, PressFade * dt);
+
+        // Lit rather than merely tinted while it is being used, which is how
+        // every other round button answers a thumb.
+        Color idle = TouchControls.ButtonIdle;
+        _dial.color = Color.Lerp(idle, new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.75f), _press);
+        _rim.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, Mathf.Lerp(0.7f, 1f, _press));
+
+        // Worded for whichever input is actually driving. The on-screen controls
+        // can come and go mid-match — picking up a tablet is all it takes — so
+        // this is read every frame rather than set once.
+        _hint.text = TouchControls.Active ? "TAP  TO  MORPH" : "T  —  MORPH";
+        float wanted = _hasMorphed ? 0f : 0.55f;
+        var color = _hint.color;
+        color.a = Mathf.MoveTowards(color.a, wanted, 1.2f * dt);
+        _hint.color = color;
+        _hint.gameObject.SetActive(color.a > 0.01f);
     }
 
     // ------------------------------------------------------------------ subject
@@ -200,6 +253,11 @@ public class TransformCast : MonoBehaviour
     void HandleFold(bool toVehicle)
     {
         var rig = ActiveRig();
+        // Fires for a fold that was actually ACCEPTED, which makes it the honest
+        // press feedback: a tap while frozen, or on a robot that cannot fold, is
+        // refused upstream and correctly lights nothing.
+        _press = 1f;
+        _hasMorphed = true;
         _folding = true;
         _foldToVehicle = toVehicle;
         _foldClock = 0f;
@@ -240,11 +298,13 @@ public class TransformCast : MonoBehaviour
         if (rig.Show(stage))
             _flashAmount = 1f;
 
+        // Short enough to fit across a 200-wide circle: the old "TRANSFORMING"
+        // and "BACK TO ROBOT" were written for a panel twice this wide, and
+        // naming the DESTINATION says the same thing in a third of the room.
         _caption.text = _folding
-            ? (_foldToVehicle ? "TRANSFORMING" : "BACK  TO  ROBOT")
+            ? (_foldToVehicle ? "» TANK" : "» ROBOT")
             : (_subject != null && _subject.IsVehicle ? "TANK" : "ROBOT");
-        _caption.color = _folding ? new Color(0.02f, 0.06f, 0.10f, 0.75f)
-                                  : new Color(0.02f, 0.06f, 0.10f);
+        _caption.color = _folding ? new Color(1f, 1f, 1f, 0.8f) : Color.white;
     }
 
     // --------------------------------------------------------------------- rigs
@@ -423,6 +483,21 @@ public class TransformCast : MonoBehaviour
 
     // ----------------------------------------------------------------------- ui
 
+    /// <summary>
+    /// The dial: a round button the size of the on-screen action buttons, with
+    /// the live form inside it instead of a word.
+    ///
+    /// WHY THE DISPLAY IS THE BUTTON. There used to be a MORPH button as well as
+    /// this readout — two widgets for one idea, and the readout was already
+    /// showing the exact thing the button would change. Merging them costs a
+    /// corner of the screen less and puts the control where the player is
+    /// already looking to find out what form they are in.
+    ///
+    /// It is built from TouchControls' own disc and ring sprites, at their
+    /// palette, on purpose: "you can press this" is carried entirely by looking
+    /// like the things that are already pressable. A differently-drawn circle
+    /// would read as a picture frame.
+    /// </summary>
     void BuildUi()
     {
         var canvasGo = new GameObject("TransformCastCanvas");
@@ -440,57 +515,108 @@ public class TransformCast : MonoBehaviour
         // Top-right corner, which the touch MENU button vacated for it.
         var panel = new GameObject("Panel");
         panel.transform.SetParent(canvasGo.transform, false);
+        var panelRect = panel.AddComponent<RectTransform>();
+        panelRect.anchorMin = panelRect.anchorMax = new Vector2(1f, 1f);
+        panelRect.pivot = new Vector2(1f, 1f);
+        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.sizeDelta = Vector2.zero;
         _group = panel.AddComponent<CanvasGroup>();
-        _frame = panel.AddComponent<Image>();
-        _frame.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.85f);
-        _frame.raycastTarget = false;
-        var frameRect = _frame.rectTransform;
-        frameRect.anchorMin = frameRect.anchorMax = new Vector2(1f, 1f);
-        frameRect.pivot = new Vector2(1f, 1f);
-        frameRect.anchoredPosition = new Vector2(-40f, -40f);
-        frameRect.sizeDelta = new Vector2(PanelSize + 8f, PanelSize + 76f);
 
-        _title = MakeLabel(panel.transform, "Title", "FORM", 16, FontStyle.Bold,
-            new Color(0.02f, 0.06f, 0.10f, 0.6f));
-        var titleRect = _title.rectTransform;
-        titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.offsetMin = new Vector2(0f, -22f);
-        titleRect.offsetMax = new Vector2(0f, -2f);
+        // The disc IS the hit target, so everything that should be tappable is
+        // inside it and nothing that should not be — the hint below sits outside.
+        var dialGo = new GameObject("Dial");
+        dialGo.transform.SetParent(panel.transform, false);
+        _dial = dialGo.AddComponent<Image>();
+        _dial.sprite = TouchControls.DiscSprite();
+        _dial.color = TouchControls.ButtonIdle;
+        _dial.raycastTarget = false;
+        _dialRect = _dial.rectTransform;
+        _dialRect.anchorMin = _dialRect.anchorMax = new Vector2(1f, 1f);
+        _dialRect.pivot = new Vector2(1f, 1f);
+        _dialRect.anchoredPosition = new Vector2(-DialMargin, -DialMargin);
+        _dialRect.sizeDelta = Vector2.one * DialSize;
+
+        // Clips the square render into the circle. Without it the picture is a
+        // box sitting inside a ring, which is exactly the picture-frame reading
+        // the round shape is there to avoid.
+        var mask = dialGo.AddComponent<Mask>();
+        mask.showMaskGraphic = true;
 
         var viewGo = new GameObject("View");
-        viewGo.transform.SetParent(panel.transform, false);
+        viewGo.transform.SetParent(_dialRect, false);
         _view = viewGo.AddComponent<RawImage>();
         _view.raycastTarget = false;
         var viewRect = _view.rectTransform;
-        viewRect.anchorMin = viewRect.anchorMax = new Vector2(0.5f, 1f);
-        viewRect.pivot = new Vector2(0.5f, 1f);
-        viewRect.anchoredPosition = new Vector2(0f, -24f);
-        viewRect.sizeDelta = new Vector2(PanelSize, PanelSize);
+        viewRect.anchorMin = Vector2.zero;
+        viewRect.anchorMax = Vector2.one;
+        viewRect.offsetMin = Vector2.zero;
+        viewRect.offsetMax = Vector2.zero;
 
-        // Sits over the render, not over the caption: this is the light burst
-        // that covers a stage swap, and a caption that strobes with it would
-        // just look broken.
+        // Over the render, under the caption: this is the light burst that
+        // covers a stage swap, and a caption that strobes with it would just
+        // look broken.
         var flashGo = new GameObject("Flash");
-        flashGo.transform.SetParent(panel.transform, false);
+        flashGo.transform.SetParent(_dialRect, false);
         _flash = flashGo.AddComponent<Image>();
+        _flash.sprite = TouchControls.DiscSprite();
         _flash.color = new Color(1f, 1f, 1f, 0f);
         _flash.raycastTarget = false;
         var flashRect = _flash.rectTransform;
-        flashRect.anchorMin = flashRect.anchorMax = new Vector2(0.5f, 1f);
-        flashRect.pivot = new Vector2(0.5f, 1f);
-        flashRect.anchoredPosition = viewRect.anchoredPosition;
-        flashRect.sizeDelta = viewRect.sizeDelta;
+        flashRect.anchorMin = Vector2.zero;
+        flashRect.anchorMax = Vector2.one;
+        flashRect.offsetMin = Vector2.zero;
+        flashRect.offsetMax = Vector2.zero;
 
-        _caption = MakeLabel(panel.transform, "Caption", "ROBOT", 24, FontStyle.Bold,
-            new Color(0.02f, 0.06f, 0.10f));
+        // Across the bottom of the disc, over a dark band — the render behind it
+        // is a mid grey and white text alone would sit half-legible on it.
+        var bandGo = new GameObject("CaptionBand");
+        bandGo.transform.SetParent(_dialRect, false);
+        var band = bandGo.AddComponent<Image>();
+        band.color = new Color(0.02f, 0.05f, 0.09f, 0.72f);
+        band.raycastTarget = false;
+        var bandRect = band.rectTransform;
+        bandRect.anchorMin = new Vector2(0f, 0f);
+        bandRect.anchorMax = new Vector2(1f, 0f);
+        bandRect.offsetMin = new Vector2(0f, DialSize * 0.14f);
+        bandRect.offsetMax = new Vector2(0f, DialSize * 0.34f);
+
+        _caption = MakeLabel(_dialRect, "Caption", "ROBOT", 22, FontStyle.Bold, Color.white);
         var captionRect = _caption.rectTransform;
-        captionRect.anchorMin = new Vector2(0f, 0f);
-        captionRect.anchorMax = new Vector2(1f, 0f);
-        captionRect.pivot = new Vector2(0.5f, 0f);
-        captionRect.offsetMin = new Vector2(0f, 6f);
-        captionRect.offsetMax = new Vector2(0f, 44f);
+        captionRect.anchorMin = bandRect.anchorMin;
+        captionRect.anchorMax = bandRect.anchorMax;
+        captionRect.offsetMin = bandRect.offsetMin;
+        captionRect.offsetMax = bandRect.offsetMax;
+
+        // A sibling of the disc rather than a child: the mask would eat the
+        // outer edge of a ring drawn exactly at the boundary.
+        var rimGo = new GameObject("Rim");
+        rimGo.transform.SetParent(panel.transform, false);
+        _rim = rimGo.AddComponent<Image>();
+        _rim.sprite = TouchControls.RingSprite();
+        _rim.color = new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.7f);
+        _rim.raycastTarget = false;
+        var rimRect = _rim.rectTransform;
+        rimRect.anchorMin = rimRect.anchorMax = new Vector2(1f, 1f);
+        rimRect.pivot = new Vector2(1f, 1f);
+        rimRect.anchoredPosition = _dialRect.anchoredPosition;
+        rimRect.sizeDelta = _dialRect.sizeDelta;
+
+        // Says what pressing it does, until the player has pressed it. The same
+        // bargain the turn hint strikes: a label that stays forever is clutter,
+        // and one that was never there is a control nobody finds.
+        _hint = MakeLabel(panel.transform, "Hint", "", 20, FontStyle.Bold,
+            new Color(1f, 1f, 1f, 0.55f));
+        var hintRect = _hint.rectTransform;
+        hintRect.anchorMin = hintRect.anchorMax = new Vector2(1f, 1f);
+        hintRect.pivot = new Vector2(1f, 1f);
+        // Exactly the dial's width and column, so the centred text lands under
+        // the middle of the circle rather than off to one side of it.
+        hintRect.anchoredPosition = new Vector2(-DialMargin, -DialMargin - DialSize - 6f);
+        hintRect.sizeDelta = new Vector2(DialSize, 30f);
+
+        // The taps come through TouchControls so they are swallowed the way a
+        // tap on any other button is — see SetFormDial.
+        TouchControls.SetFormDial(_dialRect);
 
         _group.alpha = 0f;
         panel.SetActive(false);

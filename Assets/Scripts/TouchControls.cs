@@ -5,8 +5,12 @@ using UnityEngine.UI;
 /// <summary>
 /// Roblox-style on-screen controls for touch screens: a dynamic thumbstick on
 /// the left half to walk, a fixed aim stick on the lower right to turn the
-/// body and gun, and big round action buttons (fire, jump, x-ray, snipe,
-/// morph, weapon cycle, menu). Drag anywhere that isn't a widget still looks.
+/// body and gun, and big round action buttons (fire, jump, x-ray, snipe, arms,
+/// weapon cycle, menu). Drag anywhere that isn't a widget still looks.
+///
+/// Morphing has no button here: the form dial in the top-right corner is both
+/// the readout and the control. It belongs to TransformCast, which draws it —
+/// <see cref="SetFormDial"/> is how its taps come back to this input path.
 ///
 /// True twin-stick: the aim stick steers at a speed set by how far it is
 /// pushed, and FIRE is a plain button — one above each stick, so either thumb
@@ -41,7 +45,8 @@ public class TouchControls : MonoBehaviour
     const float RefHeight = 1080f;
 
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
-    static readonly Color ButtonIdle = new Color(0.06f, 0.14f, 0.22f, 0.55f);
+    /// <summary>Internal alongside the disc and ring sprites — see DiscSprite.</summary>
+    internal static readonly Color ButtonIdle = new Color(0.06f, 0.14f, 0.22f, 0.55f);
     static readonly Color ButtonHeld = new Color(0.2f, 0.9f, 1f, 0.8f);
     static readonly Color ButtonDim = new Color(0.06f, 0.10f, 0.14f, 0.35f);
     static readonly Color RingIdle = new Color(0.2f, 0.9f, 1f, 0.35f);
@@ -156,7 +161,10 @@ public class TouchControls : MonoBehaviour
     Vector2 _aimCenter;
 
     readonly List<Button> _buttons = new List<Button>();
-    Button _fireLeft, _fireRight, _jump, _scope, _snipe, _morph, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
+    Button _fireLeft, _fireRight, _jump, _scope, _snipe, _prevWeapon, _nextWeapon, _menu, _rise, _sink, _shuffle;
+
+    /// <summary>The form dial on TransformCast's canvas; tapping it morphs. See SetFormDial.</summary>
+    static RectTransform _formDial;
     Button _weapons, _weaponClose;
 
     RectTransform _weaponPanel;
@@ -229,7 +237,8 @@ public class TouchControls : MonoBehaviour
             if (button.Visible &&
                 RectTransformUtility.RectangleContainsScreenPoint(button.rect, screenPoint, null))
                 return true;
-        return false;
+        // The form dial is ours to answer for even though it is not ours to draw.
+        return OverFormDial(screenPoint);
     }
 
     /// <summary>Create the controls if they don't exist yet. Safe to call repeatedly.</summary>
@@ -326,6 +335,29 @@ public class TouchControls : MonoBehaviour
         _morphPressed = false;
         return pressed;
     }
+
+    /// <summary>
+    /// Register the form dial — the top-right readout that says ROBOT or TANK —
+    /// as the thing that morphs when tapped.
+    ///
+    /// WHY THE DIAL OWNS ITS OWN PIXELS BUT NOT ITS OWN TAPS. It has to be
+    /// visible with the on-screen controls switched off, because in first person
+    /// it is the only thing on screen that says which form you are in — so it
+    /// lives on TransformCast's canvas, not this one. But a tap on it has to
+    /// behave like a tap on any of our buttons: swallowed, so the same finger
+    /// does not also start a look-drag, and reported by <see cref="PointOver"/>,
+    /// so nothing underneath treats it as a click in the world. Registering the
+    /// rect here is what buys both without moving the widget.
+    /// </summary>
+    public static void SetFormDial(RectTransform rect)
+    {
+        _formDial = rect;
+    }
+
+    /// <summary>Is a screen point on the form dial, and is the dial there to hit?</summary>
+    static bool OverFormDial(Vector2 screenPoint) =>
+        _formDial != null && _formDial.gameObject.activeInHierarchy
+        && RectTransformUtility.RectangleContainsScreenPoint(_formDial, screenPoint, null);
 
     /// <summary>Sniper scope toggle edge — see SniperScope for why it isn't a hold.</summary>
     public bool ConsumeSnipe()
@@ -512,25 +544,17 @@ public class TouchControls : MonoBehaviour
         if (!canJump)
             _jumpPressed = false;
 
-        // MORPH stays on screen for the whole match so it can be found, but
-        // dims on robots with no forged vehicle clips, where pressing it does
-        // nothing. Hiding it instead made the control look like it came and
-        // went with the robot.
-        SetVisible(_morph, playing && vehicle != null);
-        SetDimmed(_morph, vehicle == null || !vehicle.CanTransform);
+        // There is no MORPH button any more. The form dial in the top-right is
+        // the control — it already had to be on screen to say which form you are
+        // in, and a separate button to change the thing it was showing was a
+        // second widget for one idea. TransformCast draws it; SetFormDial is how
+        // its taps get here.
     }
 
     static void SetVisible(Button button, bool visible)
     {
         if (button != null)
             SetVisible(button.rect, visible);
-    }
-
-    /// <summary>Grey out a button whose action isn't available right now.</summary>
-    static void SetDimmed(Button button, bool dimmed)
-    {
-        if (button != null)
-            button.dimmed = dimmed;
     }
 
     static void SetVisible(RectTransform rect, bool visible)
@@ -687,6 +711,17 @@ public class TouchControls : MonoBehaviour
             return;
         }
 
+        // The form dial. After our own buttons so nothing of ours can be
+        // covered by it, and before the sticks so a tap on the top-right corner
+        // morphs instead of starting a look-drag. Swallowed rather than given a
+        // role: there is nothing to hold down, only a press.
+        if (OverFormDial(pointer.position))
+        {
+            _morphPressed = true;
+            _roles[pointer.id] = RoleNone;
+            return;
+        }
+
         // The aim stick is a fixed target the thumb returns to blind, so a
         // grab a little outside the ring still counts — mid-fight thumbs are
         // not precise.
@@ -764,7 +799,6 @@ public class TouchControls : MonoBehaviour
         if (button == _weapons) ToggleWeaponPanel(true);
         else if (button == _weaponClose) ToggleWeaponPanel(false);
         else if (button == _jump) _jumpPressed = true;
-        else if (button == _morph) _morphPressed = true;
         else if (button == _snipe) _snipePressed = true;
         else if (button == _prevWeapon) _weaponCycle = -1;
         else if (button == _nextWeapon) _weaponCycle = 1;
@@ -895,7 +929,6 @@ public class TouchControls : MonoBehaviour
         _jump = MakeRoundButton("Jump", "JUMP", new Vector2(1, 0), new Vector2(-150, 150), 170);
         _scope = MakeRoundButton("Scope", "X-RAY", new Vector2(1, 0), new Vector2(-175, 470), 140);
         _snipe = MakeRoundButton("Snipe", "SNIPE", new Vector2(1, 0), new Vector2(-175, 630), 140);
-        _morph = MakeRoundButton("Morph", "MORPH", new Vector2(1, 0), new Vector2(-620, 480), 140);
         _prevWeapon = MakeRoundButton("PrevWeapon", "<", new Vector2(1, 0), new Vector2(-700, 150), 110);
         _nextWeapon = MakeRoundButton("NextWeapon", ">", new Vector2(1, 0), new Vector2(-570, 150), 110);
         // Sits directly above the two arrows it supersedes: they step one slot
@@ -1387,13 +1420,20 @@ public class TouchControls : MonoBehaviour
         return button;
     }
 
-    static Sprite DiscSprite()
+    /// <summary>
+    /// The round-button disc. Internal because the form dial is drawn on
+    /// TransformCast's canvas and has to look like it belongs to this set —
+    /// "like the other buttons" is the whole point of it, and two hand-rolled
+    /// circles would drift apart.
+    /// </summary>
+    internal static Sprite DiscSprite()
     {
         if (_disc == null) _disc = BuildCircle(0f);
         return _disc;
     }
 
-    static Sprite RingSprite()
+    /// <summary>The round-button rim. Internal for the same reason as the disc.</summary>
+    internal static Sprite RingSprite()
     {
         if (_ring == null) _ring = BuildCircle(0.86f);
         return _ring;
