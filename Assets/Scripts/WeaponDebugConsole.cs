@@ -3,11 +3,14 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Weapon debug console: at any time during play, type a two-digit number
+/// Weapon debug console: during play, hold CTRL and type a two-digit number
 /// (01–54) and EVERY robot locks to that weapon (the player's active weapon is
 /// set to it too, so you can inspect it first-person). A top-left overlay
-/// shows the weapon's number, name, and description. Type 00 to release the
-/// lock and return the AI to normal weapon switching.
+/// shows the weapon's number, name, and description. Ctrl-00 releases the
+/// lock and returns the AI to normal weapon switching.
+///
+/// CTRL is what keeps this out of the player's way — bare number keys are the
+/// shortcut bar now. See the note in Update for what it cost before.
 ///
 /// Self-bootstraps on play — no scene wiring or arena rebuild required.
 /// </summary>
@@ -74,6 +77,28 @@ public class WeaponDebugConsole : MonoBehaviour
 
         if (_pendingDigit < 0)
         {
+            // CTRL to OPEN an entry. Bare number keys belong to the player.
+            //
+            // This console used to take any digit, any time, which was fine when
+            // the number keys did almost nothing for the player — two basics and
+            // an airdrop. They are now the primary weapon control (the four-gun
+            // shortcut bar), and the collision was silently eating them:
+            //
+            //   * the first press only reached PlayerBrain if PlayerBrain's
+            //     Update happened to run before this one, and NEITHER declares
+            //     an execution order — so whether a key worked at all came down
+            //     to arbitrary component ordering, which is exactly the shape of
+            //     "sometimes I can't change weapons";
+            //   * once a digit was captured, PlayerBrain stood down for the full
+            //     two-second window, so any second press inside it was eaten
+            //     too — and typing 1 then 2 quickly did not select two weapons,
+            //     it locked EVERY robot in the match onto weapon 12.
+            //
+            // Only the opening digit is gated: after that the player has plainly
+            // asked for the console, and the prompt says to type the second.
+            if (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl))
+                return;
+
             _pendingDigit = digit;
             _pendingDeadline = Time.unscaledTime + SecondDigitWindow;
             ShowMessage($"WEAPON {digit}_", "type the second digit…", sticky: true);

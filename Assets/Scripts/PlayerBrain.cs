@@ -247,10 +247,18 @@ public class PlayerBrain : MonoBehaviour
     void HandleWeaponSwitch(TouchControls touch)
     {
         if (weapons == null) return;
-        // While the weapon debug console is mid-entry (first digit typed),
-        // digits belong to it — don't also flip the player's weapon.
-        bool debugCapturing = WeaponDebugConsole.Instance != null
-            && WeaponDebugConsole.Instance.AwaitingSecondDigit;
+        // Digits belong to the debug console while CTRL is down (that is how an
+        // entry is opened) and while one is mid-entry.
+        //
+        // Both halves are checked HERE as well as there, so the two never
+        // depend on which Update runs first: neither component declares an
+        // execution order, and a control whose behaviour turns on arbitrary
+        // component ordering is a control that works on some runs and not
+        // others.
+        bool debugCapturing = Input.GetKey(KeyCode.LeftControl)
+            || Input.GetKey(KeyCode.RightControl)
+            || (WeaponDebugConsole.Instance != null
+                && WeaponDebugConsole.Instance.AwaitingSecondDigit);
 
         // The number keys mean the SHORTCUT BAR wherever one has been built,
         // and the raw slot list otherwise.
@@ -267,13 +275,19 @@ public class PlayerBrain : MonoBehaviour
             {
                 if (!Input.GetKeyDown(KeyCode.Alpha1 + i))
                     continue;
-                // Per KEY, not per mode: the bar wins on the keys it has filled
-                // and the slot list keeps the rest, so a half-built bar leaves
-                // 3 and 4 doing what they always did rather than going dead.
-                if (shortcuts != null && i < WeaponShortcuts.SlotCount
-                    && shortcuts.Get(i) != null)
-                    Equip(shortcuts.Get(i));
-                else if (i < weapons.Length)
+                // The bar wins only where it can actually DELIVER the gun, and
+                // the slot list picks up everywhere else.
+                //
+                // Delivering is the part that matters: in tank form the usable
+                // set is the two-gun siege kit, so every weapon on the bar is
+                // absent and Equip fails. Testing "is a gun on this key" instead
+                // of "did it equip" left keys 1-4 doing nothing at all for as
+                // long as you were driving — the number keys went dead on
+                // morphing and came back on unfolding, with nothing on screen
+                // saying why.
+                bool fromBar = shortcuts != null && i < WeaponShortcuts.SlotCount
+                               && Equip(shortcuts.Get(i));
+                if (!fromBar && i < weapons.Length)
                     SetActiveWeapon(i);
             }
         }
