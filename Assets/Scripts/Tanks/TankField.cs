@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -219,12 +220,51 @@ public class TankField : MonoBehaviour
             return;
 
         var roll = new System.Random(index * 7919 + 13);
-        var rock = ArenaMaterials.Lit("tank-rock", RockGrey, 0.18f);
-        var brick = ArenaMaterials.Surface("tank-brick",
-            new Color(0.42f, 0.20f, 0.14f), new Color(0.58f, 0.32f, 0.20f), 2.5f, 0.8f);
-        var wood = ArenaMaterials.Surface("tank-wood",
-            new Color(0.38f, 0.26f, 0.14f), new Color(0.55f, 0.40f, 0.22f), 2f, 0.7f);
+        // OBJECT-SPACE patterns, all three: every block here is pushable (see
+        // TankBlock), and a world-space pattern on a pushed block stays put in
+        // the world while the mesh slides through it — which reads as the
+        // texture changing under the player's bumper. The -os keys keep these
+        // apart from any world-space material another mode cached this session.
+        var rock = ArenaMaterials.Style("tank-rock-os", ArenaMaterials.SurfaceStyle.Stone,
+            RockGrey, RockGrey * 0.45f, 1.6f, 0.9f, objectSpace: true);
+        var brick = ArenaMaterials.Style("tank-brick-os", ArenaMaterials.SurfaceStyle.Brick,
+            new Color(0.42f, 0.20f, 0.14f), new Color(0.58f, 0.42f, 0.30f), 0.6f, 0.85f,
+            objectSpace: true);
+        var wood = ArenaMaterials.Style("tank-wood-os", ArenaMaterials.SurfaceStyle.Plank,
+            new Color(0.52f, 0.37f, 0.20f), new Color(0.28f, 0.18f, 0.09f), 0.4f, 0.75f,
+            objectSpace: true);
         var crystal = ArenaMaterials.Emissive("tank-crystal", CrystalTeal, 1.5f);
+
+        // Ground footprints already claimed on this band: x, z, circle radius.
+        // Checked before anything is planted, so no two pieces of scenery can
+        // seed fused into each other.
+        var claimed = new List<Vector3>();
+        bool Claim(float radius, float halfLane, out float x, out float z)
+        {
+            // z stays a whole footprint inside the band, which also keeps this
+            // band's furniture off whatever the NEIGHBOURING band planted at
+            // its own edge — the one overlap this list cannot see.
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                x = (float)(roll.NextDouble() * 2.0 - 1.0) * halfLane;
+                z = radius + (float)roll.NextDouble() * (BandLength - radius * 2f);
+                bool fits = true;
+                foreach (var spot in claimed)
+                    if ((new Vector2(x, z) - new Vector2(spot.x, spot.y)).sqrMagnitude
+                        < (radius + spot.z) * (radius + spot.z))
+                    {
+                        fits = false;
+                        break;
+                    }
+                if (!fits)
+                    continue;
+                claimed.Add(new Vector3(x, z, radius));
+                return true;
+            }
+            // A crowded band plants one piece fewer rather than two fused ones.
+            x = z = 0f;
+            return false;
+        }
 
         // Street furniture in three materials, all pushable (see TankBlock):
         // stone the anchor cover, brick the cover shells re-landscape, wood
@@ -233,8 +273,6 @@ public class TankField : MonoBehaviour
         int blocks = 2 + roll.Next(0, 4);
         for (int i = 0; i < blocks; i++)
         {
-            float x = (float)(roll.NextDouble() * 2.0 - 1.0) * (HalfWidth - 3f);
-            float z = (float)roll.NextDouble() * BandLength;
             int kindRoll = roll.Next(0, 10);
             TankBlockKind kind = kindRoll < 4 ? TankBlockKind.Rock
                 : kindRoll < 7 ? TankBlockKind.Brick : TankBlockKind.Wood;
@@ -244,6 +282,8 @@ public class TankField : MonoBehaviour
             {
                 // Crates: small, near-cubic, factory-square — yaw stays shy.
                 float side = 1.2f + (float)roll.NextDouble() * 1f;
+                if (!Claim(side * 0.71f, HalfWidth - 3f, out float x, out float z))
+                    continue;
                 block = Box(scatter, "Wood", new Vector3(x, side * 0.5f, z),
                     new Vector3(side, side, side), wood, collide: true);
                 block.localRotation = Quaternion.Euler(0f, (float)roll.NextDouble() * 18f, 0f);
@@ -253,6 +293,10 @@ public class TankField : MonoBehaviour
                 float w = 1.8f + (float)roll.NextDouble() * (kind == TankBlockKind.Brick ? 2.2f : 3.4f);
                 float h = 1.2f + (float)roll.NextDouble() * 2.2f;
                 float d = 1.8f + (float)roll.NextDouble() * (kind == TankBlockKind.Brick ? 2.2f : 3.4f);
+                // Half the ground diagonal: the circle a yawed box always fits in.
+                if (!Claim(Mathf.Sqrt(w * w + d * d) * 0.5f, HalfWidth - 3f,
+                        out float x, out float z))
+                    continue;
                 block = Box(scatter, kind.ToString(), new Vector3(x, h * 0.5f, z),
                     new Vector3(w, h, d), kind == TankBlockKind.Brick ? brick : rock,
                     collide: true);
@@ -264,11 +308,9 @@ public class TankField : MonoBehaviour
 
         // One crystal spire every few bands: a landmark, and the only thing on
         // the field that glows teal, so distance reads at a glance.
-        if (roll.Next(0, 3) == 0)
+        if (roll.Next(0, 3) == 0 && Claim(1.1f, HalfWidth - 4f, out float sx, out float sz))
         {
-            float x = (float)(roll.NextDouble() * 2.0 - 1.0) * (HalfWidth - 4f);
-            float z = (float)roll.NextDouble() * BandLength;
-            var spire = Box(scatter, "Crystal", new Vector3(x, 2.2f, z),
+            var spire = Box(scatter, "Crystal", new Vector3(sx, 2.2f, sz),
                 new Vector3(1.1f, 4.4f, 1.1f), crystal, collide: true);
             spire.localRotation = Quaternion.Euler(10f, (float)roll.NextDouble() * 90f, 6f);
         }
