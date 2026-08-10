@@ -82,7 +82,7 @@ public class RockDeposit : MonoBehaviour
         // The strike: a fresh small field where the boulder stood. The rock's
         // parent is the map root, which is exactly where fields live.
         if (_hasCrystal)
-            CommanderMap.SpawnFieldAt(transform.parent, transform.position, 1100f, 7);
+            CommanderMap.SpawnFieldAt(transform.parent, transform.position, 3500f, 7);
 
         Destroy(gameObject);
     }

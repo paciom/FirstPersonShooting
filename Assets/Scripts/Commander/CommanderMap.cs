@@ -202,16 +202,21 @@ public static class CommanderMap
         fields.Add(-southSide);
     }
 
-    /// <summary>Capacity by pair: starter small, contested rich.</summary>
+    /// <summary>
+    /// Capacity by pair: starter smallest, contested richest. Roughly
+    /// tripled by playtest decree — a war economy should be fed by its
+    /// mines for the WHOLE war, with exhaustion pushing expansion outward
+    /// long before it starves the front line.
+    /// </summary>
     static float FieldCapacity(int index)
     {
         int pair = index / 2;
         switch (pair)
         {
-            case 0: return 1500f;    // starter — spends fast, pushes you out
-            case 4: return 4000f;    // centre — worth the fight
-            case 6: return 4000f;    // mid-ring — also worth the fight
-            default: return 3000f;
+            case 0: return 4000f;     // starter — still the first to run dry
+            case 4: return 12000f;    // centre — worth a whole campaign
+            case 6: return 12000f;    // mid-ring — likewise
+            default: return 9000f;
         }
     }
 
