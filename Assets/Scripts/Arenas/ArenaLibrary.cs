@@ -29,6 +29,7 @@ public static class ArenaLibrary
                     new ToyboxArena(),      // grained wood, glossy plastic
                     new DrydockArena(),     // industrial bay: catwalks, gantry, cargo
                     new ReactorArena(),     // radial ship core: tiers, gallery, red glow
+                    new MeltdownArena(),    // nuclear station: enterable cooling tower
                 };
             }
             return _all;
