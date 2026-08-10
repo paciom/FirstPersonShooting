@@ -75,6 +75,10 @@ public class RobotJump : MonoBehaviour
     Vector3 _from, _to, _lastSet;
     float _t, _duration, _peak;
 
+    // A free-form dodge hop (no off-mesh link involved) — see Hop().
+    bool _freeHop;
+    float _nextHopAt;
+
     int _baseAreaMask;
     bool _maskedForVehicle;
 
@@ -131,6 +135,56 @@ public class RobotJump : MonoBehaviour
             Begin();
     }
 
+    /// <summary>
+    /// A combat dodge hop, on the brain's demand rather than a link's: leap
+    /// along the direction the bot is already moving and come down on the
+    /// navmesh. Same arc, same apex rule, same animator flag as a link jump,
+    /// so the two are visually one move. Returns false when refused — mid-air
+    /// already, on a link, in vehicle form, or still on the hop cooldown.
+    ///
+    /// The agent stays ENABLED but stops driving the transform
+    /// (updatePosition off) for the arc, so AIBrain's per-frame agent calls —
+    /// destinations, velocity reads — stay legal all the way through; Finish
+    /// then warps the agent under wherever the robot actually landed.
+    /// </summary>
+    public bool Hop(float cooldown = 1.4f)
+    {
+        if (_jumping || _agent == null || !_agent.enabled || _agent.isOnOffMeshLink)
+            return false;
+        if (Time.time < _nextHopAt)
+            return false;
+        if (_vehicle != null && (_vehicle.IsVehicle || _vehicle.IsBusy))
+            return false;
+
+        float apex = Mathf.Max(clearance,
+            RobotFactory.MeasureHeight(transform) * clearanceBodyHeights);
+        float airTime = Mathf.Clamp(FallTime(apex) * 2f, minAirTime, maxAirTime);
+
+        // Carry the current motion through the air; a bot standing still hops
+        // straight up, which still breaks an enemy's aim.
+        Vector3 velocity = _agent.velocity;
+        velocity.y = 0f;
+        Vector3 target = transform.position + velocity * airTime;
+        if (NavMesh.SamplePosition(target, out NavMeshHit hit, 2.5f, NavMesh.AllAreas))
+            target = hit.position;
+        else
+            target = transform.position;   // nowhere to land out there: hop in place
+
+        _from = transform.position;
+        _to = new Vector3(target.x, target.y + _agent.baseOffset, target.z);
+        _peak = Mathf.Max(apex, (_to.y - _from.y) + apex);
+        _duration = airTime;
+        _t = 0f;
+        _lastSet = _from;
+        _jumping = true;
+        _freeHop = true;
+        _nextHopAt = Time.time + cooldown;
+
+        _agent.updatePosition = false;
+        SetAirborne(true);
+        return true;
+    }
+
     void Begin()
     {
         OffMeshLinkData link = _agent.currentOffMeshLinkData;
@@ -174,7 +228,8 @@ public class RobotJump : MonoBehaviour
     void Tick()
     {
         // The link vanished under us (respawn, arena swap) — stop pretending.
-        if (!_agent.isOnOffMeshLink)
+        // A free hop has no link to lose, so only the link jump checks.
+        if (!_freeHop && !_agent.isOnOffMeshLink)
         {
             Finish();
             return;
@@ -210,6 +265,24 @@ public class RobotJump : MonoBehaviour
     {
         _jumping = false;
         SetAirborne(false);
+
+        if (_freeHop)
+        {
+            _freeHop = false;
+            if (_agent != null)
+            {
+                // Hand the transform back, then put the agent under the robot's
+                // actual feet — landing point, or wherever a hijack (respawn
+                // teleport, block shove) left it.
+                _agent.updatePosition = true;
+                if (_agent.isActiveAndEnabled)
+                    _agent.Warp(NavMesh.SamplePosition(transform.position,
+                        out NavMeshHit hit, 2.5f, NavMesh.AllAreas)
+                        ? hit.position : transform.position);
+            }
+            return;
+        }
+
         if (_agent != null && _agent.enabled && _agent.isOnOffMeshLink)
             _agent.CompleteOffMeshLink();
     }

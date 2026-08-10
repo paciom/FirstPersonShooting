@@ -115,6 +115,8 @@ public class AIBrain : MonoBehaviour
     TreasureDrop _mineToShoot;      // armed mine with an enemy inside its blast
     Weapon _active;
     TransformMode _vehicle;
+    RobotJump _jump;
+    float _nextHopThink;
     float _nextVehicleChange;
     float _nextRepath;
     float _nextTargetScan;
@@ -145,8 +147,9 @@ public class AIBrain : MonoBehaviour
         // Every bot leaps the gaps in its own path. Ensured here as well as in
         // ArenaBuilder so it reaches bots already serialized into the scene, and
         // reinforcement clones, without waiting on a scene rebuild.
-        if (GetComponent<RobotJump>() == null)
-            gameObject.AddComponent<RobotJump>();
+        _jump = GetComponent<RobotJump>();
+        if (_jump == null)
+            _jump = gameObject.AddComponent<RobotJump>();
 
         if (weapons == null || weapons.Length == 0)
             weapons = GetComponentsInChildren<Weapon>();
@@ -208,6 +211,30 @@ public class AIBrain : MonoBehaviour
             _evadeFlipAt = Time.time + evadeFlipSeconds;
         }
         _evadeUntil = Time.time + evadeSeconds;
+    }
+
+    /// <summary>
+    /// Situational jumping — the bot half of the player's Space bar. Two
+    /// situations call for it, both read off state the brain already keeps:
+    /// being under fire (the evade window HandleDamaged opens), where a hop
+    /// breaks the attacker's tracking mid-strafe, and actively trading fire,
+    /// where an occasional leap keeps the bot from being a flat-footed
+    /// target. Rolled on a short cadence rather than per frame so hops arrive
+    /// in ones, not flurries; RobotJump.Hop's own cooldown and form rules cap
+    /// it from below. Deliberately more likely under fire than merely engaged
+    /// — jumping is a defence here, not a war dance.
+    /// </summary>
+    void ConsiderHop(bool tradingFire)
+    {
+        if (Time.time < _nextHopThink)
+            return;
+        _nextHopThink = Time.time + Random.Range(0.45f, 0.9f);
+
+        bool underFire = Time.time < _evadeUntil;
+        if (!underFire && !tradingFire)
+            return;
+        if (Random.value < (underFire ? 0.45f : 0.2f) && _jump != null)
+            _jump.Hop();
     }
 
     /// <summary>
@@ -303,6 +330,7 @@ public class AIBrain : MonoBehaviour
             // to — and a robot being shot at from somewhere it cannot see still
             // has every reason to stop standing in the open.
             DriveMovement(null, 0f, 0f, false, false);
+            ConsiderHop(tradingFire: false);
             return;
         }
 
@@ -333,6 +361,7 @@ public class AIBrain : MonoBehaviour
         bool engaged = hasLineOfSight && distance <= Mathf.Max(engageRange, standoff) * 1.15f;
 
         DriveMovement(_target, distance, standoff, engaged, hasLineOfSight);
+        ConsiderHop(tradingFire: engaged && hasLineOfSight);
 
         // A tank turns its TURRET, not its hull: the chassis keeps facing the
         // way it drives (the agent owns that) and the gun does the tracking,
