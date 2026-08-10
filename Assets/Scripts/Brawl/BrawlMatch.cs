@@ -73,7 +73,7 @@ public class BrawlMatch : MonoBehaviour
         EndRound("K.O.!");
     }
 
-    void EndRound(string banner)
+    void EndRound(string banner, float bannerSeconds = 1.4f)
     {
         _stage = Stage.RoundEnd;
         _stageTime = 0f;
@@ -93,7 +93,7 @@ public class BrawlMatch : MonoBehaviour
 
         winner?.Celebrate();
         _hud.SetPips(_cyanPips, _magentaPips);
-        _hud.Announce(banner, 1.4f, new Color(1f, 0.85f, 0.3f));
+        _hud.Announce(banner, bannerSeconds, new Color(1f, 0.85f, 0.3f));
         BrawlAudio.PlayFlat(BrawlAudio.Id.Gong, 0.9f);
     }
 
@@ -146,8 +146,10 @@ public class BrawlMatch : MonoBehaviour
                 }
                 if (_clock <= 0f)
                 {
+                    // Spelled out and held longer than a K.O. banner — the
+                    // round ending with nobody down needs the explanation.
                     _fallen = -1;
-                    EndRound("TIME!");
+                    EndRound("TIME'S  UP!", 2.2f);
                 }
                 break;
 

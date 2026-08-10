@@ -34,8 +34,8 @@ public class BrawlBrain : MonoBehaviour
     void Awake()
     {
         // A safe default until the controller applies the chosen level —
-        // CONTENDER, the same middle the AI war defaults to.
-        ApplyDifficulty(3);
+        // CHAMPION, the same baseline the AI war defaults to.
+        ApplyDifficulty(4);
     }
 
     /// <summary>Set every dial from the chosen level, plus this robot's jitter.</summary>

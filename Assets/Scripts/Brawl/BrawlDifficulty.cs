@@ -4,8 +4,12 @@ using UnityEngine;
 /// The five CPU levels and the memory of which one each Brawl mode uses.
 /// A level is a row of dials for BrawlBrain — reaction cadence first among
 /// them, because reaction delay is what human difficulty actually feels
-/// like. LEGEND's guard is deliberately 0.85, not 1.0: a CPU that blocks
-/// everything is a staring contest, not a boss.
+/// like. The ladder is scaled for humans learning the game: ROOKIE is a
+/// true beginner's sparring partner — nearly a second of reaction time,
+/// swings from too far, almost never blocks and never punishes — and each
+/// step up lands roughly where the level below it used to. LEGEND's guard
+/// is deliberately 0.75, not 1.0: a CPU that blocks everything is a
+/// staring contest, not a boss.
 /// </summary>
 public static class BrawlDifficulty
 {
@@ -27,25 +31,26 @@ public static class BrawlDifficulty
 
     public static readonly Level[] Levels =
     {
-        new Level { name = "ROOKIE", thinkMin = 0.35f, thinkMax = 0.55f, guardChance = 0.10f,
-                    aggression = 0.45f, spacingError = 1.25f, blastChance = 0.10f, punishChance = 0.05f },
-        new Level { name = "CADET", thinkMin = 0.28f, thinkMax = 0.42f, guardChance = 0.25f,
+        new Level { name = "ROOKIE", thinkMin = 0.70f, thinkMax = 1.10f, guardChance = 0.02f,
+                    aggression = 0.20f, spacingError = 1.45f, blastChance = 0.02f, punishChance = 0.00f },
+        new Level { name = "CADET", thinkMin = 0.45f, thinkMax = 0.70f, guardChance = 0.10f,
+                    aggression = 0.35f, spacingError = 1.25f, blastChance = 0.10f, punishChance = 0.05f },
+        new Level { name = "CONTENDER", thinkMin = 0.30f, thinkMax = 0.45f, guardChance = 0.25f,
                     aggression = 0.55f, spacingError = 1.10f, blastChance = 0.25f, punishChance = 0.15f },
-        new Level { name = "CONTENDER", thinkMin = 0.20f, thinkMax = 0.32f, guardChance = 0.45f,
-                    aggression = 0.65f, spacingError = 1.00f, blastChance = 0.45f, punishChance = 0.35f },
-        new Level { name = "CHAMPION", thinkMin = 0.14f, thinkMax = 0.24f, guardChance = 0.65f,
-                    aggression = 0.75f, spacingError = 0.92f, blastChance = 0.65f, punishChance = 0.60f },
-        new Level { name = "LEGEND", thinkMin = 0.10f, thinkMax = 0.16f, guardChance = 0.85f,
-                    aggression = 0.85f, spacingError = 0.85f, blastChance = 0.85f, punishChance = 0.85f },
+        new Level { name = "CHAMPION", thinkMin = 0.20f, thinkMax = 0.32f, guardChance = 0.45f,
+                    aggression = 0.70f, spacingError = 1.00f, blastChance = 0.45f, punishChance = 0.40f },
+        new Level { name = "LEGEND", thinkMin = 0.12f, thinkMax = 0.20f, guardChance = 0.75f,
+                    aggression = 0.85f, spacingError = 0.88f, blastChance = 0.75f, punishChance = 0.75f },
     };
 
     /// <summary>
-    /// The remembered pick for a mode (1-based). Player v AI opens on CADET;
-    /// the AI war opens on CONTENDER — the watchable middle.
+    /// The remembered pick for a mode (1-based). Player v AI opens on ROOKIE —
+    /// a beginner's first bout should be winnable; the AI war opens on
+    /// CHAMPION, the watchable fight on this ladder's scale.
     /// </summary>
     public static int For(GameMode mode)
     {
-        int fallback = mode == GameMode.BrawlWar ? 3 : 2;
+        int fallback = mode == GameMode.BrawlWar ? 4 : 1;
         return Mathf.Clamp(PlayerPrefs.GetInt(Key(mode), fallback), 1, Levels.Length);
     }
 

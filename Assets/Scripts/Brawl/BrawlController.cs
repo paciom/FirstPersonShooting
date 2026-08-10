@@ -147,9 +147,21 @@ public class BrawlController : MonoBehaviour
         string levelTag = "  ·  " + BrawlDifficulty.NameOf(_difficulty);
         string cyanName = DisplayName(roster, _cyanRobot, _playerControls ? "PLAYER" : "CYAN");
         string magentaName = DisplayName(roster, _magentaRobot, _playerControls ? "CPU" : "MAGENTA");
+
+        // Each corner's live portrait — whose bar is whose, at a glance.
+        var portraits = BrawlPortraits.Build(transform);
+        Texture cyanFace = null, magentaFace = null;
+        if (roster != null && roster.HasRobots)
+        {
+            cyanFace = portraits.Add(roster.Get(_cyanRobot).modelPrefab,
+                MatchAnnouncer.TeamColor(0));
+            magentaFace = portraits.Add(roster.Get(_magentaRobot).modelPrefab,
+                MatchAnnouncer.TeamColor(1));
+        }
+
         var hud = BrawlHud.Build(transform,
             _playerControls ? cyanName : cyanName + levelTag,
-            magentaName + levelTag, def.name);
+            magentaName + levelTag, def.name, cyanFace, magentaFace);
         // Every attack calls its own name under the attacker's health bar —
         // watching a bout, you can read the fight move by move.
         Cyan.OnMoveStarted += name => hud.ShowMove(true, name);

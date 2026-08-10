@@ -16,6 +16,7 @@ public class BrawlHud : MonoBehaviour
 
     const float BarWidth = 640f;
     const float BarHeight = 30f;
+    const float PortraitSize = 84f;
 
     Canvas _canvas;
     RectTransform _cyanFill, _cyanGhost, _magentaFill, _magentaGhost;
@@ -30,7 +31,7 @@ public class BrawlHud : MonoBehaviour
     float _cyanMoveUntil, _magentaMoveUntil;
 
     public static BrawlHud Build(Transform parent, string cyanName, string magentaName,
-        string stageName = null)
+        string stageName = null, Texture cyanPortrait = null, Texture magentaPortrait = null)
     {
         var go = new GameObject("BrawlHud");
         go.transform.SetParent(parent, false);
@@ -47,7 +48,7 @@ public class BrawlHud : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
         canvasGo.AddComponent<GraphicRaycaster>();
 
-        hud.BuildBars(canvasGo.transform, cyanName, magentaName);
+        hud.BuildBars(canvasGo.transform, cyanName, magentaName, cyanPortrait, magentaPortrait);
         hud.BuildTimer(canvasGo.transform);
         hud.BuildAnnouncement(canvasGo.transform);
         hud.BuildChargeMeters(canvasGo.transform);
@@ -67,12 +68,53 @@ public class BrawlHud : MonoBehaviour
         return hud;
     }
 
-    void BuildBars(Transform parent, string cyanName, string magentaName)
+    void BuildBars(Transform parent, string cyanName, string magentaName,
+        Texture cyanPortrait, Texture magentaPortrait)
     {
-        _cyanFill = BuildBar(parent, true, cyanName, HoloCyan, out _cyanGhost, out _cyanPips);
-        _magentaFill = BuildBar(parent, false, magentaName, HoloMagenta, out _magentaGhost, out _magentaPips);
-        _cyanMove = BuildMoveCaption(parent, true, HoloCyan);
-        _magentaMove = BuildMoveCaption(parent, false, HoloMagenta);
+        float cyanInset = BuildPortrait(parent, true, cyanName, cyanPortrait, HoloCyan);
+        float magentaInset = BuildPortrait(parent, false, magentaName, magentaPortrait, HoloMagenta);
+        _cyanFill = BuildBar(parent, true, cyanName, HoloCyan, cyanInset, out _cyanGhost, out _cyanPips);
+        _magentaFill = BuildBar(parent, false, magentaName, HoloMagenta, magentaInset, out _magentaGhost, out _magentaPips);
+        _cyanMove = BuildMoveCaption(parent, true, HoloCyan, cyanInset);
+        _magentaMove = BuildMoveCaption(parent, false, HoloMagenta, magentaInset);
+    }
+
+    /// <summary>
+    /// The fighter's face in the corner — a live RenderTexture of the actual
+    /// robot — so whose bar is whose needs no reading. Returns how far the
+    /// bar row must shift inward to make room.
+    /// </summary>
+    float BuildPortrait(Transform parent, bool left, string name, Texture portrait, Color color)
+    {
+        if (portrait == null)
+            return 0f;
+        float sign = left ? 1f : -1f;
+        var anchor = new Vector2(left ? 0f : 1f, 1f);
+
+        var frame = MakeImage(parent, $"Portrait_{name}", BarBack);
+        var frameRect = frame.rectTransform;
+        frameRect.anchorMin = frameRect.anchorMax = anchor;
+        frameRect.pivot = anchor;
+        frameRect.anchoredPosition = new Vector2(sign * 40f, -34f);
+        frameRect.sizeDelta = new Vector2(PortraitSize, PortraitSize);
+
+        var raw = new GameObject("Face").AddComponent<RawImage>();
+        raw.transform.SetParent(frame.transform, false);
+        raw.texture = portrait;
+        var rawRect = raw.rectTransform;
+        rawRect.anchorMin = Vector2.zero;
+        rawRect.anchorMax = Vector2.one;
+        rawRect.offsetMin = new Vector2(3f, 3f);
+        rawRect.offsetMax = new Vector2(-3f, -3f);
+
+        // A team-colour sill under the face ties it to its bar.
+        var sill = MakeImage(frame.transform, "Sill", new Color(color.r, color.g, color.b, 0.9f));
+        sill.rectTransform.anchorMin = Vector2.zero;
+        sill.rectTransform.anchorMax = new Vector2(1f, 0f);
+        sill.rectTransform.offsetMin = new Vector2(3f, 0f);
+        sill.rectTransform.offsetMax = new Vector2(-3f, 3f);
+
+        return PortraitSize + 12f;
     }
 
     /// <summary>
@@ -80,7 +122,7 @@ public class BrawlHud : MonoBehaviour
     /// itself by name as it starts, so a spectator can READ the fight —
     /// half the fun of watching is knowing the crescent kick was one.
     /// </summary>
-    Text BuildMoveCaption(Transform parent, bool left, Color color)
+    Text BuildMoveCaption(Transform parent, bool left, Color color, float inset)
     {
         float sign = left ? 1f : -1f;
         var anchor = new Vector2(left ? 0f : 1f, 1f);
@@ -89,7 +131,7 @@ public class BrawlHud : MonoBehaviour
         var rect = caption.rectTransform;
         rect.anchorMin = rect.anchorMax = anchor;
         rect.pivot = anchor;
-        rect.anchoredPosition = new Vector2(sign * 44f, -102f);
+        rect.anchoredPosition = new Vector2(sign * (44f + inset), -102f);
         rect.sizeDelta = new Vector2(480, 32);
         caption.alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
         caption.gameObject.SetActive(false);
@@ -111,7 +153,7 @@ public class BrawlHud : MonoBehaviour
     }
 
     RectTransform BuildBar(Transform parent, bool left, string name, Color color,
-        out RectTransform ghost, out Image[] pips)
+        float inset, out RectTransform ghost, out Image[] pips)
     {
         float sign = left ? 1f : -1f;
         var anchor = new Vector2(left ? 0f : 1f, 1f);
@@ -120,7 +162,7 @@ public class BrawlHud : MonoBehaviour
         var backRect = back.rectTransform;
         backRect.anchorMin = backRect.anchorMax = anchor;
         backRect.pivot = anchor;
-        backRect.anchoredPosition = new Vector2(sign * 40f, -34f);
+        backRect.anchoredPosition = new Vector2(sign * (40f + inset), -34f);
         backRect.sizeDelta = new Vector2(BarWidth, BarHeight);
 
         // Ghost under fill: it lingers at the old health and eases down, so
@@ -132,7 +174,7 @@ public class BrawlHud : MonoBehaviour
         var labelRect = label.rectTransform;
         labelRect.anchorMin = labelRect.anchorMax = anchor;
         labelRect.pivot = anchor;
-        labelRect.anchoredPosition = new Vector2(sign * 44f, -70f);
+        labelRect.anchoredPosition = new Vector2(sign * (44f + inset), -70f);
         labelRect.sizeDelta = new Vector2(400, 28);
         label.alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
 
@@ -143,7 +185,7 @@ public class BrawlHud : MonoBehaviour
             var pipRect = pip.rectTransform;
             pipRect.anchorMin = pipRect.anchorMax = anchor;
             pipRect.pivot = anchor;
-            pipRect.anchoredPosition = new Vector2(sign * (44f + 410f + i * 34f), -70f);
+            pipRect.anchoredPosition = new Vector2(sign * (44f + inset + 410f + i * 34f), -70f);
             pipRect.sizeDelta = new Vector2(22, 22);
             pipRect.localRotation = Quaternion.Euler(0, 0, 45f);
             pips[i] = pip;
@@ -237,7 +279,8 @@ public class BrawlHud : MonoBehaviour
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(1f, 1f);
-        rect.anchoredPosition = new Vector2(-40f, -116f);
+        // Below the portrait frame, which owns the corner itself.
+        rect.anchoredPosition = new Vector2(-40f, -130f);
         rect.sizeDelta = new Vector2(46f, 46f);
 
         var button = image.gameObject.AddComponent<Button>();
@@ -323,9 +366,16 @@ public class BrawlHud : MonoBehaviour
         _magentaShown = magenta;
     }
 
+    int _lastTimerShown = -1;
+
     public void SetTimer(float seconds)
     {
         int shown = Mathf.Max(0, Mathf.CeilToInt(seconds));
+        // The last ten seconds pop on every tick — the clock must be
+        // impossible to miss once it matters.
+        if (shown != _lastTimerShown && shown <= 10)
+            _timer.transform.localScale = Vector3.one * 1.4f;
+        _lastTimerShown = shown;
         _timer.text = shown.ToString();
         _timer.color = shown <= 10 ? new Color(1f, 0.35f, 0.3f) : Color.white;
     }
@@ -394,6 +444,9 @@ public class BrawlHud : MonoBehaviour
         Scale(_magentaFill, _magentaShown, fast, ref _magentaShownLerp);
         Scale(_cyanGhost, _cyanShown, slow, ref _cyanGhostShown);
         Scale(_magentaGhost, _magentaShown, slow, ref _magentaGhostShown);
+
+        _timer.transform.localScale = Vector3.Lerp(
+            _timer.transform.localScale, Vector3.one, 1f - Mathf.Exp(-8f * dt));
 
         if (_announcement.gameObject.activeSelf)
         {
