@@ -211,6 +211,27 @@ public class EnergyShield : MonoBehaviour
         OnDeRezzed?.Invoke();
     }
 
+    /// <summary>
+    /// True while a gunfight (Player v AI, AI v AI, Online) is the active mode.
+    /// Gunfight shields do NOT auto-heal: damage there is meant to be spent,
+    /// not waited out — ducking behind a crate for three seconds should not
+    /// undo a fight. Recovery comes from Repair Pack airdrops and the full
+    /// refill on re-materializing. Every other mode (Dogfight, Commander,
+    /// Tank Raid…) keeps the regen its balance was tuned around.
+    /// </summary>
+    static bool GunfightActive
+    {
+        get
+        {
+            var controller = GameModeController.Instance;
+            if (controller == null)
+                return false;
+            var mode = controller.Mode;
+            return mode == GameMode.PlayerVsAI || mode == GameMode.AIvAI
+                || mode == GameMode.OnlinePvP;
+        }
+    }
+
     void Update()
     {
         if (HasOvershield && Time.time >= _overshieldUntil)
@@ -219,7 +240,8 @@ public class EnergyShield : MonoBehaviour
         // A remote player's mirror never regenerates on its own: their client
         // owns that value in both directions, and local regen would creep the
         // enemy's bar back up between broadcasts.
-        if (!remoteProxy && !IsDown && Current < maxShield && Time.time - _lastHitTime > regenDelay)
+        if (!remoteProxy && !IsDown && !GunfightActive
+            && Current < maxShield && Time.time - _lastHitTime > regenDelay)
             Current = Mathf.Min(maxShield, Current + regenPerSecond * Time.deltaTime);
     }
 }
