@@ -107,8 +107,15 @@ public class TankPawn : MonoBehaviour
     /// <summary>Where the guns come out. Rides the barrel on a turreted tank.</summary>
     public Transform Muzzle { get; private set; }
 
-    /// <summary>Body radius, for keeping pawns out of each other and for aiming.</summary>
+    /// <summary>Body radius, for the field fence and for aiming.</summary>
     public float Radius { get; private set; } = 1.4f;
+
+    // The hull's actual footprint, for contact. One circle has to choose
+    // between the width (nose and tail hang out and clip through crates) and
+    // the length (everything is held a hull-length off a tank it passes);
+    // circles of the half-width, walked along the hull, trace the real shape.
+    float _probeRadius = 1f;    // each circle: the hull's half-width
+    float _probeReach;          // nose/tail circle offset from centre; 0 on a round body
 
     /// <summary>Aim height — the middle of the hull, not its feet.</summary>
     public Vector3 Center => transform.position + Vector3.up * (Radius * 0.8f);
@@ -241,6 +248,11 @@ public class TankPawn : MonoBehaviour
         capsule.radius = Mathf.Max(0.75f, box.extents.x * 1.05f);
         capsule.height = Mathf.Max(height, capsule.radius * 2f);
         capsule.center = new Vector3(0f, capsule.height * 0.5f, 0f);
+
+        pawn._probeRadius = capsule.radius;
+        // After the nose-forward turn the length lies along Z, so this is how
+        // far past the centre circle the hull actually reaches.
+        pawn._probeReach = Mathf.Max(0f, box.extents.z - capsule.radius);
 
         pawn.Shield = go.AddComponent<EnergyShield>();
         pawn.Shield.maxShield = maxShield;
@@ -582,7 +594,7 @@ public class TankPawn : MonoBehaviour
                 DriveLegs(heading, dt);
 
             transform.position = TankField.Clamp(transform.position, Radius);
-            Separate(dt);
+            Separate();
             AvoidScenery();
             // Flat ground: the field is a deck at y = 0 and nothing in this mode
             // climbs, so there is no surface query worth making.
@@ -676,32 +688,86 @@ public class TankPawn : MonoBehaviour
         }
     }
 
+    static readonly Vector3[] MyCircles = new Vector3[3];
+    static readonly Vector3[] TheirCircles = new Vector3[3];
+
     /// <summary>
-    /// Keep pawns out of each other. A push, not a collision: everything here
-    /// moves by writing its own transform, so two tanks driving into the same
-    /// square would simply occupy it. Cheap enough to run unconditionally with a
-    /// couple of dozen pawns on the field.
+    /// This hull's footprint circles, written into <paramref name="into"/>:
+    /// the centre, plus nose and tail for a body meaningfully longer than it
+    /// is wide. Returns how many were written.
     /// </summary>
-    void Separate(float dt)
+    int FootprintCircles(Vector3[] into)
     {
-        Vector3 push = Vector3.zero;
-        foreach (var other in Live)
-        {
-            if (other == null || other == this)
-                continue;
-            Vector3 gap = transform.position - other.transform.position;
-            gap.y = 0f;
-            float want = Radius + other.Radius;
-            float distance = gap.magnitude;
-            if (distance >= want || distance < 1e-4f)
-                continue;
-            push += gap / distance * (want - distance);
-        }
-        if (push.sqrMagnitude > 1e-6f)
-            transform.position += Vector3.ClampMagnitude(push, 3f) * (6f * dt);
+        into[0] = transform.position;
+        if (_probeReach < 0.05f)
+            return 1;
+        Vector3 along = transform.forward * _probeReach;
+        into[1] = transform.position + along;
+        into[2] = transform.position - along;
+        return 3;
     }
 
-    static readonly Collider[] SceneryProbe = new Collider[12];
+    /// <summary>
+    /// Keep pawns out of each other. Everything here moves by writing its own
+    /// transform, so Unity's collision response never runs and two tanks
+    /// driving into the same square would simply occupy it.
+    ///
+    /// Resolved POSITIONALLY, not as a spring: the deepest circle-pair overlap
+    /// with each neighbour is undone outright, half here and half by the
+    /// neighbour's own pass (all of it here when the neighbour is a structure,
+    /// which never moves). The old velocity-style push was tuned soft enough
+    /// that anything driving at full speed simply out-ran it and sat inside
+    /// whatever it hit. Capped per frame so a pile that spawns overlapped
+    /// spreads over a few frames instead of detonating.
+    /// </summary>
+    void Separate()
+    {
+        Vector3 resolve = Vector3.zero;
+        int mine = FootprintCircles(MyCircles);
+        foreach (var other in Live)
+        {
+            // A wrecked pawn still in the list is the hero's faded-out body
+            // waiting on a continue — not something live traffic should be
+            // shoved around by.
+            if (other == null || other == this || other._wrecked)
+                continue;
+            int theirs = other.FootprintCircles(TheirCircles);
+            float want = _probeRadius + other._probeRadius;
+            float deepest = 0f;
+            Vector3 direction = Vector3.zero;
+            for (int i = 0; i < mine; i++)
+                for (int j = 0; j < theirs; j++)
+                {
+                    Vector3 gap = MyCircles[i] - TheirCircles[j];
+                    gap.y = 0f;
+                    float distance = gap.magnitude;
+                    if (distance >= want)
+                        continue;
+                    float depth = want - distance;
+                    if (depth <= deepest)
+                        continue;
+                    deepest = depth;
+                    if (distance > 1e-4f)
+                        direction = gap / distance;
+                    else
+                    {
+                        // Dead centre on top of each other: any flat way out
+                        // beats none, and sideways clears a head-on fastest.
+                        Vector3 apart = Flat(transform.position - other.transform.position);
+                        direction = apart.sqrMagnitude > 1e-6f ? apart.normalized
+                            : Flat(transform.right).normalized;
+                    }
+                }
+            if (deepest <= 0f)
+                continue;
+            float share = other.Kind == Chassis.Structure ? 1f : 0.5f;
+            resolve += direction * (deepest * share);
+        }
+        if (resolve.sqrMagnitude > 1e-8f)
+            transform.position += Vector3.ClampMagnitude(resolve, 1.5f);
+    }
+
+    static readonly Collider[] SceneryProbe = new Collider[16];
 
     /// <summary>
     /// Stay out of the rocks.
@@ -719,37 +785,44 @@ public class TankPawn : MonoBehaviour
     /// </summary>
     void AvoidScenery()
     {
-        Vector3 probe = transform.position + Vector3.up * 0.6f;
-        int count = Physics.OverlapSphereNonAlloc(probe, Radius, SceneryProbe, ~0,
-            QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < count; i++)
+        // One overlap query per footprint circle, so the nose and tail meet a
+        // crate where the mesh does instead of sailing through until the hull's
+        // centre arrives. Circles are re-derived each pass because resolving
+        // one contact moves the pawn every other circle hangs off.
+        for (int c = 0; c < 3; c++)
         {
-            var collider = SceneryProbe[i];
-            if (collider == null || collider.transform.root == transform)
-                continue;
-            if (collider.GetComponentInParent<TankPawn>() != null)
-                continue;                       // another pawn: Separate owns that
-            Vector3 away = probe - collider.ClosestPoint(probe);
-            away.y = 0f;
-            float distance = away.magnitude;
-            if (distance < 1e-4f)
-                continue;
-            Vector3 resolve = away / distance * (Radius - distance);
+            if (c >= FootprintCircles(MyCircles))
+                break;
+            Vector3 probe = MyCircles[c] + Vector3.up * 0.6f;
+            int count = Physics.OverlapSphereNonAlloc(probe, _probeRadius, SceneryProbe, ~0,
+                QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                var collider = SceneryProbe[i];
+                if (collider == null || collider.transform.root == transform)
+                    continue;
+                if (collider.GetComponentInParent<TankPawn>() != null)
+                    continue;                   // another pawn: Separate owns that
+                Vector3 away = probe - collider.ClosestPoint(probe);
+                away.y = 0f;
+                float distance = away.magnitude;
+                if (distance < 1e-4f || distance >= _probeRadius)
+                    continue;
+                Vector3 resolve = away / distance * (_probeRadius - distance);
 
-            // Street blocks split the contact instead of winning it: the
-            // block takes its material's share by moving, the hull takes the
-            // rest. A crate parts around a driving tank, masonry grinds
-            // aside, stone still mostly says no — and berms, spires and
-            // outposts keep saying it entirely.
-            var block = collider.GetComponentInParent<TankBlock>();
-            if (block != null)
-            {
-                block.Push(-resolve * block.PushShare);
-                transform.position += resolve * (1f - block.PushShare);
-            }
-            else
-            {
+                // Street blocks split the contact instead of winning it: the
+                // block takes its material's share by moving, the hull takes the
+                // rest. A crate parts around a driving tank, masonry grinds
+                // aside, stone still mostly says no — and berms, spires and
+                // outposts keep saying it entirely.
+                var block = collider.GetComponentInParent<TankBlock>();
+                if (block != null)
+                {
+                    block.Push(-resolve * block.PushShare);
+                    resolve *= 1f - block.PushShare;
+                }
                 transform.position += resolve;
+                probe += resolve;
             }
         }
     }
