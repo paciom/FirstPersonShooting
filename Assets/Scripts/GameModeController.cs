@@ -1088,6 +1088,21 @@ public class GameModeController : MonoBehaviour
     /// </summary>
     public void StartTankRaidWar() => StartTankRaidMode(playerDrives: false);
 
+    /// <summary>
+    /// The over panel's DRIVE AGAIN: the same robot, the same seat, a fresh
+    /// run. A full Teardown-then-Begin rather than any in-place reset, so it
+    /// can never disagree with what entering the mode normally builds.
+    /// </summary>
+    public void RestartTankRaid()
+    {
+        if (_tankRaid == null)
+            return;
+        bool playerDrives = Mode != GameMode.TankRaidWar;
+        _tankRaid.Teardown();
+        _tankRaid = null;
+        StartTankRaidMode(playerDrives);
+    }
+
     void StartTankRaidMode(bool playerDrives)
     {
         Mode = playerDrives ? GameMode.TankRaid : GameMode.TankRaidWar;

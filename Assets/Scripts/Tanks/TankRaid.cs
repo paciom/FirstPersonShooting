@@ -209,6 +209,7 @@ public class TankRaid : MonoBehaviour
         _director.Follow(_hero.transform);
 
         _hud = TankRaidHud.Build(transform);
+        _hud.OnRestart = Restart;
         _hud.SetLives(_lives);
         _hud.SetProgress(0, 0);
         // No thumb sticks in AI v AI — there is nothing for a thumb to do, and a
@@ -243,7 +244,15 @@ public class TankRaid : MonoBehaviour
 
     void Update()
     {
-        if (!_running || _hero == null)
+        if (!_running)
+        {
+            // The over panel is up (the only way _running goes false while this
+            // object still exists). ENTER or R restarts without the mouse.
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.R))
+                Restart();
+            return;
+        }
+        if (_hero == null)
             return;
 
         float dt = Time.deltaTime;
@@ -727,6 +736,20 @@ public class TankRaid : MonoBehaviour
     }
 
     // --------------------------------------------------------------- lifecycle
+
+    /// <summary>
+    /// DRIVE AGAIN, from the over panel. Routed through the controller's full
+    /// teardown-and-begin rather than resetting fields in place: the run's
+    /// state is spread across pawns, pickups, boons, the field's frontier and
+    /// the camera, and the one code path guaranteed to reset all of it is the
+    /// one that already builds a fresh run from nothing.
+    /// </summary>
+    void Restart()
+    {
+        var controller = GetComponentInParent<GameModeController>();
+        if (controller != null)
+            controller.RestartTankRaid();
+    }
 
     public void Teardown()
     {

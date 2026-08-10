@@ -42,6 +42,9 @@ public class TankRaidHud : MonoBehaviour
     GameObject _over;
     Text _overBody;
 
+    /// <summary>The over panel's DRIVE AGAIN button. Wired by the mode.</summary>
+    public System.Action OnRestart;
+
     public static TankRaidHud Build(Transform parent)
     {
         var go = new GameObject("TankRaidHud");
@@ -250,14 +253,41 @@ public class TankRaidHud : MonoBehaviour
         _overBody = Label(_over.transform, "OverBody", "", 30, Color.white, FontStyle.Normal,
             new Vector2(0.5f, 0.5f), new Vector2(0f, 16f), new Vector2(700f, 100f));
 
+        // DRIVE AGAIN. The Box helper turns raycasts off (nothing else on this
+        // HUD is clickable), so this one is built by hand with them on.
+        var again = new GameObject("AgainButton");
+        again.transform.SetParent(_over.transform, false);
+        var face = again.AddComponent<Image>();
+        face.sprite = MainMenu.RoundedTile();
+        face.type = Image.Type.Sliced;
+        face.color = Warn;
+        var rect = face.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0f, -92f);
+        rect.sizeDelta = new Vector2(320f, 72f);
+
+        var button = again.AddComponent<Button>();
+        button.targetGraphic = face;
+        var colors = button.colors;
+        colors.highlightedColor = new Color(1.25f, 1.25f, 1.25f, 1f);
+        colors.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+        button.colors = colors;
+        button.onClick.AddListener(() => OnRestart?.Invoke());
+
+        var caption = Label(again.transform, "AgainLabel", "DRIVE AGAIN", 30,
+            new Color(0.08f, 0.07f, 0.03f), FontStyle.Bold,
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(320f, 72f));
+        // The one label that must not swallow the click meant for its button.
+        caption.raycastTarget = false;
+
         _over.SetActive(false);
     }
 
     /// <summary>
-    /// The end of a run. Buttons are deliberately absent: this mode is entered
-    /// from the menu and left with ESC or the MENU button, and a panel with its
-    /// own PLAY AGAIN would be a second, competing way out of a mode that
-    /// already has one.
+    /// The end of a run: the haul, the record, and DRIVE AGAIN. Restarting from
+    /// the panel matters because the alternative is ESC, menu, card, robot pick
+    /// — a four-stop trip back to a game the player was in one second ago.
     /// </summary>
     public void ShowOver(int metres, int wrecks, int outposts, int best)
     {
