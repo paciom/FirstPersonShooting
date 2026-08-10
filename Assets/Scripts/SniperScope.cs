@@ -48,6 +48,10 @@ public class SniperScope : MonoBehaviour
     CanvasGroup _group;
     Text _readout;
     EnergyShield _shield;
+    AimAssist _assist;
+    RectTransform _lock;
+    CanvasGroup _lockGroup;
+    RectTransform _canvasRect;
 
     static Sprite _lensMask;
 
@@ -56,6 +60,9 @@ public class SniperScope : MonoBehaviour
         _camera = GetComponentInChildren<Camera>(true);
         if (_camera != null)
             _baseFov = _camera.fieldOfView;
+        // Not the assist: PlayerBrain adds this component and that one in the
+        // same Awake, so at this point ours may be the one that exists yet.
+        // Looked up on first use instead.
 
         // De-rezzing while scoped would come back zoomed with no way to tell why.
         _shield = GetComponent<EnergyShield>();
@@ -103,9 +110,54 @@ public class SniperScope : MonoBehaviour
         float zoomed = Mathf.InverseLerp(_baseFov, zoomedFov, _camera.fieldOfView);
         _group.alpha = zoomed;
         if (!IsScoped && zoomed <= 0.001f)
+        {
             _overlay.SetActive(false);
-        else if (_readout != null)
+            return;
+        }
+        if (_readout != null)
             _readout.text = $"{Magnification:0.#}x";
+        UpdateLock();
+    }
+
+    /// <summary>
+    /// Puts the bracket on whatever the aim assist has hold of.
+    ///
+    /// The bracket exists so the help is legible. An assist the player cannot
+    /// see is one they cannot trust — a shot that lands feels like luck and a
+    /// crosshair that slides feels like a bug. With the brackets on the robot
+    /// it is reading, both become obviously deliberate, and the player learns
+    /// the one thing they need to know: get it near, and it will take it.
+    /// </summary>
+    void UpdateLock()
+    {
+        if (_lock == null)
+            return;
+        if (_assist == null)
+            _assist = GetComponent<AimAssist>();
+
+        var target = _assist != null ? _assist.Target : null;
+        if (target == null)
+        {
+            _lockGroup.alpha = Mathf.MoveTowards(_lockGroup.alpha, 0f, 6f * Time.deltaTime);
+            return;
+        }
+
+        Vector3 screen = _camera.WorldToScreenPoint(_assist.TargetPoint);
+        if (screen.z <= 0f)
+        {
+            _lockGroup.alpha = 0f;
+            return;
+        }
+
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvasRect, screen, null, out Vector2 local);
+        _lock.anchoredPosition = local;
+
+        // Brighter the more of the aim the assist is actually taking, so the
+        // player can see the difference between "I could help with that one"
+        // and "I am helping right now".
+        _lockGroup.alpha = Mathf.MoveTowards(_lockGroup.alpha,
+            0.45f + 0.55f * _assist.Engagement, 8f * Time.deltaTime);
     }
 
     void BuildOverlay()
@@ -125,6 +177,9 @@ public class SniperScope : MonoBehaviour
         _group.alpha = 0f;
         _group.blocksRaycasts = false;
         _group.interactable = false;
+        // The scaler works in reference units; the lock bracket is placed from
+        // real screen pixels, so it needs the canvas rect to convert through.
+        _canvasRect = _overlay.GetComponent<RectTransform>();
 
         // Darkened surround with the lens punched out of it. Stretched to the
         // screen, so the lens is an ellipse on a wide display — which is what a
@@ -149,6 +204,46 @@ public class SniperScope : MonoBehaviour
             new Vector2(0f, -300f), new Vector2(200f, 34f));
         MakeText(_overlay.transform, "Label", "SNIPER  SCOPE", 20,
             new Vector2(0f, 300f), new Vector2(400f, 30f));
+
+        BuildLock();
+    }
+
+    /// <summary>
+    /// Four corner ticks around the locked robot. Corners rather than a box:
+    /// a closed rectangle over a distant robot hides the robot, and the whole
+    /// point of the scope is seeing it.
+    ///
+    /// Built last so it draws over the crosshair — the bracket and the spokes
+    /// meet at the same place the moment the assist has finished its work, and
+    /// the one that should read on top is the one that says "on target".
+    /// </summary>
+    void BuildLock()
+    {
+        var go = new GameObject("Lock");
+        go.transform.SetParent(_overlay.transform, false);
+        _lock = go.AddComponent<RectTransform>();
+        _lock.anchorMin = _lock.anchorMax = new Vector2(0.5f, 0.5f);
+        _lock.sizeDelta = Vector2.zero;
+        _lockGroup = go.AddComponent<CanvasGroup>();
+        _lockGroup.alpha = 0f;
+        _lockGroup.blocksRaycasts = false;
+
+        const float reach = 46f, thickness = 3f, arm = 18f;
+        for (int corner = 0; corner < 4; corner++)
+        {
+            float sx = (corner & 1) == 0 ? -1f : 1f;
+            float sy = (corner & 2) == 0 ? -1f : 1f;
+            Tick(new Vector2(sx * (reach - arm * 0.5f), sy * reach), new Vector2(arm, thickness));
+            Tick(new Vector2(sx * reach, sy * (reach - arm * 0.5f)), new Vector2(thickness, arm));
+        }
+    }
+
+    void Tick(Vector2 position, Vector2 size)
+    {
+        var image = MakeImage(_lock, "Tick", reticleColor);
+        image.rectTransform.anchorMin = image.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        image.rectTransform.anchoredPosition = position;
+        image.rectTransform.sizeDelta = size;
     }
 
     void Spoke(Vector2 position, Vector2 size)
