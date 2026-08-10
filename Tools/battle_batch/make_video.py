@@ -24,7 +24,10 @@ from songs_c import SONGS_C
 HERE = os.path.dirname(os.path.abspath(__file__))
 POOL = os.path.join(HERE, "pool")
 RENDERS = r"D:\Claude\FirstPersongShooting\Renders"
-SONGS = SONGS_A + SONGS_B + SONGS_C
+# Deal only from songs whose audio actually exists — the pool can run short
+# of the full 60 when MiniMax credits run out mid-batch.
+SONGS = [song for song in SONGS_A + SONGS_B + SONGS_C
+         if os.path.exists(os.path.join(POOL, song["id"] + ".mp3"))]
 TITLE = {song["id"]: song["title"] for song in SONGS}
 FADE = 2.0
 CARD = 4.0
@@ -50,7 +53,7 @@ def main():
     effective = 0.0
     j = 0
     while effective < target:
-        song = SONGS[(3 * (index - 1) + 13 * j) % 60]["id"]
+        song = SONGS[(3 * (index - 1) + 13 * j) % len(SONGS)]["id"]
         length = duration(os.path.join(POOL, song + ".mp3"))
         picks.append([song, length])
         effective = sum(p[1] for p in picks) - FADE * (len(picks) - 1)

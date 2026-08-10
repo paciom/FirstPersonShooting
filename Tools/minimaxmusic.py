@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -50,11 +51,21 @@ def generate(key, model, prompt, lyrics, instrumental):
         payload["is_instrumental"] = True
     else:
         payload["lyrics"] = lyrics
-    reply = call(key, payload)
-    base = reply.get("base_resp") or {}
-    if base.get("status_code") not in (0, None):
-        return None, f"{base['status_code']}: {base.get('status_msg')}"
-    return reply, None
+    # Rate limits are a wait, not a refusal — falling down the model ladder
+    # on 1002 just burns the next model's quota too (that mistake cost half
+    # a 60-song batch). Back off and retry the SAME model.
+    for attempt in range(12):
+        reply = call(key, payload)
+        base = reply.get("base_resp") or {}
+        code = base.get("status_code")
+        if code in (0, None):
+            return reply, None
+        message = f"{code}: {base.get('status_msg')}"
+        if "rate limit" not in (base.get("status_msg") or "").lower():
+            return None, message
+        print(f"  rate limited, waiting 60s ({attempt + 1}/12)", flush=True)
+        time.sleep(60)
+    return None, message
 
 
 def main():
