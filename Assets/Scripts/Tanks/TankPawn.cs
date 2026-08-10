@@ -713,12 +713,16 @@ public class TankPawn : MonoBehaviour
     /// driving into the same square would simply occupy it.
     ///
     /// Resolved POSITIONALLY, not as a spring: the deepest circle-pair overlap
-    /// with each neighbour is undone outright, half here and half by the
-    /// neighbour's own pass (all of it here when the neighbour is a structure,
-    /// which never moves). The old velocity-style push was tuned soft enough
-    /// that anything driving at full speed simply out-ran it and sat inside
-    /// whatever it hit. Capped per frame so a pile that spawns overlapped
-    /// spreads over a few frames instead of detonating.
+    /// with each neighbour is undone outright — the WHOLE depth, by whichever
+    /// pawn measures it. Not split half-and-half: Updates run sequentially, so
+    /// the first pawn to look clears the contact and the second finds nothing
+    /// left to do. A split sounds fairer but leaves a standing half-overlap
+    /// whenever the neighbour cannot honour its share — pinned against the
+    /// fence (whose clamp runs before this and undoes any yield), or pressed
+    /// from behind in a column jam. The old velocity-style push was worse
+    /// still: tuned soft enough that anything driving at full speed simply
+    /// out-ran it. Capped per frame so a pile that spawns overlapped spreads
+    /// over a few frames instead of detonating.
     /// </summary>
     void Separate()
     {
@@ -760,8 +764,7 @@ public class TankPawn : MonoBehaviour
                 }
             if (deepest <= 0f)
                 continue;
-            float share = other.Kind == Chassis.Structure ? 1f : 0.5f;
-            resolve += direction * (deepest * share);
+            resolve += direction * deepest;
         }
         if (resolve.sqrMagnitude > 1e-8f)
             transform.position += Vector3.ClampMagnitude(resolve, 1.5f);
