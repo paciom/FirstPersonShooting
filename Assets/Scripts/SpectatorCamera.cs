@@ -54,6 +54,13 @@ public class SpectatorCamera : MonoBehaviour
     /// <summary>Smoothed detour around blockers, added to the orbit angle.</summary>
     float _angleOffset;
 
+    /// <summary>
+    /// Subject whose death has already been put on screen, so the overlay
+    /// fires once per life — when every bot is down PickSubject can leave the
+    /// dead subject in place for many frames.
+    /// </summary>
+    Transform _deathAnnounced;
+
     // Character roots are skipped by the occlusion probe: a robot crossing frame
     // should not yank the camera in. Refreshed on a slow tick because teams gain
     // robots mid-match (gold-funded reinforcements).
@@ -73,7 +80,18 @@ public class SpectatorCamera : MonoBehaviour
         // orbiting an invisible robot makes for bad television.
         if (Time.time >= _nextSwitch || _subject == null || !_subject.gameObject.activeInHierarchy
             || (_subjectShield != null && _subjectShield.IsDown))
+        {
+            // Say WHY the shot is ending before it ends: a cut on a death
+            // without the overlay reads as the director getting bored, not as
+            // the robot the viewer was watching being gone.
+            if (_subject != null && _subjectShield != null && _subjectShield.IsDown
+                && _subject != _deathAnnounced)
+            {
+                _deathAnnounced = _subject;
+                DeathScreen.SpectatorSubjectDied(_subject, _subjectShield);
+            }
             PickSubject();
+        }
         if (_subject == null)
             return;
 
@@ -281,5 +299,8 @@ public class SpectatorCamera : MonoBehaviour
         // A cut is the one moment a big angle change is free, so start the new
         // shot from a clean offset instead of inheriting the last detour.
         _angleOffset = 0f;
+        // Fresh subject, fresh announcement rights — the same robot can die
+        // again on a later shot and deserves its overlay again.
+        _deathAnnounced = null;
     }
 }
