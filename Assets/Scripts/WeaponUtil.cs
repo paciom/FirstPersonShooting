@@ -80,6 +80,14 @@ public static class WeaponUtil
             block.TakeHit(damage, point);
             return;
         }
+        // Tank Raid's street furniture: brick crumbles, crates splinter,
+        // stone just takes the shot.
+        var street = collider.GetComponentInParent<TankBlock>();
+        if (street != null)
+        {
+            street.TakeHit(damage, point);
+            return;
+        }
         collider.GetComponentInParent<TreasureDrop>()?.TakeHit(damage, point);
     }
 

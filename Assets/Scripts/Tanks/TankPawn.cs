@@ -734,7 +734,23 @@ public class TankPawn : MonoBehaviour
             float distance = away.magnitude;
             if (distance < 1e-4f)
                 continue;
-            transform.position += away / distance * (Radius - distance);
+            Vector3 resolve = away / distance * (Radius - distance);
+
+            // Street blocks split the contact instead of winning it: the
+            // block takes its material's share by moving, the hull takes the
+            // rest. A crate parts around a driving tank, masonry grinds
+            // aside, stone still mostly says no — and berms, spires and
+            // outposts keep saying it entirely.
+            var block = collider.GetComponentInParent<TankBlock>();
+            if (block != null)
+            {
+                block.Push(-resolve * block.PushShare);
+                transform.position += resolve * (1f - block.PushShare);
+            }
+            else
+            {
+                transform.position += resolve;
+            }
         }
     }
 

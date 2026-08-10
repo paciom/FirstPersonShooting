@@ -220,19 +220,46 @@ public class TankField : MonoBehaviour
 
         var roll = new System.Random(index * 7919 + 13);
         var rock = ArenaMaterials.Lit("tank-rock", RockGrey, 0.18f);
+        var brick = ArenaMaterials.Surface("tank-brick",
+            new Color(0.42f, 0.20f, 0.14f), new Color(0.58f, 0.32f, 0.20f), 2.5f, 0.8f);
+        var wood = ArenaMaterials.Surface("tank-wood",
+            new Color(0.38f, 0.26f, 0.14f), new Color(0.55f, 0.40f, 0.22f), 2f, 0.7f);
         var crystal = ArenaMaterials.Emissive("tank-crystal", CrystalTeal, 1.5f);
 
+        // Street furniture in three materials, all pushable (see TankBlock):
+        // stone the anchor cover, brick the cover shells re-landscape, wood
+        // the crates a hull just drives through. Kind is part of the band's
+        // seeded identity like everything else here.
         int blocks = 2 + roll.Next(0, 4);
         for (int i = 0; i < blocks; i++)
         {
             float x = (float)(roll.NextDouble() * 2.0 - 1.0) * (HalfWidth - 3f);
             float z = (float)roll.NextDouble() * BandLength;
-            float w = 1.8f + (float)roll.NextDouble() * 3.4f;
-            float h = 1.2f + (float)roll.NextDouble() * 2.6f;
-            float d = 1.8f + (float)roll.NextDouble() * 3.4f;
-            var block = Box(scatter, "Rock", new Vector3(x, h * 0.5f, z),
-                new Vector3(w, h, d), rock, collide: true);
-            block.localRotation = Quaternion.Euler(0f, (float)roll.NextDouble() * 90f, 0f);
+            int kindRoll = roll.Next(0, 10);
+            TankBlockKind kind = kindRoll < 4 ? TankBlockKind.Rock
+                : kindRoll < 7 ? TankBlockKind.Brick : TankBlockKind.Wood;
+
+            Transform block;
+            if (kind == TankBlockKind.Wood)
+            {
+                // Crates: small, near-cubic, factory-square — yaw stays shy.
+                float side = 1.2f + (float)roll.NextDouble() * 1f;
+                block = Box(scatter, "Wood", new Vector3(x, side * 0.5f, z),
+                    new Vector3(side, side, side), wood, collide: true);
+                block.localRotation = Quaternion.Euler(0f, (float)roll.NextDouble() * 18f, 0f);
+            }
+            else
+            {
+                float w = 1.8f + (float)roll.NextDouble() * (kind == TankBlockKind.Brick ? 2.2f : 3.4f);
+                float h = 1.2f + (float)roll.NextDouble() * 2.2f;
+                float d = 1.8f + (float)roll.NextDouble() * (kind == TankBlockKind.Brick ? 2.2f : 3.4f);
+                block = Box(scatter, kind.ToString(), new Vector3(x, h * 0.5f, z),
+                    new Vector3(w, h, d), kind == TankBlockKind.Brick ? brick : rock,
+                    collide: true);
+                block.localRotation = Quaternion.Euler(0f,
+                    (float)roll.NextDouble() * (kind == TankBlockKind.Brick ? 20f : 90f), 0f);
+            }
+            block.gameObject.AddComponent<TankBlock>().Configure(kind);
         }
 
         // One crystal spire every few bands: a landmark, and the only thing on
