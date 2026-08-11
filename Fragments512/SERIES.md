@@ -43,6 +43,6 @@ from a new space entity.
 |-----|-------|---------------------------------------|--------|
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
 
-Episode 1 verified: counter text rendered crisply, voice line confirmed by
-STT ("Fragment 1 secured."), lattice close extracted to
-`anchor_lattice_frame.png` — pin it with --last-frame on future episodes.
+Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
+voice line confirmed by STT, no moons, nose-first flight, single cube in the
+close. (v1's lattice close and anchor_lattice_frame.png are retired.)
