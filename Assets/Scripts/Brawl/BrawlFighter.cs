@@ -526,7 +526,8 @@ public class BrawlFighter : MonoBehaviour
             Phase = State.Air;
             _verticalVelocity = BrawlMoveSet.JumpVelocity;
             _airVelocity = new Vector3(intent.move.x, 0f, intent.move.y) * BrawlMoveSet.WalkSpeed;
-            BrawlAudio.Play(BrawlAudio.Id.Jump, transform.position, 0.4f);
+            // Silent by design, like the swings: the jump clip was the same
+            // whoosh, and robots jump constantly — only impacts speak.
             return;
         }
 
@@ -983,7 +984,8 @@ public class BrawlFighter : MonoBehaviour
             Phase = State.Air;
             _airVelocity = Vector3.zero;
             _verticalVelocity = velocity;
-            BrawlAudio.Play(BrawlAudio.Id.Jump, transform.position, 0.5f);
+            // The geyser's own eruption already sounds; the body it throws
+            // adds nothing.
         }
         else if (Phase == State.Air || Phase == State.AirAttack)
         {
