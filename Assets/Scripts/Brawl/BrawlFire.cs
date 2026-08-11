@@ -60,7 +60,6 @@ public class BrawlFire : MonoBehaviour, BrawlProps.IStrikeable
         fire._groundY = ground;
         fire.BuildComet(ground + 10f);
         fire._warning = fire.BuildWarningRing(stageRoot, x, ground, z);
-        BrawlAudio.Play(BrawlAudio.Id.Whoosh, new Vector3(x, ground + 6f, z), 0.5f);
         BrawlProps.Register(fire);
     }
 

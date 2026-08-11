@@ -133,7 +133,6 @@ public class BrawlRepairKit : MonoBehaviour, BrawlProps.IStrikeable
                 _landed = true;
                 if (_warning != null) { Destroy(_warning); _warning = null; }
                 VfxUtil.SpawnBurst(p, new Color(0.4f, 1f, 0.6f), 8, 2.5f, 0.10f);
-                BrawlAudio.Play(BrawlAudio.Id.Jump, p, 0.4f);
             }
             transform.position = p;
             return;

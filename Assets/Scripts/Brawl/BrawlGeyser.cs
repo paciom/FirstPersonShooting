@@ -75,8 +75,9 @@ public class BrawlGeyser : MonoBehaviour
                 {
                     _stage = Stage.Warning;
                     _clock = 0f;
-                    _steamEmission.rateOverTime = 14f;   // the wisps
-                    BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position, 0.5f);
+                    // The wisps alone warn — the synthetic whoosh is banned
+                    // from the bout's soundscape, only impacts speak.
+                    _steamEmission.rateOverTime = 14f;
                 }
                 break;
 
@@ -108,7 +109,6 @@ public class BrawlGeyser : MonoBehaviour
     {
         _steamEmission.rateOverTime = 90f;
         _steam.Emit(30);
-        BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position, 0.9f);
         VfxUtil.SpawnBurst(transform.position + Vector3.up * 0.4f,
             new Color(0.9f, 0.97f, 1f), 10, 4.5f, 0.14f);
 
