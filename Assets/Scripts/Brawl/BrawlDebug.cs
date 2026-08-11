@@ -10,8 +10,9 @@ using UnityEngine.Rendering;
 ///
 /// Per part: a translucent fill (ZTest Always — visible through the
 /// robots) plus a wireframe. Green = vital (damage), cyan = graze (sparks
-/// only). The sphere rides the striking limb's bone: yellow through the
-/// swing, red while the hit window is open.
+/// only), and a part flashes BLUE for a beat when a strike actually
+/// touches it. The sphere rides the striking limb's bone: yellow while
+/// the swing is not touching anyone, red the moment it is.
 ///
 /// Top-left: the outcome log (HIT n / BLOCKED / GRAZE / WHIFF) and a perf
 /// line — frame ms, object/particle/light counts — so a bad frame rate
@@ -24,9 +25,15 @@ public class BrawlDebug : MonoBehaviour
     BrawlFighter[] _fighters;
     readonly List<BrawlBodyPart> _parts = new List<BrawlBodyPart>();
     readonly List<GameObject> _fills = new List<GameObject>();
+    readonly Dictionary<BrawlBodyPart, List<MeshRenderer>> _partFills =
+        new Dictionary<BrawlBodyPart, List<MeshRenderer>>();
+    // Struck parts and when their blue flash expires.
+    readonly Dictionary<BrawlBodyPart, float> _struckUntil =
+        new Dictionary<BrawlBodyPart, float>();
     GameObject[] _markers;
     MeshRenderer[] _markerRenderers;
-    Material _vitalMaterial, _grazeMaterial, _swingMaterial, _hotMaterial, _lineMaterial;
+    Material _vitalMaterial, _grazeMaterial, _swingMaterial, _hotMaterial,
+        _struckMaterial, _lineMaterial;
     bool _visible;
     readonly List<string> _log = new List<string>();
 
@@ -52,6 +59,8 @@ public class BrawlDebug : MonoBehaviour
                 debug.Log($"{who} {move.ToString().ToUpperInvariant()} → WHIFF");
             fighter.OnGrazed += label =>
                 debug.Log($"{who} STRIKE → GRAZE ({label})");
+            fighter.OnPartStruck += part =>
+                debug._struckUntil[part] = Time.time + 0.30f;
         }
     }
 
@@ -104,9 +113,28 @@ public class BrawlDebug : MonoBehaviour
             if (striking)
             {
                 _markers[i].transform.position = effector.position;
+                // Red means TOUCHING — the live overlap test, the same one
+                // the strike query runs — yellow is a swing in empty air.
+                var foe = fighter.Opponent;
+                bool touching = foe != null && foe.HasHurtboxes
+                    && BrawlHurtboxes.Query(effector.position,
+                        BrawlMoveSet.StrikeRadius + 0.04f, foe) != null;
                 _markerRenderers[i].sharedMaterial =
-                    fighter.AttackWindowOpen ? _hotMaterial : _swingMaterial;
+                    touching ? _hotMaterial : _swingMaterial;
             }
+        }
+
+        // The struck flash: any part a strike touched holds blue for a
+        // beat, then falls back to its vital/graze colour.
+        foreach (var pair in _partFills)
+        {
+            bool struck = _struckUntil.TryGetValue(pair.Key, out float until)
+                          && Time.time < until;
+            var material = struck ? _struckMaterial
+                : pair.Key != null && pair.Key.Vital ? _vitalMaterial : _grazeMaterial;
+            foreach (var renderer in pair.Value)
+                if (renderer != null && renderer.sharedMaterial != material)
+                    renderer.sharedMaterial = material;
         }
     }
 
@@ -132,6 +160,7 @@ public class BrawlDebug : MonoBehaviour
         _grazeMaterial = Translucent(new Color(0.2f, 0.75f, 1f, 0.18f));
         _swingMaterial = Translucent(new Color(1f, 0.9f, 0.2f, 0.85f));
         _hotMaterial = Translucent(new Color(1f, 0.2f, 0.15f, 0.95f));
+        _struckMaterial = Translucent(new Color(0.15f, 0.35f, 1f, 0.55f));
         _lineMaterial = new Material(Shader.Find("Hidden/Internal-Colored"))
         {
             hideFlags = HideFlags.HideAndDontSave,
@@ -146,8 +175,15 @@ public class BrawlDebug : MonoBehaviour
             foreach (var part in fighter.GetComponentsInChildren<BrawlBodyPart>(true))
             {
                 _parts.Add(part);
+                var renderers = new List<MeshRenderer>();
                 foreach (var collider in part.GetComponents<Collider>())
-                    _fills.Add(BuildFill(part, collider));
+                {
+                    var fill = BuildFill(part, collider);
+                    _fills.Add(fill);
+                    if (fill != null)
+                        renderers.Add(fill.GetComponent<MeshRenderer>());
+                }
+                _partFills[part] = renderers;
             }
         }
 
@@ -240,9 +276,13 @@ public class BrawlDebug : MonoBehaviour
         {
             if (part == null)
                 continue;
-            GL.Color(part.Vital
-                ? new Color(0.3f, 1f, 0.45f, 0.9f)
-                : new Color(0.35f, 0.8f, 1f, 0.8f));
+            bool struck = _struckUntil.TryGetValue(part, out float until)
+                          && Time.time < until;
+            GL.Color(struck
+                ? new Color(0.35f, 0.55f, 1f, 1f)
+                : part.Vital
+                    ? new Color(0.3f, 1f, 0.45f, 0.9f)
+                    : new Color(0.35f, 0.8f, 1f, 0.8f));
             foreach (var collider in part.GetComponents<Collider>())
             {
                 if (collider is CapsuleCollider capsule)

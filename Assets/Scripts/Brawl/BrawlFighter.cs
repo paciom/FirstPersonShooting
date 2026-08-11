@@ -144,6 +144,12 @@ public class BrawlFighter : MonoBehaviour
     /// <summary>Raised when a strike found a limb, not the body: "arm"/"leg".</summary>
     public System.Action<string> OnGrazed;
 
+    /// <summary>
+    /// Raised by the ATTACKER for every contact its strike makes — vital or
+    /// graze — with the exact body part touched. The F3 overlay flashes it.
+    /// </summary>
+    public System.Action<BrawlBodyPart> OnPartStruck;
+
     /// <summary>True when this fighter carries a per-bone hurtbox rig.</summary>
     public bool HasHurtboxes { get; private set; }
 
@@ -170,6 +176,9 @@ public class BrawlFighter : MonoBehaviour
     BrawlMoveSet.Variant _variant;
     float _moveTime;
     bool _moveHasHit;
+    // Last frame's striking-bone position — the start of the swept test.
+    Vector3 _effectorPrev;
+    bool _effectorPrevValid;
     bool _boltFired;
     bool _grazedThisMove;
     bool _propHitThisMove;
@@ -538,6 +547,7 @@ public class BrawlFighter : MonoBehaviour
             _moveTime = 0f;
             _moveHasHit = false;
             _grazedThisMove = false;
+            _effectorPrevValid = false;
             // The lunge: committing adds forward speed toward the opponent.
             _airVelocity += FacingDir * 2.2f;
             Trigger(BrawlAnim.FlyKick);
@@ -552,6 +562,7 @@ public class BrawlFighter : MonoBehaviour
                           && _moveTime <= _move.startup + _move.active;
             if (active && !_moveHasHit)
                 TryHit();
+            TrackEffector();
         }
 
         _verticalVelocity -= BrawlMoveSet.Gravity * dt;
@@ -608,6 +619,7 @@ public class BrawlFighter : MonoBehaviour
             bool active = _moveTime >= _move.startup && _moveTime <= window;
             if (active && !_moveHasHit)
                 TryHit();
+            TrackEffector();
         }
 
         if (_moveTime >= _move.Duration)
@@ -678,6 +690,7 @@ public class BrawlFighter : MonoBehaviour
         _boltFired = false;
         _grazedThisMove = false;
         _propHitThisMove = false;
+        _effectorPrevValid = false;
         BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position + Vector3.up * 1.2f, 0.35f);
         Trigger(_variant.trigger);
         OnMoveStarted?.Invoke(_variant.display);
@@ -745,16 +758,32 @@ public class BrawlFighter : MonoBehaviour
             return;
         }
 
-        var part = BrawlHurtboxes.Query(effector.position,
-            BrawlMoveSet.StrikeRadius + 0.04f, target);
+        // Swept, not sampled: at action tempo the fist crosses more than a
+        // forearm-width between frames, and the single-point test tunneled
+        // clean through limbs — most visible overlaps registered nothing.
+        // Walk last frame's bone position to this frame's in strike-radius
+        // steps and take the first contact along the path.
+        Vector3 current = effector.position;
+        Vector3 start = _effectorPrevValid ? _effectorPrev : current;
+        int steps = Mathf.Clamp(
+            Mathf.CeilToInt((current - start).magnitude / BrawlMoveSet.StrikeRadius), 1, 8);
+        BrawlBodyPart part = null;
+        Vector3 contact = current;
+        for (int i = 1; i <= steps && part == null; i++)
+        {
+            contact = Vector3.Lerp(start, current, i / (float)steps);
+            part = BrawlHurtboxes.Query(contact,
+                BrawlMoveSet.StrikeRadius + 0.04f, target);
+        }
         if (part == null)
         {
             // No robot in reach — maybe a crate was.
             if (!_propHitThisMove
-                && BrawlProps.TryStrike(effector.position, BrawlMoveSet.StrikeRadius + 0.12f, this))
+                && BrawlProps.TryStrike(current, BrawlMoveSet.StrikeRadius + 0.12f, this))
                 _propHitThisMove = true;
             return;
         }
+        OnPartStruck?.Invoke(part);
         if (part.Vital)
         {
             _moveHasHit = true;
@@ -768,10 +797,24 @@ public class BrawlFighter : MonoBehaviour
             // nothing.
             Vector3 away = gap > 1e-3f ? offset / gap : FacingDir;
             target.Nudge(away * 2.6f);
-            VfxUtil.SpawnBurst(effector.position, new Color(0.8f, 0.95f, 1f), 5, 2.5f, 0.08f);
-            BrawlAudio.Play(BrawlAudio.Id.Graze, effector.position, 0.6f);
+            VfxUtil.SpawnBurst(contact, new Color(0.8f, 0.95f, 1f), 5, 2.5f, 0.08f);
+            BrawlAudio.Play(BrawlAudio.Id.Graze, contact, 0.85f);
             OnGrazed?.Invoke(part.Label);
         }
+    }
+
+    /// <summary>
+    /// Record the striking bone's position for next frame's sweep. Runs
+    /// every frame of a strike — startup included, so the first active
+    /// frame already has a path behind it.
+    /// </summary>
+    void TrackEffector()
+    {
+        var effector = ActiveEffector;
+        if (effector == null)
+            return;
+        _effectorPrev = effector.position;
+        _effectorPrevValid = true;
     }
 
     public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker)
