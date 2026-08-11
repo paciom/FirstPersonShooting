@@ -597,15 +597,17 @@ public static class BrawlPoses
         float w = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(u / 0.35f));
         float bob = 0.012f * Mathf.Sin(u * 2f * Mathf.PI);
 
-        // The guard turns INTO the pressure: lead shoulder blades in, the
-        // forearms cross the centreline, the whole frame sits down on it.
+        // The guard turns INTO the pressure and covers the FACE: elbows
+        // tucked down by the ribs, forearms upright and close, fists at
+        // the chin — the old aims lifted the elbows to shoulder height and
+        // sent the fists over the head, which guarded nothing.
         rig.Rotate(rig.Hips, Vector3.up, 8f, w);
         rig.Rotate(rig.Chest, Vector3.up, -20f, w);
         rig.Rotate(rig.Head, Vector3.up, 12f, w);
-        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.10f, 0.20f, 0.75f), w);
-        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.30f, 0.85f, 0.35f), w);
-        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(0.10f, 0.20f, 0.75f), w);
-        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.30f, 0.85f, 0.35f), w);
+        rig.Aim(rig.ArmR, rig.ForeArmR, new Vector3(-0.08f, -0.70f, 0.35f), w);
+        rig.Aim(rig.ForeArmR, rig.HandR, new Vector3(-0.22f, 0.92f, 0.15f), w);
+        rig.Aim(rig.ArmL, rig.ForeArmL, new Vector3(0.08f, -0.70f, 0.35f), w);
+        rig.Aim(rig.ForeArmL, rig.HandL, new Vector3(0.22f, 0.92f, 0.15f), w);
         rig.Rotate(rig.Chest, Vector3.right, 7f, w);
         rig.Shift(rig.Hips, new Vector3(0f, -0.05f + bob, 0f), w);
     }

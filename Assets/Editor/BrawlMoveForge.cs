@@ -61,8 +61,10 @@ public static class BrawlMoveForge
     /// v9: EVERY adopted clip pins in place (strikes included; fly kick
     ///     pins Y too) — Variant.lunge moves the root instead. Ends the
     ///     mid-move body drift that snapped home at every state seam.
+    /// v12: the guard actually guards — elbows tucked to the ribs, forearms
+    ///     upright at the chin instead of high over the head.
     /// </summary>
-    const int TemplateVersion = 11;
+    const int TemplateVersion = 12;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
