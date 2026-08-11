@@ -63,6 +63,11 @@ def main():
                         help="reference image, cited in prompt order")
     parser.add_argument("--audio-ref", default="",
                         help="reference audio clip to choreograph/score against")
+    parser.add_argument("--first-frame", default="",
+                        help="pin this image as the opening frame")
+    parser.add_argument("--last-frame", default="",
+                        help="pin this image as the closing frame (same image "
+                             "as --first-frame makes a structural loop)")
     parser.add_argument("--model", default="",
                         help="pin one ModelArk model id (default: try the "
                              "ladder " + " then ".join(MODELS) + ")")
@@ -78,6 +83,12 @@ def main():
         prompt = handle.read().strip()
 
     content = [{"type": "text", "text": prompt}]
+    if args.first_frame:
+        content.append({"type": "image_url", "role": "first_frame",
+                        "image_url": {"url": data_uri(args.first_frame)}})
+    if args.last_frame:
+        content.append({"type": "image_url", "role": "last_frame",
+                        "image_url": {"url": data_uri(args.last_frame)}})
     for ref in args.ref:
         content.append({"type": "image_url", "role": "reference_image",
                         "image_url": {"url": data_uri(ref)}})

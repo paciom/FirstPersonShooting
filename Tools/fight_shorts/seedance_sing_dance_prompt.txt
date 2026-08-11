@@ -1,0 +1,15 @@
+A 30-second solo robot dance music video. The provided first frame and last frame are the SAME image, so the clip loops perfectly — animate from that exact frame, through the whole dance, and back into that exact frame.
+
+The dancer: the sleek ice-white robot with the black racing-helmet visor standing arms-crossed on the airliner wing in the provided frame.
+
+The soundtrack: generate an original upbeat MOTIVATIONAL dance-pop anthem, around 126 BPM, with a bright singalong voice. It sings these lyrics, timed across the 30 seconds:
+
+"Get up, get up, you were born to fly,
+every fall just teaches you to touch the sky!
+Shine, shine, brighter every day —
+nothing's gonna stop us, we were made this way!
+Get up! Shine on! Today!"
+
+The choreography acts out each lyric as it is sung: on "get up, get up" the robot snaps out of its frozen arms-crossed pose and rises taller with two beat-matched shoulder pops; on "born to fly" it spreads both arms into a soaring airplane pose and banks side to side while wind streams past; on "every fall" it drops into a controlled one-knee slide along the wing and springs back up on "touch the sky", both arms shooting straight up with its visor flashing; on "shine, shine" it does a dazzling two-step with light glinting off its white armor, spinning once on each "shine"; on "brighter every day" it moonwalks backward along the wing as thin vapor trails from its heels; on "nothing's gonna stop us" it marches toward the camera with powerful fist pumps on every beat; on "we were made this way" it does a full-body wave from fingertips to feet and strikes a proud chest-out hero pose; on the final chanted "Get up! Shine on! Today!" it leaps, backflips against the sunset, lands dead center, and folds back into the exact arms-crossed, feet-wide opening pose as the song resolves — matching the provided last frame precisely.
+
+Setting stays consistent with the provided frame: the wing of a huge white airliner in cruise flight above pink-and-gold sunset clouds, contrails in the sky, warm sun flaring behind the robot. Audio is only the song — no wind noise, no mechanical foot sounds, clean music like an official music video. Dynamic camera that orbits and punches in on the big moves but returns to the exact framing of the provided first frame for the seamless loop. Vertical 9:16 YouTube Short composition, the robot always fully in frame, joyful, heroic, motivational.
