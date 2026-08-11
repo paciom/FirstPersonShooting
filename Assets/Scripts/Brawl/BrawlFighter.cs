@@ -162,6 +162,7 @@ public class BrawlFighter : MonoBehaviour
     float _verticalVelocity;
     Vector3 _airVelocity;       // horizontal (XZ) flight
     Vector3 _knockback;         // horizontal shove, decaying
+    Vector3 _nudge;             // the graze shove: ground given, no stagger
     float _animatorSpeed;
 
     // ---- move in progress ----
@@ -307,6 +308,7 @@ public class BrawlFighter : MonoBehaviour
         _verticalVelocity = 0f;
         _airVelocity = Vector3.zero;
         _knockback = Vector3.zero;
+        _nudge = Vector3.zero;
         _moveTime = 0f;
         _stunTime = 0f;
         _floorTime = 0f;
@@ -376,6 +378,7 @@ public class BrawlFighter : MonoBehaviour
         _verticalVelocity = 0f;
         _airVelocity = Vector3.zero;
         _knockback = Vector3.zero;
+        _nudge = Vector3.zero;
         SetBlock(false);
         transform.localPosition = new Vector3(x, 0f, z);
         SetY(BrawlGround.HeightAt(transform.position.x, transform.position.z, aboveY: 30f));
@@ -459,9 +462,31 @@ public class BrawlFighter : MonoBehaviour
                 break;
         }
 
+        // The graze shove, integrated in EVERY mobile state: unlike
+        // _knockback (which only HitStun and Knockdown tick), this must
+        // move a robot that is mid-swing or mid-walk without interrupting
+        // what it is doing — impact you can see, no stagger.
+        if (_nudge.sqrMagnitude > 1e-6f)
+        {
+            SlideAlongGround(_nudge * dt);
+            _nudge = Vector3.MoveTowards(_nudge, Vector3.zero, 14f * dt);
+        }
+
         Separate();
         ClampToLane();
         DriveAnimator(dt);
+    }
+
+    /// <summary>
+    /// A shove with no stagger: the body gives a little ground while its
+    /// current action continues. The impact read for limb hits — a strike
+    /// that costs no health must still visibly land.
+    /// </summary>
+    public void Nudge(Vector3 shove)
+    {
+        if (Phase == State.Knockdown || Phase == State.KO || Phase == State.Celebrating)
+            return;
+        _nudge += shove;
     }
 
     // ------------------------------------------------------------- states
@@ -738,6 +763,11 @@ public class BrawlFighter : MonoBehaviour
         else if (!_grazedThisMove)
         {
             _grazedThisMove = true;
+            // The struck robot gives ~a quarter metre of ground: no damage
+            // for a limb hit, but contact must never read as touching
+            // nothing.
+            Vector3 away = gap > 1e-3f ? offset / gap : FacingDir;
+            target.Nudge(away * 2.6f);
             VfxUtil.SpawnBurst(effector.position, new Color(0.8f, 0.95f, 1f), 5, 2.5f, 0.08f);
             BrawlAudio.Play(BrawlAudio.Id.Graze, effector.position, 0.6f);
             OnGrazed?.Invoke(part.Label);
