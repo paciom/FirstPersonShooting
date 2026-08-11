@@ -77,6 +77,18 @@ public static class BrawlMoveSet
         },
     };
 
+    /// <summary>
+    /// How fast a bout's ATTACKS run relative to the table above: the clock
+    /// an attack integrates against (and the animator's rate with it) is
+    /// multiplied by this while the strike is in progress, so every action
+    /// finishes in half the tabled time while walking, stun and falls keep
+    /// the bout's pacing. Lives here, not in the table rows, so the forge's
+    /// baked clip speeds stay valid — the scaling happens at runtime on top.
+    /// Applied by BrawlController to its two fighters; the shows and quiz
+    /// modes pace themselves and leave it alone.
+    /// </summary>
+    public const float ActionTempo = 2f;
+
     // The non-attack timings, one authoritative home each.
     public const float MaxHealth = 100f;
     public const float RoundSeconds = 60f;

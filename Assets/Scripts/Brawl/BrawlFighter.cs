@@ -96,6 +96,20 @@ public class BrawlFighter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Extra clock on ATTACKS only. While a strike (grounded or aerial) is
+    /// in progress, the fighter's clock — and the Animator's rate with it,
+    /// the same locked pair Tempo keeps — is multiplied by this, so actions
+    /// snap while walking, stun and falls keep the bout's pacing. Brawl
+    /// bouts run BrawlMoveSet.ActionTempo; everyone else's default of 1
+    /// leaves the tabled timings literal (Chinese Quest scripts its waits
+    /// against Tempo and must not have attacks quietly doubled under it).
+    /// </summary>
+    public float ActionTempo { get; set; } = 1f;
+
+    /// <summary>True while a strike's clock (and animator) run at ActionTempo.</summary>
+    bool Striking => Phase == State.Attacking || Phase == State.AirAttack;
+
     /// <summary>The tallest step a walking robot climbs without jumping.</summary>
     const float StepUp = 0.6f;
 
@@ -433,8 +447,10 @@ public class BrawlFighter : MonoBehaviour
         {
             case State.Neutral: TickNeutral(dt); break;
             case State.Air: TickAir(dt, hot: false); break;
-            case State.Attacking: TickAttack(dt); break;
-            case State.AirAttack: TickAir(dt, hot: true); break;
+            case State.Attacking: TickAttack(dt * ActionTempo); break;
+            // The whole aerial tick accelerates, arc included: a fly kick
+            // that only ticked its windows faster would close them mid-air.
+            case State.AirAttack: TickAir(dt * ActionTempo, hot: true); break;
             case State.Blocking: TickBlocking(); break;
             case State.HitStun: TickHitStun(dt); break;
             case State.Knockdown: TickKnockdown(dt); break;
@@ -1079,6 +1095,10 @@ public class BrawlFighter : MonoBehaviour
     {
         if (_animator == null)
             return;
+        // The playback rate keeps step with whichever clock the current
+        // state integrates against — the Tempo contract, extended to the
+        // attack multiplier.
+        _animator.speed = _tempo * (Striking ? ActionTempo : 1f);
         float target = Phase == State.Neutral
             ? Mathf.Min(1f, Live.move.magnitude) * BrawlMoveSet.WalkSpeed : 0f;
         _animatorSpeed = Mathf.Lerp(_animatorSpeed, target, 1f - Mathf.Exp(-12f * dt));

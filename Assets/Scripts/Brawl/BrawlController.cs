@@ -119,6 +119,10 @@ public class BrawlController : MonoBehaviour
         Magenta = BrawlFighter.Spawn(_stageRoot.transform, roster, _magentaRobot, 1);
         Cyan.Opponent = Magenta;
         Magenta.Opponent = Cyan;
+        // Bout attacks snap: every strike runs — and animates — at double,
+        // finishing in half the tabled time.
+        Cyan.ActionTempo = BrawlMoveSet.ActionTempo;
+        Magenta.ActionTempo = BrawlMoveSet.ActionTempo;
 
         // P1 is a human's hands or a second brain — the fighter can't tell.
         // Touch pads only exist when someone is actually driving. Every CPU
