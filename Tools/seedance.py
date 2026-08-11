@@ -61,6 +61,8 @@ def main():
     parser.add_argument("--prompt-file", required=True)
     parser.add_argument("--ref", action="append", default=[],
                         help="reference image, cited in prompt order")
+    parser.add_argument("--audio-ref", default="",
+                        help="reference audio clip to choreograph/score against")
     parser.add_argument("--model", default="",
                         help="pin one ModelArk model id (default: try the "
                              "ladder " + " then ".join(MODELS) + ")")
@@ -79,6 +81,13 @@ def main():
     for ref in args.ref:
         content.append({"type": "image_url", "role": "reference_image",
                         "image_url": {"url": data_uri(ref)}})
+    if args.audio_ref:
+        # The validator rejects the stock audio/mpeg mime; it wants audio/mp3.
+        with open(args.audio_ref, "rb") as handle:
+            blob = base64.b64encode(handle.read()).decode()
+        ext = os.path.splitext(args.audio_ref)[1].lstrip(".").lower() or "mp3"
+        content.append({"type": "audio_url", "role": "reference_audio",
+                        "audio_url": {"url": f"data:audio/{ext};base64," + blob}})
 
     payload = {"content": content,
                "duration": args.seconds, "resolution": args.resolution,
