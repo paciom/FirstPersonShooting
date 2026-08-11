@@ -13,8 +13,9 @@ using UnityEngine;
 ///    fight swoops around the dome instead of hovering over a plane.
 ///  - DONUT STATION — a torus station floating in open space: launch pads on
 ///    the hub deck, a ring walkway the turrets stand on, spokes between, and
-///    the hole through the middle begging to be flown through. A faint
-///    energy net far below catches anything that falls off the furniture.
+///    the hole through the middle begging to be flown through. Below the
+///    furniture there is only space — no deck, no gravity; what drifts off,
+///    drifts (see <see cref="InOpenSpace"/>).
 ///
 /// THE VOLUME IS SOFT. <see cref="SteerAssist"/> leans on the same steer values
 /// the drivers write, ramping in over the last stretch before an edge, so the
@@ -101,12 +102,14 @@ public class DogfightSky : MonoBehaviour
     const float RingDeckInner = 64f;
     const float RingDeckOuter = 80f;
 
-    /// <summary>The energy net far under the station: the deck of last
-    /// resort, so nothing — robot, tank or wreck — ever falls forever.</summary>
+    /// <summary>The deck height REPORTED where the station has no furniture:
+    /// a mathematical answer that keeps the deck queries total, not a place.
+    /// Nothing is drawn there and nothing lands there — the void is open
+    /// space, and fallers in it drift (<see cref="InOpenSpace"/>).</summary>
     const float VoidY = -40f;
 
-    /// <summary>The station map's flat soft floor: low enough to fly UNDER
-    /// the ring, high enough that the net stays a failsafe, not a venue.</summary>
+    /// <summary>The station map's flat soft floor for JETS: low enough to fly
+    /// under the ring, with only stars below it.</summary>
     const float DonutFloorY = 8f;
 
     const float SpokeGirth = 2.75f;
@@ -171,7 +174,6 @@ public class DogfightSky : MonoBehaviour
                 BuildRingDeck();
                 BuildStationWindows();
                 BuildStationLamps();
-                BuildSafetyNet();
                 BuildStars(true);
                 break;
 
@@ -998,29 +1000,6 @@ public class DogfightSky : MonoBehaviour
         FlatQuadMesh("StationLamps", VfxUtil.GlowTexture, vertices, uvs, colors, triangles);
     }
 
-    /// <summary>The energy net the void deck is made visible by: a faint
-    /// holo-grid far below the station, so landing on "nothing" reads as
-    /// landing on something the station put there.</summary>
-    void BuildSafetyNet()
-    {
-        var vertices = new List<Vector3>();
-        var uvs = new List<Vector2>();
-        var colors = new List<Color>();
-        var triangles = new List<int>();
-
-        Color line = GridGlow * 0.22f;
-        const float half = 280f;
-        for (float p = -half; p <= half; p += 40f)
-        {
-            AddOrientedQuad(vertices, uvs, colors, triangles,
-                new Vector3(p, VoidY, 0f), Vector3.right * 0.35f, Vector3.forward * half, line);
-            AddOrientedQuad(vertices, uvs, colors, triangles,
-                new Vector3(0f, VoidY, p), Vector3.right * half, Vector3.forward * 0.35f, line);
-        }
-
-        FlatQuadMesh("SafetyNet", null, vertices, uvs, colors, triangles);
-    }
-
     // ------------------------------------------------------------------ shared
 
     /// <summary>Soft puffs drifting through the fight band. Pure speed cues —
@@ -1232,10 +1211,12 @@ public class DogfightSky : MonoBehaviour
     /// What is underfoot at this spot — the height a landing, a walk, a drive
     /// or a wreck crash settles onto. The airfield is flat; the planet's deck
     /// is its curved surface (clamped at the rim so the flank behaves like a
-    /// very steep hill rather than an abyss); the station is decks over an
-    /// energy net, so the answer JUMPS at every edge — which is why grounded
+    /// very steep hill rather than an abyss); the station is decks over open
+    /// space, so the answer JUMPS at every edge — which is why grounded
     /// steps go through <see cref="HoldOnDeck"/> and landings refuse a deck
-    /// that is far above them (see JetPawn.TouchDownCheck).
+    /// that is far above them (see JetPawn.TouchDownCheck). Over a space
+    /// map's void the number returned is bookkeeping, not ground — nothing
+    /// is allowed to land on it (<see cref="InOpenSpace"/>).
     /// </summary>
     public static float GroundHeight(Vector3 at)
     {
@@ -1261,9 +1242,10 @@ public class DogfightSky : MonoBehaviour
         }
     }
 
-    /// <summary>The deck of last resort — where a fall that misses every
-    /// piece of furniture finally ends. The airfield's tarmac, the planet's
-    /// flank line, the station's energy net.</summary>
+    /// <summary>The lowest deck the queries may report: the airfield's
+    /// tarmac, the planet's flank line, the station's void depth. On the
+    /// space maps this is a backstop for the arithmetic, not a landing —
+    /// falls out there drift instead of ending (<see cref="InOpenSpace"/>).</summary>
     public static float BottomHeight
     {
         get
@@ -1295,9 +1277,9 @@ public class DogfightSky : MonoBehaviour
     }
 
     /// <summary>True where the deck under this spot is not real furniture —
-    /// the station's energy net, the planet's flank clamp. Wreck craters skip
-    /// their fire here (flame standing on a hologram reads as a bug), and AI
-    /// pilots refuse to fold into ground forms over it.</summary>
+    /// the station's empty space, the planet's flank clamp. Wreck craters
+    /// skip their fire here, AI pilots refuse to fold into ground forms over
+    /// it, and on the space maps it is where gravity ends.</summary>
     public static bool OverVoid(Vector3 at)
     {
         switch (Map)
@@ -1310,6 +1292,16 @@ public class DogfightSky : MonoBehaviour
                 return false;
         }
     }
+
+    /// <summary>
+    /// True when this spot hangs in OPEN SPACE: a space map, over its void.
+    /// Out here there is no ground and no gravity — fall physics trades its
+    /// downward pull for a drift, landings are refused, and a wreck ends as
+    /// a blast adrift instead of a crash site. Over the furniture (the
+    /// planet's dome, the station's decks) local gravity still pulls, which
+    /// is exactly what lets a tank fold out of the sky and LAND there.
+    /// </summary>
+    public static bool InOpenSpace(Vector3 at) => FreeOrientation && OverVoid(at);
 
     /// <summary>
     /// The grounded step test: a walking robot or driving tank may follow the

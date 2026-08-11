@@ -940,12 +940,14 @@ public class JetPawn : MonoBehaviour
     }
 
     /// <summary>Mid-fold physics: fall, gently, and land if the deck arrives
-    /// before the new shape does.</summary>
+    /// before the new shape does. Over open space nothing pulls — the fold
+    /// coasts on its momentum instead of dropping.</summary>
     void CoastFall(float dt)
     {
         if (Grounded)
             return;
-        _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, -9f, 16f * dt);
+        float pull = DogfightSky.InOpenSpace(transform.position) ? 0f : -9f;
+        _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, pull, 16f * dt);
         _airVelocity = Vector3.MoveTowards(_airVelocity, Vector3.zero, 6f * dt);
         transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
         TouchDownCheck(1.2f);
@@ -1002,12 +1004,16 @@ public class JetPawn : MonoBehaviour
         // The floor assist steers a jet up long before this matters; the
         // clamp is the net under the net (a jet re-folding off the deck
         // starts far below the assist's whole band). DeckUnder, not
-        // GroundHeight: a jet threading beneath the station's walkway is over
-        // the void net, and must not be snapped up through the furniture.
-        float deck = DogfightSky.DeckUnder(transform.position);
-        if (transform.position.y < deck + 1f)
-            transform.position = new Vector3(transform.position.x, deck + 1f,
-                transform.position.z);
+        // GroundHeight: a jet threading beneath the station's walkway must
+        // not be snapped up through the furniture — and in open space there
+        // is no floor at all, only the shell assist.
+        if (!DogfightSky.InOpenSpace(transform.position))
+        {
+            float deck = DogfightSky.DeckUnder(transform.position);
+            if (transform.position.y < deck + 1f)
+                transform.position = new Vector3(transform.position.x, deck + 1f,
+                    transform.position.z);
+        }
 
         foreach (var trail in _trails)
             trail.emitting = true;
@@ -1037,7 +1043,11 @@ public class JetPawn : MonoBehaviour
         Vector3 drift = Quaternion.Euler(0f, _yaw, 0f) * new Vector3(steer.x, 0f, steer.y);
         if (!Grounded)
         {
-            _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, -ChuteFallSpeed, 8f * dt);
+            // Over open space the chute has nothing to fall toward: descent
+            // bleeds off and the drift is all there is — enough to steer
+            // back over a deck and come down on it.
+            float sink = DogfightSky.InOpenSpace(transform.position) ? 0f : ChuteFallSpeed;
+            _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, -sink, 8f * dt);
             _airVelocity = Vector3.MoveTowards(_airVelocity, drift * ChuteDriftSpeed, 10f * dt);
             transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
             SwayChute(dt);
@@ -1083,11 +1093,24 @@ public class JetPawn : MonoBehaviour
 
         if (!Grounded)
         {
-            // A falling tank is a promise, not a vehicle.
-            _verticalSpeed = Mathf.Max(-TankFallTerminal,
-                _verticalSpeed - TankFallAcceleration * dt);
+            if (DogfightSky.InOpenSpace(transform.position))
+            {
+                // No gravity out here: the hull drifts, and the sticks are
+                // thrusters — enough authority to nudge back over a deck
+                // (and the fold back to jet is always one tap away).
+                _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, 0f, 10f * dt);
+                _airVelocity = Vector3.MoveTowards(_airVelocity,
+                    Quaternion.Euler(0f, _yaw, 0f) * new Vector3(steer.x, 0f, steer.y) * 6f,
+                    5f * dt);
+            }
+            else
+            {
+                // A falling tank is a promise, not a vehicle.
+                _verticalSpeed = Mathf.Max(-TankFallTerminal,
+                    _verticalSpeed - TankFallAcceleration * dt);
+                _airVelocity = Vector3.MoveTowards(_airVelocity, Vector3.zero, 4f * dt);
+            }
             transform.position += (_airVelocity + Vector3.up * _verticalSpeed) * dt;
-            _airVelocity = Vector3.MoveTowards(_airVelocity, Vector3.zero, 4f * dt);
             transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
             if (TouchDownCheck(1.1f))
             {
@@ -1298,9 +1321,13 @@ public class JetPawn : MonoBehaviour
 
     /// <summary>Common landing test. True on the frame the deck arrives.
     /// DeckUnder, not GroundHeight: a faller that has already dropped past a
-    /// floating walkway belongs to the net below it, never snapped up.</summary>
+    /// floating walkway is under the furniture, never snapped up. Open space
+    /// has no deck to arrive at — out there the only way down to Grounded is
+    /// to drift back over something real.</summary>
     bool TouchDownCheck(float rideHeight)
     {
+        if (DogfightSky.InOpenSpace(transform.position))
+            return false;
         float deck = DogfightSky.DeckUnder(transform.position);
         if (transform.position.y > deck + rideHeight)
             return false;
@@ -1473,21 +1500,25 @@ public class JetPawn : MonoBehaviour
     }
 
     /// <summary>A dying flier loses control and rides its wreck all the way
-    /// down — the fall IS the shot. It ends where falls end.</summary>
+    /// down — the fall IS the shot. It ends where falls end — and in open
+    /// space falls don't: a wreck adrift out there gets its beat of tumbling
+    /// and then the reactor lets go. Same funeral, no deck required.</summary>
     void Tumble()
     {
         float dt = Time.deltaTime;
         float falling = Time.time - _downSince;
+        bool adrift = DogfightSky.InOpenSpace(transform.position);
         Speed = Mathf.MoveTowards(Speed, 9f, 10f * dt);
         _pitch = Mathf.MoveTowards(_pitch, -55f, 40f * dt);
         _roll += 260f * dt;
         transform.rotation = Quaternion.Euler(-_pitch, _yaw, _roll);
         transform.position += transform.forward * (Speed * dt)
-                              + Vector3.down * (falling * 6f * dt);
+                              + Vector3.down * (adrift ? 0f : falling * 6f * dt);
         if (falling > 0.35f && Random.value < 12f * dt)
             VfxUtil.SpawnBurst(Center, new Color(1f, 0.6f, 0.25f), 4, 3f, 0.14f);
 
-        if (transform.position.y <= DogfightSky.DeckUnder(transform.position) + 0.9f)
+        if (adrift ? falling > 2.2f
+            : transform.position.y <= DogfightSky.DeckUnder(transform.position) + 0.9f)
             LandWreck();
     }
 
@@ -1505,13 +1536,16 @@ public class JetPawn : MonoBehaviour
         WreckLanded = true;
         Grounded = true;
         float rest = DogfightSky.DeckUnder(transform.position);
-        // A crater burns only on real furniture: fire standing on the
-        // station's energy net or hanging off the planet's flank reads as a
-        // bug, not a crash site. The blast is honest anywhere.
+        // A crater burns only on real furniture: fire hanging off the
+        // planet's flank or floating in the station's void reads as a bug,
+        // not a crash site. The blast is honest anywhere.
         bool onDeck = !DogfightSky.OverVoid(transform.position)
             && rest >= DogfightSky.GroundHeight(transform.position) - 0.5f;
-        transform.position = new Vector3(transform.position.x, rest + 0.9f,
-            transform.position.z);
+        // A wreck adrift in open space detonates where it is; only a wreck
+        // over furniture is set down onto it.
+        if (!DogfightSky.InOpenSpace(transform.position))
+            transform.position = new Vector3(transform.position.x, rest + 0.9f,
+                transform.position.z);
 
         VfxUtil.EnergyBurst(transform.position, MatchAnnouncer.TeamColor(Team), 2.4f);
         WarFx.Spawn(WarFx.Kind.Big, transform.position, 1.8f);

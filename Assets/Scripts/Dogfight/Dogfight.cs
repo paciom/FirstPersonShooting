@@ -789,11 +789,14 @@ public class Dogfight : MonoBehaviour
         {
             _finalWreck = null;
             // The mushroom grows off whatever deck the wreck actually hit —
-            // tarmac, planet dome, station walkway or the net below it all.
+            // tarmac, planet dome or station walkway. A final wreck that
+            // died adrift in open space detonates where it stopped.
             WarFx.Spawn(WarFx.Kind.Nuke,
-                new Vector3(pawn.Center.x,
-                    DogfightSky.DeckUnder(pawn.transform.position),
-                    pawn.Center.z));
+                DogfightSky.InOpenSpace(pawn.transform.position)
+                    ? pawn.Center
+                    : new Vector3(pawn.Center.x,
+                        DogfightSky.DeckUnder(pawn.transform.position),
+                        pawn.Center.z));
         }
     }
 
