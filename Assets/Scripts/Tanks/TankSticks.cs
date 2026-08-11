@@ -15,10 +15,12 @@ using UnityEngine.UI;
 /// controls are up, precisely so that a drag cannot also read as a click — so on
 /// the device this is built for, uGUI would receive nothing at all.
 ///
-/// BOTH STICKS ARE DYNAMIC: each appears centred wherever that thumb landed,
-/// rather than sitting in a fixed corner waiting to be found. On a screen with
-/// no bezel to feel for, a stick that comes to the thumb beats a thumb that has
-/// to go and find the stick.
+/// BOTH STICKS ARE DYNAMIC, BUT NEVER HIDDEN: each rests visible in its own
+/// bottom corner — so the screen itself says there are two sticks and which
+/// thumb owns which — and then re-centres wherever that thumb actually lands.
+/// On a screen with no bezel to feel for, a stick that comes to the thumb
+/// beats a thumb that has to go and find the stick; a stick that cannot be
+/// seen at all teaches nobody it exists.
 ///
 /// The mouse stands in for a finger, so the mode can be driven from the editor
 /// with '=' held down — one pointer at a time, which is enough to check that a
@@ -101,10 +103,31 @@ public class TankSticks : MonoBehaviour
         }
 
         ReadPointers();
+        // An unheld stick sits at its home corner. Re-asserted every frame
+        // rather than only on release, so a resolution or orientation change
+        // walks the resting sticks to where the corners now are.
+        if (!_left.Held) Rest(_left, true);
+        if (!_right.Held) Rest(_right, false);
         Drive = _left.value;
         Aim = _right.value;
         Paint(_left);
         Paint(_right);
+    }
+
+    /// <summary>The corner a stick waits in until its thumb lands.</summary>
+    Vector2 Home(bool leftSide)
+    {
+        // A canvas built this frame has not been laid out yet; its rect says
+        // zero. One frame at the canvas centre is invisible at these alphas.
+        Vector2 half = _canvasRect.rect.size * 0.5f;
+        return new Vector2((leftSide ? -1f : 1f) * (half.x - 300f), -(half.y - 250f));
+    }
+
+    void Rest(Stick stick, bool leftSide)
+    {
+        stick.center = Home(leftSide);
+        stick.baseRect.anchoredPosition = stick.center;
+        stick.knob.anchoredPosition = stick.center;
     }
 
     /// <summary>
@@ -199,13 +222,15 @@ public class TankSticks : MonoBehaviour
         return local;
     }
 
-    /// <summary>Both rings fade up under the thumb and back out when it lifts,
-    /// so an untouched screen shows the battlefield and nothing else.</summary>
+    /// <summary>Both rings brighten under the thumb and settle back when it
+    /// lifts — to RESTING visibility, not to nothing: an invisible stick is a
+    /// control the player has to discover by accident.</summary>
     void Paint(Stick stick)
     {
         stick.fade = Mathf.MoveTowards(stick.fade, stick.Held ? 1f : 0f, Time.deltaTime * 6f);
-        stick.baseRect.GetComponent<Image>().color = Fade(stick.ringColor, stick.ringColor.a * stick.fade);
-        stick.knob.GetComponent<Image>().color = Fade(stick.knobColor, stick.knobColor.a * stick.fade);
+        float lift = Mathf.Lerp(0.55f, 1f, stick.fade);
+        stick.baseRect.GetComponent<Image>().color = Fade(stick.ringColor, stick.ringColor.a * lift);
+        stick.knob.GetComponent<Image>().color = Fade(stick.knobColor, stick.knobColor.a * lift);
     }
 
     static Color Fade(Color color, float alpha) => new Color(color.r, color.g, color.b, alpha);
