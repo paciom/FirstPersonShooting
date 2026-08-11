@@ -1,6 +1,7 @@
-# robot move start end ï¿½ strike windows cut from Meshy
+# robot move start end — strike windows cut from Meshy
 # library routines; written by meshyfight.py analyze,
 # hand-tweak freely (the forge re-reads on next Play).
+bolt blast 0.39 0.94
 bolt elbow 1.04 1.59
 bolt flykick 2.70 3.25
 bolt highkick 0.82 1.37
@@ -13,6 +14,7 @@ bolt punch 1.24 1.79
 bolt sidekick 0.29 0.84
 bolt spinkick 0.64 1.19
 bolt uppercut 0.32 0.87
+hawk blast 0.38 0.93
 hawk elbow 1.04 1.59
 hawk flykick 2.70 3.25
 hawk highkick 0.82 1.37
@@ -25,6 +27,7 @@ hawk punch 3.29 3.84
 hawk sidekick 0.29 0.84
 hawk spinkick 0.62 1.17
 hawk uppercut 0.40 0.95
+knight blast 1.49 2.04
 knight elbow 1.04 1.59
 knight flykick 2.70 3.25
 knight highkick 0.81 1.36
@@ -37,6 +40,7 @@ knight punch 1.25 1.80
 knight sidekick 0.29 0.84
 knight spinkick 0.64 1.19
 knight uppercut 0.39 0.94
+panther blast 0.38 0.93
 panther elbow 1.05 1.60
 panther flykick 2.70 3.25
 panther highkick 0.82 1.37
@@ -49,6 +53,7 @@ panther punch 3.27 3.82
 panther sidekick 0.29 0.84
 panther spinkick 0.76 1.31
 panther uppercut 0.40 0.95
+racer blast 0.38 0.93
 racer elbow 1.04 1.59
 racer flykick 2.70 3.25
 racer highkick 0.81 1.36
@@ -61,6 +66,7 @@ racer punch 1.20 1.75
 racer sidekick 0.29 0.84
 racer spinkick 0.64 1.19
 racer uppercut 0.32 0.87
+ranger blast 1.51 2.06
 ranger elbow 1.04 1.59
 ranger flykick 2.70 3.25
 ranger highkick 0.82 1.37
@@ -73,6 +79,7 @@ ranger punch 1.27 1.82
 ranger sidekick 0.29 0.84
 ranger spinkick 0.64 1.19
 ranger uppercut 0.40 0.95
+samurai blast 0.38 0.93
 samurai elbow 1.04 1.59
 samurai flykick 2.70 3.25
 samurai highkick 0.82 1.37
@@ -85,6 +92,7 @@ samurai punch 1.27 1.82
 samurai sidekick 0.29 0.84
 samurai spinkick 0.64 1.19
 samurai uppercut 0.37 0.92
+scout blast 0.36 0.91
 scout elbow 1.04 1.59
 scout flykick 2.70 3.25
 scout highkick 0.81 1.36
@@ -97,6 +105,7 @@ scout punch 1.19 1.74
 scout sidekick 0.29 0.84
 scout spinkick 0.76 1.31
 scout uppercut 0.32 0.87
+titan blast 1.51 2.06
 titan elbow 1.04 1.59
 titan flykick 2.70 3.25
 titan highkick 0.82 1.37
