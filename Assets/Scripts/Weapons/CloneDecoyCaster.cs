@@ -26,7 +26,7 @@ public class CloneDecoyCaster : Weapon
         Vector3 flat = new Vector3(direction.x, 0f, direction.z).normalized;
         Vector3 spawnAt = ownerRoot.position + flat * 1.4f;
         DecoyEntity.Spawn(spawnAt, flat, TeamId, color);
-        VfxUtil.Explosion(spawnAt + Vector3.up * 1.2f, color, 0.7f);
+        VfxUtil.EnergyBurst(spawnAt + Vector3.up * 1.2f, color, 0.7f);
         FlashMuzzle(4.5f);
     }
 }

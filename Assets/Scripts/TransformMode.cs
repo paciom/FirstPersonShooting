@@ -298,7 +298,7 @@ public class TransformMode : MonoBehaviour
             if (!burst && t >= SwapFraction)
             {
                 burst = true;
-                VfxUtil.Explosion(transform.position + Vector3.up * 0.8f, burstColor, 1.1f);
+                VfxUtil.EnergyBurst(transform.position + Vector3.up * 0.8f, burstColor, 1.1f);
                 // Inside the flash: the robot mesh goes, the vehicle arrives.
                 // Stop-motion robots are already partway through the sequence.
                 if (_skin != null && !stopMotion)

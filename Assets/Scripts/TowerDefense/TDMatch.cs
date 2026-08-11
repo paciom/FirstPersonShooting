@@ -103,7 +103,7 @@ public class TDMatch : MonoBehaviour
             Vector3 at = Vector3.Lerp(TDMap.PortalSite, TDMap.CoreSite, i / 9f)
                 + new Vector3(Random.Range(-4f, 4f), 4f + Random.Range(0f, 3f),
                     Random.Range(-4f, 4f));
-            VfxUtil.Explosion(at, i % 3 == 0 ? Color.white : cyan, 1.5f);
+            VfxUtil.EnergyBurst(at, i % 3 == 0 ? Color.white : cyan, 1.5f);
             yield return new WaitForSeconds(0.45f);
         }
         yield return new WaitForSeconds(MenuReturnDelay - 4.5f);

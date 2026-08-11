@@ -39,7 +39,22 @@ public static class VfxUtil
     }
 
     /// <summary>Big multi-stage explosion — used for de-rez and future gadgets.</summary>
+    /// <summary>
+    /// A real explosion — combustion, smoke, debris: the War FX pack's burst
+    /// layered under the tinted energy flash, the pairing the dogfight
+    /// established. Anything that pops without burning — de-rez, morphs,
+    /// pings, portals, celebrations — wants <see cref="EnergyBurst"/>.
+    /// </summary>
     public static void Explosion(Vector3 position, Color color, float scale = 1f)
+    {
+        EnergyBurst(position, color, scale);
+        WarFx.Spawn(scale >= 1.6f ? WarFx.Kind.Big : WarFx.Kind.Small,
+            position, Mathf.Clamp(scale * 0.9f, 0.35f, 3f));
+    }
+
+    /// <summary>The tinted flash + ring + sparks pop with no fire — the old
+    /// Explosion look under its honest name.</summary>
+    public static void EnergyBurst(Vector3 position, Color color, float scale = 1f)
     {
         FlashQuad.Spawn(position, Glow, Color.white, 0.6f * scale, 2.6f * scale, 0.18f, 3.5f);
         FlashQuad.Spawn(position, Glow, color, 0.8f * scale, 3.4f * scale, 0.35f, 2.5f);

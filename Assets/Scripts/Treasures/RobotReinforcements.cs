@@ -68,7 +68,7 @@ public static class RobotReinforcements
         cloneBrain.SetActive(true);
 
         Color tint = MatchAnnouncer.TeamColor(teamId);
-        VfxUtil.Explosion(spawn + Vector3.up * 1f, tint, 1.6f);
+        VfxUtil.EnergyBurst(spawn + Vector3.up * 1f, tint, 1.6f);
         MatchAnnouncer.Say($"{MatchAnnouncer.TeamName(teamId)} BUILT A NEW ROBOT",
             $"{TeamBank.RobotCost} gold spent — that's {roster + 1} on the field", tint);
 

@@ -74,7 +74,7 @@ public class DeRezEffect : MonoBehaviour
 
     IEnumerator DeRezRoutine()
     {
-        VfxUtil.Explosion(transform.position + Vector3.up * 1f, burstColor, 1.3f);
+        VfxUtil.EnergyBurst(transform.position + Vector3.up * 1f, burstColor, 1.3f);
         SetControlEnabled(false);
 
         // Shrink into nothing — dissolving into light, never dying.
@@ -99,7 +99,7 @@ public class DeRezEffect : MonoBehaviour
             transform.position = _spawnPosition;
         transform.rotation = _spawnRotation;
 
-        VfxUtil.Explosion(_spawnPosition + Vector3.up * 1f, burstColor, 0.7f);
+        VfxUtil.EnergyBurst(_spawnPosition + Vector3.up * 1f, burstColor, 0.7f);
         for (float t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
         {
             body.localScale = _bodyScale * t;

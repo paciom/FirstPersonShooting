@@ -716,7 +716,7 @@ public class JetPawn : MonoBehaviour
         if (!_morphBurst && progress >= 0.42f)
         {
             _morphBurst = true;
-            VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.1f);
+            VfxUtil.EnergyBurst(Center, MatchAnnouncer.TeamColor(Team), 1.1f);
         }
 
         if (progress < 1f)
@@ -804,7 +804,7 @@ public class JetPawn : MonoBehaviour
         if (!_morphBurst && progress >= 0.42f)
         {
             _morphBurst = true;
-            VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.1f);
+            VfxUtil.EnergyBurst(Center, MatchAnnouncer.TeamColor(Team), 1.1f);
         }
     }
 
@@ -1464,7 +1464,7 @@ public class JetPawn : MonoBehaviour
         SetChuteVisible(false);
         _turret.enabled = false;
         // The kill shot is a POP, not the payoff — the payoff is the ground.
-        VfxUtil.Explosion(Center, MatchAnnouncer.TeamColor(Team), 1.4f);
+        VfxUtil.EnergyBurst(Center, MatchAnnouncer.TeamColor(Team), 1.4f);
         WarFx.Spawn(WarFx.Kind.Small, Center, 1.2f);
         OnWrecked?.Invoke(this);
         // A pawn killed standing on the deck has no fall to fall.
@@ -1513,7 +1513,7 @@ public class JetPawn : MonoBehaviour
         transform.position = new Vector3(transform.position.x, rest + 0.9f,
             transform.position.z);
 
-        VfxUtil.Explosion(transform.position, MatchAnnouncer.TeamColor(Team), 2.4f);
+        VfxUtil.EnergyBurst(transform.position, MatchAnnouncer.TeamColor(Team), 2.4f);
         WarFx.Spawn(WarFx.Kind.Big, transform.position, 1.8f);
         VfxUtil.SpawnBurst(transform.position, new Color(0.75f, 0.7f, 0.6f), 26, 7f, 0.2f);
         if (onDeck)

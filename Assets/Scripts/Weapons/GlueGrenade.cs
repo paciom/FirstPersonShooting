@@ -47,7 +47,7 @@ public class GlueGrenade : Weapon
     void Splash(GenericBolt bolt, RaycastHit hit)
     {
         bolt.spec.onImpact = null;
-        VfxUtil.Explosion(hit.point + hit.normal * 0.1f, color, 0.9f);
+        VfxUtil.EnergyBurst(hit.point + hit.normal * 0.1f, color, 0.9f);
         WeaponUtil.PaintSplat(hit.point, hit.normal, color, 1.6f);
 
         foreach (var shield in WeaponUtil.FindEnemies(TeamId))

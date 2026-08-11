@@ -60,7 +60,7 @@ public class PortalPistol : Weapon
                 ~0, QueryTriggerInteraction.Ignore) || hit.transform.root == ownerRoot)
             return;
         _portal = PortalEntity.Spawn(hit.point, hit.normal, color);
-        VfxUtil.Explosion(hit.point + hit.normal * 0.3f, color, 0.7f);
+        VfxUtil.EnergyBurst(hit.point + hit.normal * 0.3f, color, 0.7f);
         FlashMuzzle(5f);
     }
 }

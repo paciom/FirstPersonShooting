@@ -144,7 +144,7 @@ public class ProductionQueue : MonoBehaviour
                 paintAnchorHue: entry.paintAnchorHue);
         def.ApplyTo(unit);
 
-        VfxUtil.Explosion(door + Vector3.up * 1f, MatchAnnouncer.TeamColor(team), 0.8f);
+        VfxUtil.EnergyBurst(door + Vector3.up * 1f, MatchAnnouncer.TeamColor(team), 0.8f);
         CommanderOps.Log(team, $"{def.displayName} deployed");
 
         if (!def.isCollector)

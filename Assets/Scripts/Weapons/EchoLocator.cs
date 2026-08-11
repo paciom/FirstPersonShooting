@@ -27,7 +27,7 @@ public class EchoLocator : Weapon
         _nextFireTime = Time.time + 1f / pingsPerSecond;
 
         // Expanding sonar sphere.
-        VfxUtil.Explosion(ownerRoot.position + Vector3.up * 1.2f, color, 2f);
+        VfxUtil.EnergyBurst(ownerRoot.position + Vector3.up * 1.2f, color, 2f);
 
         foreach (var shield in WeaponUtil.FindEnemies(TeamId))
         {

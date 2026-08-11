@@ -355,7 +355,7 @@ public class DogfightTurret : MonoBehaviour
         if (IsDead)
             return;
         IsDead = true;
-        VfxUtil.Explosion(Center, Paint, 1.6f);
+        VfxUtil.EnergyBurst(Center, Paint, 1.6f);
         // The battery goes up properly — War FX blast, then a burn that
         // marks the trophy until teardown sweeps the turret away.
         WarFx.Spawn(WarFx.Kind.Big, Center, 1.4f);

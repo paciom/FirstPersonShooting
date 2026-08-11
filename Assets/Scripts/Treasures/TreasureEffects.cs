@@ -87,7 +87,7 @@ public static class TreasureEffects
                 break;
         }
 
-        VfxUtil.Explosion(root.position + Vector3.up * 1.1f, tint, 0.8f);
+        VfxUtil.EnergyBurst(root.position + Vector3.up * 1.1f, tint, 0.8f);
         MatchAnnouncer.Say($"{who} GRABBED {def.displayName}", detail, tint);
     }
 
@@ -125,8 +125,8 @@ public static class TreasureEffects
     public static void Detonate(Vector3 position, TreasureDef def)
     {
         Color color = def != null ? def.color : new Color(1f, 0.22f, 0.16f);
-        VfxUtil.Explosion(position, color, 3.2f);
-        VfxUtil.Explosion(position, new Color(1f, 0.85f, 0.5f), 1.8f);
+        VfxUtil.EnergyBurst(position, color, 3.2f);
+        VfxUtil.EnergyBurst(position, new Color(1f, 0.85f, 0.5f), 1.8f);
 
         int caught = 0;
         foreach (var shield in Object.FindObjectsByType<EnergyShield>(FindObjectsSortMode.None))

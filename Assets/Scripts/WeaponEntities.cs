@@ -309,7 +309,7 @@ public class MagnetFieldEntity : MonoBehaviour
             Vector3.one * field.radius * 2f, teamColor, 0.055f);
         field._dome.transform.SetParent(go.transform, true);
 
-        VfxUtil.Explosion(go.transform.position, teamColor, 0.7f);
+        VfxUtil.EnergyBurst(go.transform.position, teamColor, 0.7f);
     }
 
     void Update()
@@ -433,7 +433,7 @@ public class TornadoEntity : MonoBehaviour
         _age += Time.deltaTime;
         if (_age >= life)
         {
-            VfxUtil.Explosion(transform.position + Vector3.up * 1f, color, 0.8f);
+            VfxUtil.EnergyBurst(transform.position + Vector3.up * 1f, color, 0.8f);
             Destroy(gameObject);
             return;
         }
@@ -672,7 +672,7 @@ public class DecoyEntity : MonoBehaviour
 
     void Dissolve()
     {
-        VfxUtil.Explosion(transform.position + Vector3.up * 1.2f, new Color(0.4f, 0.95f, 1f), 0.9f);
+        VfxUtil.EnergyBurst(transform.position + Vector3.up * 1.2f, new Color(0.4f, 0.95f, 1f), 0.9f);
         Destroy(gameObject);
     }
 }

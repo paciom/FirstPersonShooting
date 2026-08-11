@@ -39,7 +39,7 @@ public class BassDropper : Weapon
         _readyTime = Time.time + cooldownAfterShot;
 
         Vector3 center = ownerRoot.position + Vector3.up * 1f;
-        VfxUtil.Explosion(center, color, 2.2f);   // concentric pressure rings
+        VfxUtil.EnergyBurst(center, color, 2.2f);   // concentric pressure rings
 
         foreach (var shield in WeaponUtil.FindEnemies(TeamId))
         {
