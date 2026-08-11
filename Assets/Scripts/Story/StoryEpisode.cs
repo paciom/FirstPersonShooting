@@ -82,9 +82,8 @@ public class StoryBeat
     public string text;
     public string voice;
 
-    /// <summary>Animator verb: jab, hook, uppercut, elbow, backfist,
-    /// hammerfist, palmstrike, chop, punch, kick, highkick, sidekick, lowkick,
-    /// spinkick, axekick, crescentkick, backkick, kneestrike, flykick, blast,
+    /// <summary>Animator verb: punch, jab, hook, uppercut, elbow, kick,
+    /// highkick, sidekick, lowkick, spinkick, kneestrike, flykick, blast,
     /// block, hit, knockdown, getup, victory.</summary>
     public string verb;
 

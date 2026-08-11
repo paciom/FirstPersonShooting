@@ -63,8 +63,11 @@ public static class BrawlMoveForge
     ///     mid-move body drift that snapped home at every state seam.
     /// v12: the guard actually guards — elbows tucked to the ribs, forearms
     ///     upright at the chin instead of high over the head.
+    /// v13: capture-only movelist — the seven variants with no library
+    ///     preset retire, and hit/block/blast/victory adopt their new Meshy
+    ///     captures instead of template poses.
     /// </summary>
-    const int TemplateVersion = 12;
+    const int TemplateVersion = 13;
 
     static string VersionPath => $"{OutDir}/forge_version.txt";
 
@@ -231,6 +234,7 @@ public static class BrawlMoveForge
         AdoptWhole(robot, title, moves, BrawlAnim.Hit, false, restHips, HipsPin.Horizontal, "hit");
         AdoptWhole(robot, title, moves, BrawlAnim.Block, true, restHips, HipsPin.Horizontal, "block");
         AdoptWhole(robot, title, moves, BrawlAnim.Victory, true, restHips, HipsPin.Horizontal, "victory");
+        AdoptWhole(robot, title, moves, BrawlAnim.Blast, false, restHips, HipsPin.Horizontal, "blast");
         var meshyStance = AdoptClip(robot, title, "stance", true, restHips, HipsPin.Horizontal);
         if (meshyStance != null)
             stance = meshyStance;
