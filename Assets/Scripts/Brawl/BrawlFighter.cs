@@ -691,7 +691,9 @@ public class BrawlFighter : MonoBehaviour
         _grazedThisMove = false;
         _propHitThisMove = false;
         _effectorPrevValid = false;
-        BrawlAudio.Play(BrawlAudio.Id.Whoosh, transform.position + Vector3.up * 1.2f, 0.35f);
+        // No swing whoosh by design: a bout at action tempo throws moves
+        // constantly, and the air sound drowned the contact sounds that
+        // actually carry information — only impacts speak.
         Trigger(_variant.trigger);
         OnMoveStarted?.Invoke(_variant.display);
     }
