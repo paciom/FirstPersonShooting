@@ -42,6 +42,7 @@ from a new space entity.
 | Ep  | Robot | Entity                                | Status |
 |-----|-------|---------------------------------------|--------|
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
+| 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | song re-roll in progress |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the

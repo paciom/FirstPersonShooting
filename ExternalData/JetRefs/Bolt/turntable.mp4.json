@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "duration": 5,
+  "resolution": "720p",
+  "ratio": "1:1",
+  "refs": [
+    "D:\\Claude\\FirstPersongShooting\\ExternalData\\JetRefs\\Bolt\\jet_5.png"
+  ],
+  "task_id": "cgt-20260812074804-5bx5r",
+  "source_url": "https://ark-acg-ap-southeast-1.tos-ap-southeast-1.volces.com/dreamina-seedance-2-5/3002678075/Video/r5xb5-40847021806202-tgc_ddda1365878a0cffff00000000000000000000439580294687120/cgt-20260812074804-5bx5r.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Credential=AKLTYWJkZTExNjA1ZDUyNDc3YzhjNTM5OGIyNjBhNDcyOTQ%2F20260811%2Fap-southeast-1%2Ftos%2Frequest&X-Tos-Date=20260811T234955Z&X-Tos-Expires=86400&X-Tos-Max-Requests=100&X-Tos-Signature=2cc4aad1eecef797ac569f02ca6a2905d252218cb509ec59bd8864a257619753&X-Tos-SignedHeaders=host",
+  "prompt": "A product turntable shot of the futuristic fighter jet from the reference image. The jet hovers perfectly level in the center of the frame against a plain dark grey studio background with soft even studio lighting, and rotates slowly and smoothly through one full 360-degree turn around its vertical axis, starting from the reference angle. The camera is completely static at a slight three-quarter high angle. The jet's design stays exactly faithful to the reference image: same colors, same proportions, same details, sharp pointed nose, cockpit canopy toward the front, engine exhausts at the rear. No other objects, no text, no effects, no camera movement, constant lighting. Silent, no music."
+}
