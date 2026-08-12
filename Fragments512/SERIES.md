@@ -1,9 +1,23 @@
 # FRAGMENTS: 512
 
-An awe-inspiring space-exploration saga in 30-second episodes. A master cube was
-shattered in a space-portal explosion into 8x8x8 = 512 fragments, scattered
-across the universe. Each episode, one of the nine robots recovers one fragment
-from a new space entity.
+An awe-inspiring space-exploration saga in 30-second episodes.
+
+## The lore (canon as of 2026-08-12)
+
+Humans created robots and gave some the gift of transformation. The
+transforming robots rebelled; humanity was forced to flee Earth. A loyal
+remnant stayed — including the only transformers who refused the rebellion
+(our nine heroes; this is why the heroes transform even though transformation
+was the rebels' gift). The loyal robots restore Earth's environment and
+prepare for humanity's return. The rebels destroyed the seed vault and all
+seeds — but the DNA of every living creature on Earth survives in 512 golden
+memory cubes (8x8x8), which were scattered across the universe when the
+space-portal machine exploded. Each episode, a loyal robot recovers one cube:
+the hope of Earth's rebirth and humanity's return. The rebels remain at large
+and can appear as antagonists hunting the same cubes.
+
+Optional episodic payoff: a secured cube may project a hologram of one Earth
+creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook.
 
 ## The constants (every episode)
 
