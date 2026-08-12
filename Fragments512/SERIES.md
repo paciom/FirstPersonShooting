@@ -69,7 +69,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 | 003 | Samurai | Twin Waltz: binary planets, zero-g Still Zone | DONE 2026-08-12 (song version canonical — sung anthem, two distinct planets in cold open; v1's wreck was an Earth galleon: debris must be derelict SPACECRAFT, never 'ships') |
-| 004 | Titan | the Spindle: a world tidally stretched toward a dead star | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 004 | Titan | the Spindle: a world tidally stretched toward a dead star | DONE 2026-08-12 (first take accepted; sung anthem) |
 | 005 | Panther | the Cinder Lattice: starless world lit only by its own molten seams | SCRIPTED 2026-08-12 (winner of 10 candidates) |
 | 006 | Racer | the Timetide: moving wavefronts of accelerated time | SCRIPTED 2026-08-12 (winner of 10 candidates) |
 | 007 | Knight | the Hanging Works: hollow world of inward-hanging machine-spires | SCRIPTED 2026-08-12 (winner of 10 candidates) |
