@@ -42,6 +42,11 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 
 ## Production notes
 
+- DEFAULT AUDIO for every fragment episode: an original English MOTIVATIONAL
+  anthem with sung lyrics, composed by Seedance in the same single pass
+  (lyrics written into the prompt, themed to the episode's world), plus the
+  closing spoken voice line. Orchestral-only is the exception, not the rule.
+
 - Generator: Seedance 2.5 via Tools/seedance.py, 30s 720p 9:16.
 - References per episode: robot portrait + vehicle-form still, both sourced
   from ExternalData (vehicle stills extracted from the *_Transformation.mp4
