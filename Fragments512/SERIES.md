@@ -69,7 +69,27 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 | 003 | Samurai | Twin Waltz: binary planets, zero-g Still Zone | DONE 2026-08-12 (song version canonical — sung anthem, two distinct planets in cold open; v1's wreck was an Earth galleon: debris must be derelict SPACECRAFT, never 'ships') |
+| 004 | Titan | the Spindle: a world tidally stretched toward a dead star | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 005 | Panther | the Cinder Lattice: starless world lit only by its own molten seams | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 006 | Racer | the Timetide: moving wavefronts of accelerated time | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 007 | Knight | the Hanging Works: hollow world of inward-hanging machine-spires | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 008 | Bolt | the Petrified Storm: lightning frozen mid-strike, re-firing in waves | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 009 | Ranger | Respira: the crust is one breathing membrane | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 010 | Scout | the Reiteration: mountains built of smaller copies of themselves | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 011 | Hawk | the Thousand Panes: stacked mirror layers inside a giant | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 012 | Samurai | the Chladni Plains: a vibrating crust patterned by its own note | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | SCRIPTED 2026-08-12 (winner of 10 candidates) |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the
 close. (v1's lattice close and anchor_lattice_frame.png are retired.)
+
+## Episode 004-013 slate
+
+Each was chosen from ten candidate prompts written against a single assigned
+domain, so no two episodes share a world concept. Candidates are kept in
+`epNNN/candidates/`; the reasoning for each pick is in `epNNN/SELECTION.md`;
+the winner is `epNNN/prompt.txt`, generation-ready. Domains assigned:
+gravity (004), darkness (005), time (006), inside-out (007), plasma (008),
+biology (009), geometry (010), gas-giant depth (011), sound (012), light (013).
+Shared authoring rules live in `AGENT_BRIEF.md`.
