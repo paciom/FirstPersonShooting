@@ -60,7 +60,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 
 | Ep  | Robot | Entity                                | Status |
 |-----|-------|---------------------------------------|--------|
-| 000 | Scout+Hawk | Prologue: Cube 0, rebellion, exodus | DONE 2026-08-12 — v4 recommended (5 rolls: v4 clean narration + gridded cube; v5 best shatter shot, worst audio) |
+| 000 | Scout+Hawk | Prologue: Cube 0, rebellion, exodus | DONE 2026-08-12 — v7 recommended (rewritten three-party narration; v1-v5 use the old pronoun script). Narration flubs ~half of rolls: transcribe before accepting. |
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 
