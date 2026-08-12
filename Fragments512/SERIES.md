@@ -70,15 +70,15 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 | 003 | Samurai | Twin Waltz: binary planets, zero-g Still Zone | DONE 2026-08-12 (song version canonical — sung anthem, two distinct planets in cold open; v1's wreck was an Earth galleon: debris must be derelict SPACECRAFT, never 'ships') |
 | 004 | Titan | the Spindle: a world tidally stretched toward a dead star | DONE 2026-08-12 (first take accepted; sung anthem) |
-| 005 | Panther | the Cinder Lattice: starless world lit only by its own molten seams | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 006 | Racer | the Timetide: moving wavefronts of accelerated time | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 007 | Knight | the Hanging Works: hollow world of inward-hanging machine-spires | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 008 | Bolt | the Petrified Storm: lightning frozen mid-strike, re-firing in waves | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 009 | Ranger | Respira: the crust is one breathing membrane | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 010 | Scout | the Reiteration: mountains built of smaller copies of themselves | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 011 | Hawk | the Thousand Panes: stacked mirror layers inside a giant | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 012 | Samurai | the Chladni Plains: a vibrating crust patterned by its own note | SCRIPTED 2026-08-12 (winner of 10 candidates) |
-| 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | SCRIPTED 2026-08-12 (winner of 10 candidates) |
+| 005 | Panther | the Cinder Lattice: starless world lit only by its own molten seams | DONE 2026-08-13 (2 takes; v1 recommended) |
+| 006 | Racer | the Timetide: moving wavefronts of accelerated time | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 007 | Knight | the Hanging Works: hollow world of inward-hanging machine-spires | DONE 2026-08-13 (2 takes; v1 recommended) |
+| 008 | Bolt | the Petrified Storm: lightning frozen mid-strike, re-firing in waves | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 009 | Ranger | Respira: the crust is one breathing membrane | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 010 | Scout | the Reiteration: mountains built of smaller copies of themselves | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 011 | Hawk | the Thousand Panes: stacked mirror layers inside a giant | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 012 | Samurai | the Chladni Plains: a vibrating crust patterned by its own note | DONE 2026-08-13 (2 takes; v1 recommended) |
+| 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | DONE 2026-08-13 (2 takes; v1 recommended) |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the
@@ -93,3 +93,15 @@ the winner is `epNNN/prompt.txt`, generation-ready. Domains assigned:
 gravity (004), darkness (005), time (006), inside-out (007), plasma (008),
 biology (009), geometry (010), gas-giant depth (011), sound (012), light (013).
 Shared authoring rules live in `AGENT_BRIEF.md`.
+
+### Generation notes, 005-013
+
+Two takes each via `Tools/fragments_batch.sh` in three parallel lanes.
+ep009 v2 was refused once with `OutputVideoSensitiveContentDetected` — the
+output-side moderation filter, not a prompt error, since v1 of the identical
+prompt passed; a straight retry cleared it. Respira's flesh-like terrain is
+the likely trigger, so soften anatomical wording if it recurs.
+
+Recurring audio defect across the series: the singer sometimes performs a
+stage direction as a lyric (ep009 v1 sings "sphere pulses gold"; ep012 v2
+sings "collapses flat at once"). Transcribe every take before accepting it.
