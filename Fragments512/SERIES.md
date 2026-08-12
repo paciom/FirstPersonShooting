@@ -11,8 +11,10 @@ from a new space entity.
   circuit glyphs, always identical, always rising on a column of light.
 - **The counter**: holographic `FRAGMENT NNN / 512` in the cold open.
 - **The ritual close**: close-up of the robot's open palm holding the ONE cube
-  (never show multiple cubes), holographic text "FRAGMENT NNN / 512 — SECURED",
-  a calm epic voice says "Fragment <n>... secured."
+  (never show multiple cubes), holographic text "FRAGMENT — SECURED" (NO digits
+  — the model reliably mistypes numbers in this shot; ep002 typed "516" twice),
+  a calm epic voice says "Fragment <n>... secured." The cold-open counter and
+  the voice line carry the numbers.
 - **Hard rules learned from ep001 v1**: no moons (they render as unnaturally
   stacked with inconsistent lighting); ONE sun with consistent shadows; jets
   fly NOSE-FIRST (give front-3/4, rear-3/4 and profile angle refs from
@@ -42,7 +44,7 @@ from a new space entity.
 | Ep  | Robot | Entity                                | Status |
 |-----|-------|---------------------------------------|--------|
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
-| 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | song re-roll in progress |
+| 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the
