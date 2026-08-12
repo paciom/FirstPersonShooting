@@ -9,11 +9,17 @@ using UnityEngine;
 /// the raider brain would circle the first tank it met until the frontier caught
 /// up and pushed it off the bottom of the screen.
 ///
-/// So it drives forward by default and lets four pulls argue with that:
+/// So it drives forward by default and lets five pulls argue with that:
 ///
-///  * PICKUPS. It will detour for a pod, a kit or a beacon within reach — the
-///    strongest pull, because collecting them is most of what makes the run
-///    interesting to watch.
+///  * THE THROTTLE. Full ahead on open road, eased right down when the army is
+///    actually engaging. A hero that never slows outruns its own enemies —
+///    every fight slides off the bottom of the screen before it happens, and
+///    the broadcast is a tank driving alone up an empty road. The war is the
+///    show; the throttle is what keeps it in shot.
+///  * PICKUPS. It will detour for a pod, a kit or a beacon within reach — a
+///    strong pull, because collecting them is half of what there is to watch.
+///  * OUTPOSTS. While healthy it drives at the outpost it has decided to crack,
+///    not just shoots at it — captures are the other half.
 ///  * SPACE. Anything too close gets backed away from, so it does not simply
 ///    drive into the army and stop.
 ///  * LANES. It hunts the emptiest side of the strip, which is what makes it
@@ -34,6 +40,10 @@ public class TankPilot : MonoBehaviour
 
     /// <summary>Closer than this and it gives ground.</summary>
     const float TooClose = 13f;
+
+    /// <summary>An enemy inside this range means a fight is on, and the hero
+    /// stays for it instead of driving out of it.</summary>
+    const float BrawlRange = 24f;
 
     /// <summary>How far ahead it reads the field when choosing a side.</summary>
     const float LaneLook = 40f;
@@ -57,13 +67,27 @@ public class TankPilot : MonoBehaviour
         if (_self == null || _self.IsDown)
             return;
 
-        Vector3 heading = Vector3.forward;                  // up the field, always
-        heading += TowardPickup() * 1.6f;
+        // The throttle is the drive vector's LENGTH — TankPawn reads 0–1 as
+        // speed — so it must survive to the end rather than being normalized
+        // away. Errands override the brawl brake: a hero that crawled to its
+        // pickups would be taking fire the whole way for no story at all.
+        Vector3 pickupPull = TowardPickup();
+        Vector3 outpostPull = TowardOutpost();
+        float throttle = Advance();
+        if (pickupPull != Vector3.zero)
+            throttle = Mathf.Max(throttle, 0.75f);
+        else if (outpostPull != Vector3.zero)
+            throttle = Mathf.Max(throttle, 0.6f);
+
+        Vector3 heading = Vector3.forward * throttle;
+        heading += pickupPull * 1.6f;
+        heading += outpostPull * 1.1f;
         heading += AwayFromCrowding() * 1.2f;
         heading += TowardOpenLane() * 0.7f;
         heading += OffTheWalls() * 2f;
 
-        _self.Drive = new Vector2(heading.x, heading.z).normalized;
+        var drive = new Vector2(heading.x, heading.z);
+        _self.Drive = drive.sqrMagnitude > 1e-6f ? drive.normalized * throttle : Vector2.zero;
         _self.Firing = true;
 
         var quarry = ChooseQuarry();
@@ -109,6 +133,70 @@ public class TankPilot : MonoBehaviour
         if (outpost != null && healthy && outpostScore < 45f)
             return outpost;
         return nearest ?? outpost;
+    }
+
+    /// <summary>
+    /// The throttle. Full ahead on open road; eased right down when the army
+    /// is actually engaging, so the hero stands and trades fire — the scroll
+    /// still creeps the run forward underneath the brawl, and the moment the
+    /// contact is cleared the sprint resumes. Enemies already dropping off the
+    /// bottom are not a fight, so they do not slow it.
+    ///
+    /// The exception is a hero at low shield, which runs THROUGH fights: the
+    /// mode's own repair-drop logic hands medicine to a hurt hero, and going
+    /// and finding it is both the survival play and a story to watch.
+    /// </summary>
+    float Advance()
+    {
+        if (_self.Shield != null && _self.Shield.Normalized < 0.35f)
+            return 1f;
+
+        float nearest = float.MaxValue;
+        foreach (var pawn in TankPawn.All)
+        {
+            if (pawn == null || pawn.Team == _self.Team || pawn.IsDown
+                || pawn.Kind == TankPawn.Chassis.Structure)
+                continue;
+            Vector3 gap = pawn.transform.position - transform.position;
+            gap.y = 0f;
+            if (gap.z < -10f)
+                continue;                       // dropping behind: the scroll has it
+            nearest = Mathf.Min(nearest, gap.magnitude);
+        }
+
+        if (nearest < BrawlRange)
+            return 0.2f;
+        if (nearest < BrawlRange * 1.6f)
+            return 0.55f;                       // ease in rather than braking on a line
+        return 1f;
+    }
+
+    /// <summary>
+    /// Drive at the outpost worth cracking, while healthy enough to crack it —
+    /// the same shield floor <see cref="ChooseQuarry"/> applies to shooting
+    /// one. Pulls to just inside trading range and no further: parking on an
+    /// outpost's doorstep is how an AI eats a full broadside.
+    /// </summary>
+    Vector3 TowardOutpost()
+    {
+        if (_self.Shield == null || _self.Shield.Normalized < OutpostShieldFloor)
+            return Vector3.zero;
+
+        foreach (var pawn in TankPawn.All)
+        {
+            if (pawn == null || pawn.Team == _self.Team || pawn.IsDown
+                || pawn.Kind != TankPawn.Chassis.Structure)
+                continue;
+            Vector3 gap = pawn.transform.position - transform.position;
+            gap.y = 0f;
+            if (gap.z < -6f)
+                continue;                       // the frontier owns what is behind
+            float distance = gap.magnitude;
+            if (distance < 1e-3f || distance > 55f)
+                continue;
+            return gap / distance * Mathf.Clamp01((distance - 16f) / 24f);
+        }
+        return Vector3.zero;
     }
 
     /// <summary>The nearest pickup worth a detour, as a pull toward it.</summary>

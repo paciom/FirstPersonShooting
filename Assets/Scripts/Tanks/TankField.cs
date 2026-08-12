@@ -85,18 +85,26 @@ public class TankField : MonoBehaviour
     }
 
     /// <summary>
-    /// Hold a pawn inside the fence and behind the frontier.
+    /// Hold a pawn inside the fence — and, for the HERO ONLY, behind the
+    /// frontier.
     ///
-    /// The back edge is the only wall that matters: it is what turns "drive
-    /// wherever" into a scrolling game. A pawn parked against it is being pushed
-    /// up the field at <see cref="ScrollSpeed"/> — slowly enough to be a nudge
-    /// rather than a shove, but it never stops.
+    /// The back edge is what turns "drive wherever" into a scrolling game, and
+    /// it applies to the one pawn the screen follows. A pawn parked against it
+    /// is being pushed up the field at <see cref="ScrollSpeed"/> — slowly
+    /// enough to be a nudge rather than a shove, but it never stops.
+    ///
+    /// Everything else must be free to fall PAST that line, because the sweep
+    /// (<see cref="FallenBehind"/>) collects raiders well behind it — a raider
+    /// held at the trail line can never reach the sweep, and every tank slower
+    /// than the hero ends up pinned there in a jostling scrum at the bottom of
+    /// the screen.
     /// </summary>
-    public static Vector3 Clamp(Vector3 position, float radius)
+    public static Vector3 Clamp(Vector3 position, float radius, bool heldAtTrail)
     {
         float lane = Mathf.Max(1f, HalfWidth - radius);
         position.x = Mathf.Clamp(position.x, -lane, lane);
-        position.z = Mathf.Max(position.z, Frontier - Trail);
+        if (heldAtTrail)
+            position.z = Mathf.Max(position.z, Frontier - Trail);
         return position;
     }
 

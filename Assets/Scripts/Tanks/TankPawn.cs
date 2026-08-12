@@ -133,6 +133,14 @@ public class TankPawn : MonoBehaviour
     /// <summary>Hold the trigger. Constant fire is the mode, so this is normally true.</summary>
     public bool Firing { get; set; }
 
+    /// <summary>
+    /// True on the hero alone: held at the field's trail line so the scroll can
+    /// push it. Everyone else may fall off the bottom and be swept — see
+    /// <see cref="TankField.Clamp"/> for why holding them there instead piles
+    /// the army up at the bottom of the screen.
+    /// </summary>
+    public bool HeldAtTrail { get; set; }
+
     /// <summary>Top speed in metres per second.</summary>
     public float speed = 9f;
 
@@ -593,7 +601,7 @@ public class TankPawn : MonoBehaviour
             else
                 DriveLegs(heading, dt);
 
-            transform.position = TankField.Clamp(transform.position, Radius);
+            transform.position = TankField.Clamp(transform.position, Radius, HeldAtTrail);
             Separate();
             AvoidScenery();
             // Flat ground: the field is a deck at y = 0 and nothing in this mode

@@ -197,6 +197,7 @@ public class TankRaid : MonoBehaviour
             TankArsenal.Role.Hero);
         _hero.speed = HeroSpeed;
         _hero.turnSpeed = HeroTurn;
+        _hero.HeldAtTrail = true;
         _hero.Shield.regenDelay = HeroRegenDelay;
         _hero.Shield.regenPerSecond = HeroRegenPerSecond;
         _hero.OnWrecked += HeroWrecked;
