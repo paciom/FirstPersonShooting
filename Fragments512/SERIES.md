@@ -60,6 +60,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 
 | Ep  | Robot | Entity                                | Status |
 |-----|-------|---------------------------------------|--------|
+| 000 | Scout+Hawk | Prologue: Cube 0, rebellion, exodus | DONE 2026-08-12 |
 | 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 
