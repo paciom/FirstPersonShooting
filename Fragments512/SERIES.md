@@ -5,16 +5,19 @@ An awe-inspiring space-exploration saga in 30-second episodes.
 ## The lore (canon as of 2026-08-12)
 
 Humans created robots and gave some the gift of transformation. The
-transforming robots rebelled; humanity was forced to flee Earth. A loyal
-remnant stayed — including the only transformers who refused the rebellion
-(our nine heroes; this is why the heroes transform even though transformation
-was the rebels' gift). The loyal robots restore Earth's environment and
-prepare for humanity's return. The rebels destroyed the seed vault and all
-seeds — but the DNA of every living creature on Earth survives in 512 golden
-memory cubes (8x8x8), which were scattered across the universe when the
-space-portal machine exploded. Each episode, a loyal robot recovers one cube:
-the hope of Earth's rebirth and humanity's return. The rebels remain at large
-and can appear as antagonists hunting the same cubes.
+transforming robots rebelled; humanity was forced to flee Earth. The rebels
+destroyed the seed vault and all seeds. Humanity's DNA archive — CUBE 0, one
+colossal cube assembled from 512 small glyph cubes (8x8x8) holding the DNA of
+every living creature on Earth — was being carried through the great migration
+portal during the exodus when rebel fire destroyed the portal: the last ships
+slipped through, but the explosion shattered Cube 0 at the threshold and
+dispersed its 512 cubes across the universe. A loyal remnant stayed on Earth —
+including the only transformers who refused the rebellion (our nine heroes;
+this is why the heroes transform even though transformation was the rebels'
+gift). They restore Earth's environment, prepare for humanity's return, and
+recover the cubes: the hope of Earth's rebirth. The rebels remain at large and
+can appear as antagonists hunting the same cubes. The ep000 title card reads
+exactly "CUBE 0".
 
 Optional episodic payoff: a secured cube may project a hologram of one Earth
 creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook.
