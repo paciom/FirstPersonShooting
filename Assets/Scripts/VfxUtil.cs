@@ -53,8 +53,12 @@ public static class VfxUtil
     /// </summary>
     public static void Explosion(Vector3 position, Color color, float scale = 1f)
     {
-        FlashQuad.Spawn(position, Glow, Color.white, 0.5f * scale, 1.5f * scale, 0.10f, 2.4f);
-        FlashQuad.Spawn(position, Glow, color, 0.7f * scale, 2.2f * scale, 0.22f, 2.0f);
+        // Warm-white, not white, and under the bloom threshold's reach: this
+        // pop sits ON TOP of the fireball's own stacked-hot core, and pure
+        // white here is the last coat of paint on a whiteout.
+        FlashQuad.Spawn(position, Glow, new Color(1f, 0.85f, 0.55f),
+            0.4f * scale, 1.2f * scale, 0.08f, 1.8f);
+        FlashQuad.Spawn(position, Glow, color, 0.7f * scale, 2.2f * scale, 0.22f, 1.8f);
         FlashQuad.Spawn(position, Ring, color, 0.4f * scale, 5.5f * scale, 0.5f, 2.2f);
         SpawnSparks(position, color, Mathf.RoundToInt(22 * scale), 8f * scale);
         // No glow motes: the fireball brings its own embers, and additive

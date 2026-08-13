@@ -207,11 +207,14 @@ public static class WarFx
     }
 
     /// <summary>
-    /// Peak brightness an additive layer may reach — on its hottest channel,
-    /// after the shader's own 4x. This project's bloom (threshold 0.8,
-    /// intensity 2.2) turns anything much hotter into one soft blob.
+    /// Peak brightness ONE additive particle may reach — on its hottest
+    /// channel, after the shader's own 4x. Deliberately near the bloom
+    /// threshold rather than above it, because additive particles STACK:
+    /// the fireball's core is five or ten of them deep, and the stack is
+    /// what should carry the heat. A ceiling of 1.6 looked right for one
+    /// particle and still summed to a white core.
     /// </summary>
-    const float AdditiveCeiling = 1.6f;
+    const float AdditiveCeiling = 0.9f;
 
     /// <summary>
     /// What the fire renders AS, whatever colour the particles think they
@@ -223,7 +226,10 @@ public static class WarFx
     /// featureless blob. Forcing the tint to a fire colour makes even the
     /// white-phase particles render orange, so the bloom spreads FIRE.
     /// </summary>
-    static readonly Color FireWarm = new Color(1f, 0.58f, 0.26f);
+    /// Deep orange, not amber: when the core stacks hot, channels saturate in
+    /// order — red first, then green, then blue — and the lower green/blue sit
+    /// here, the longer a stacked core stays yellow-orange instead of white.
+    static readonly Color FireWarm = new Color(1f, 0.48f, 0.16f);
 
     /// <summary>
     /// The pack's additive shaders OVERBRIGHTEN BY DESIGN: they multiply
