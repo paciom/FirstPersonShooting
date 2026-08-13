@@ -74,7 +74,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 |-----|-------|---------------------------------------|--------|
 | 000 | Scout+Hawk | Prologue: Cube 0, rebellion, exodus | DONE 2026-08-12 — v7 recommended (rewritten three-party narration; v1-v5 use the old pronoun script). Narration flubs ~half of rolls: transcribe before accepting. |
 | 001 | Scout | the Stillwater: an ocean frozen mid-break with its spray still hanging in the air | DONE 2026-08-13 (regenerated to current standard; v3 recommended — the 2026-08-12 v2 cut predates the sung anthem and still has digits in its close) |
-| 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
+| 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-13 (regenerated on the countdown-close standard; v4 recommended. Earth nouns forest/trees/cathedral removed) |
 | 003 | Samurai | Twin Waltz: binary planets, zero-g Still Zone | DONE 2026-08-12 (song version canonical — sung anthem, two distinct planets in cold open; v1's wreck was an Earth galleon: debris must be derelict SPACECRAFT, never 'ships') |
 | 004 | Titan | the Spindle: a world tidally stretched toward a dead star | DONE 2026-08-12 (first take accepted; sung anthem) |
 | 005 | Panther | the Cinder Lattice: starless world lit only by its own molten seams | DONE 2026-08-13 (2 takes; v1 recommended) |
@@ -129,3 +129,9 @@ A living antagonist needs its own beat budget: dive compressed to 3-13s, fight
 the world's own material so it cannot default to an Earth animal) and a FIGHT
 RULE keeping the duel to impacts, sparks and throws, with the creature driven
 off rather than killed.
+
+Canonical prompt files: every episode's live prompt is `epNNN/prompt.txt`.
+ep001-003 previously kept theirs under prompt_v3.txt / prompt_song.txt while a
+superseded draft sat at prompt.txt — which the batch driver and the compliance
+checker both read. Superseded drafts are now suffixed (prompt_orchestral.txt,
+prompt_v1_original.txt) and prompt.txt is always the canonical one.
