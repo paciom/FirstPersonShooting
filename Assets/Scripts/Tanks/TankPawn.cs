@@ -141,6 +141,14 @@ public class TankPawn : MonoBehaviour
     /// </summary>
     public bool HeldAtTrail { get; set; }
 
+    /// <summary>
+    /// A temporary forward fence, in world z. The pawn drives at full power
+    /// but cannot ADVANCE past this line while it is set — the AI pilot's way
+    /// of waiting for a pinned recruit without touching anyone's speed.
+    /// Infinity when clear (the default, and the player's permanent state).
+    /// </summary>
+    public float MaxAdvanceZ { get; set; } = float.PositiveInfinity;
+
     /// <summary>Top speed in metres per second.</summary>
     public float speed = 9f;
 
@@ -602,6 +610,12 @@ public class TankPawn : MonoBehaviour
                 DriveLegs(heading, dt);
 
             transform.position = TankField.Clamp(transform.position, Radius, HeldAtTrail);
+            if (transform.position.z > MaxAdvanceZ)
+            {
+                var held = transform.position;
+                held.z = MaxAdvanceZ;
+                transform.position = held;
+            }
             Separate();
             AvoidScenery();
             // Flat ground: the field is a deck at y = 0 and nothing in this mode

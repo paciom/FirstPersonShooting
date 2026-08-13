@@ -9,13 +9,10 @@ using UnityEngine;
 /// the raider brain would circle the first tank it met until the frontier caught
 /// up and pushed it off the bottom of the screen.
 ///
-/// So it drives forward by default and lets five pulls argue with that:
+/// It drives at FULL SPEED, always — never throttled for balance (the field
+/// balances by how many raiders it feeds, not by slowing anybody down) — and
+/// lets four pulls argue about direction:
 ///
-///  * THE THROTTLE. Full ahead on open road, eased right down when the army is
-///    actually engaging. A hero that never slows outruns its own enemies —
-///    every fight slides off the bottom of the screen before it happens, and
-///    the broadcast is a tank driving alone up an empty road. The war is the
-///    show; the throttle is what keeps it in shot.
 ///  * PICKUPS. It will detour for a pod, a kit or a beacon within reach — a
 ///    strong pull, because collecting them is half of what there is to watch.
 ///  * OUTPOSTS. While healthy it drives at the outpost it has decided to crack,
@@ -26,6 +23,10 @@ using UnityEngine;
 ///    look like it is picking its way through rather than ploughing.
 ///  * THE FENCE. A soft push off both walls, because everything above can
 ///    otherwise pin it against one.
+///
+/// Waiting for the escort is a GEO-FENCE, not a slowdown: while a recruit is
+/// caught at the bottom edge the hero may fight and jink at full power but
+/// cannot advance past where it stood — see <see cref="EscortFence"/>.
 ///
 /// The gun is separate and simple: hold the nearest enemy, always. That is the
 /// same freedom the player has, and watching a hull drive one way while its
@@ -42,10 +43,6 @@ public class TankPilot : MonoBehaviour
 
     /// <summary>Closer than this and it gives ground.</summary>
     const float TooClose = 13f;
-
-    /// <summary>An enemy inside this range means a fight is on, and the hero
-    /// stays for it instead of driving out of it.</summary>
-    const float BrawlRange = 24f;
 
     /// <summary>How far ahead it reads the field when choosing a side.</summary>
     const float LaneLook = 40f;
@@ -69,30 +66,15 @@ public class TankPilot : MonoBehaviour
         if (_self == null || _self.IsDown)
             return;
 
-        // The throttle is the drive vector's LENGTH — TankPawn reads 0–1 as
-        // speed — so it must survive to the end rather than being normalized
-        // away. Errands override the brawl brake: a hero that crawled to its
-        // pickups would be taking fire the whole way for no story at all.
-        Vector3 pickupPull = TowardPickup();
-        Vector3 outpostPull = TowardOutpost();
-        float throttle = Advance();
-        if (pickupPull != Vector3.zero)
-            throttle = Mathf.Max(throttle, 0.75f);
-        else if (outpostPull != Vector3.zero)
-            throttle = Mathf.Max(throttle, 0.6f);
-        // The escort outranks every errand: a convoy that leaves its recruits
-        // pinned at the bottom edge is throwing its own rewards away.
-        throttle = WaitForEscort(throttle);
-
-        Vector3 heading = Vector3.forward * throttle;
-        heading += pickupPull * 1.6f;
-        heading += outpostPull * 1.1f;
+        Vector3 heading = Vector3.forward;
+        heading += TowardPickup() * 1.6f;
+        heading += TowardOutpost() * 1.1f;
         heading += AwayFromCrowding() * 1.2f;
         heading += TowardOpenLane() * 0.7f;
         heading += OffTheWalls() * 2f;
 
-        var drive = new Vector2(heading.x, heading.z);
-        _self.Drive = drive.sqrMagnitude > 1e-6f ? drive.normalized * throttle : Vector2.zero;
+        _self.Drive = new Vector2(heading.x, heading.z).normalized;
+        _self.MaxAdvanceZ = EscortFence();
         _self.Firing = true;
 
         var quarry = ChooseQuarry();
@@ -103,29 +85,30 @@ public class TankPilot : MonoBehaviour
     }
 
     /// <summary>
-    /// Wait for the escort. A recruit caught at the field's trail line is
-    /// being dragged by the scroll, its drive projected sideways along the
-    /// clamp — the "tank sliding sideways at the bottom of the screen" tell —
-    /// and a hero that keeps cruising turns that into a permanent state. With
-    /// the throttle near zero the scroll closes the gap and the recruits (a
-    /// metre a second faster than the hero) are back in formation in seconds.
+    /// The hold line that waits for the escort — a GEO-FENCE, not a slowdown.
+    /// A recruit caught at the field's trail line is being dragged by the
+    /// scroll, and a hero that keeps advancing turns that into a permanent
+    /// state. While one is caught, the hero's forward progress is fenced at
+    /// its current position: it still drives, fights and dodges at full
+    /// power, it just gains no ground until the recruits (faster than the
+    /// hero) are back in formation — usually seconds.
     ///
     /// The one thing that outranks waiting is running for its life: a hero at
     /// a third shield keeps fleeing, because a dead hero rescues nobody.
     /// </summary>
-    float WaitForEscort(float throttle)
+    float EscortFence()
     {
         if (_self.Shield != null && _self.Shield.Normalized < 0.35f)
-            return throttle;
+            return float.PositiveInfinity;
         foreach (var pawn in TankPawn.All)
         {
             if (pawn == null || pawn == _self || pawn.Team != _self.Team || pawn.IsDown
                 || pawn.Kind == TankPawn.Chassis.Structure)
                 continue;
             if (pawn.transform.position.z < TankField.Frontier - TankField.Trail + 2.5f)
-                return Mathf.Min(throttle, 0.15f);
+                return _self.transform.position.z + 0.5f;
         }
-        return throttle;
+        return float.PositiveInfinity;
     }
 
     /// <summary>
@@ -164,61 +147,6 @@ public class TankPilot : MonoBehaviour
         if (outpost != null && healthy && outpostScore < 45f)
             return outpost;
         return nearest ?? outpost;
-    }
-
-    /// <summary>
-    /// The throttle — and it never opens right up. This pilot exists for the
-    /// broadcast, and a hero at full speed outruns its own 7 m/s enemies: the
-    /// war slides off the bottom of the screen and the show is a tank driving
-    /// alone. Cruise sits just under raider speed, so the army genuinely
-    /// arrives, the escort keeps formation, and the drops get collected —
-    /// distance still accumulates because the fights end.
-    ///
-    /// Eased right down when the army is actually engaging, so the hero
-    /// stands and trades fire — the scroll still creeps the run forward
-    /// underneath the brawl. Enemies already dropping off the bottom are not
-    /// a fight, so they do not slow it.
-    ///
-    /// The exception is a hero at low shield, which runs THROUGH fights: the
-    /// mode's own repair-drop logic hands medicine to a hurt hero, and going
-    /// and finding it is both the survival play and a story to watch.
-    /// </summary>
-    float Advance()
-    {
-        if (_self.Shield != null && _self.Shield.Normalized < 0.35f)
-            return 1f;
-
-        // COUNT the engagement rather than reacting to the nearest single
-        // enemy. The spawner keeps something in contact almost constantly,
-        // so "any enemy nearby → crawl" had the early run (slow kills, no
-        // upgrades) stuck at scroll speed for minutes, then visibly speeding
-        // up as boons made wave-clears instant — pacing that read as a bug.
-        // One attacker is a skirmish the hero fights on the move; a real
-        // crossfire is what earns the brake.
-        int near = 0, approaching = 0;
-        foreach (var pawn in TankPawn.All)
-        {
-            if (pawn == null || pawn.Team == _self.Team || pawn.IsDown
-                || pawn.Kind == TankPawn.Chassis.Structure)
-                continue;
-            Vector3 gap = pawn.transform.position - transform.position;
-            gap.y = 0f;
-            if (gap.z < -10f)
-                continue;                       // dropping behind: the scroll has it
-            float distance = gap.magnitude;
-            if (distance < BrawlRange)
-                near++;
-            else if (distance < BrawlRange * 1.6f)
-                approaching++;
-        }
-
-        if (near >= 2)
-            return 0.35f;                       // a crossfire: stand and trade
-        if (near == 1)
-            return 0.5f;                        // a skirmish: fight on the move
-        if (approaching > 0)
-            return 0.55f;                       // contact soon: ease in
-        return 0.65f;                           // open road
     }
 
     /// <summary>
