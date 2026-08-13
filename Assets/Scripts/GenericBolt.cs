@@ -288,7 +288,13 @@ public class GenericBolt : MonoBehaviour
         _dead = true;
         if (spec.splashRadius > 0f)
         {
-            VfxUtil.Explosion(at, spec.color, spec.splashScale);
+            // EnergyBurst, NOT Explosion: a splash weapon lands several times
+            // a second, and the full combustion explosion — which since
+            // 2026-08 includes a War FX fireball — stacked per shot into a
+            // permanent white inferno at the impact point (and a particle
+            // storm). The bolt's splash is an energy pop in the weapon's
+            // colour; the fireball belongs to things that DIE.
+            VfxUtil.EnergyBurst(at, spec.color, spec.splashScale);
             WeaponUtil.SplashDamage(at, spec.splashRadius, spec.damage, teamId, ownerRoot);
         }
         Destroy(gameObject);

@@ -79,9 +79,13 @@ public static class VfxUtil
     /// (~2.5) so the burst keeps its colour instead of clipping to a blob.</summary>
     public static void EnergyBurst(Vector3 position, Color color, float scale = 1f)
     {
-        FlashQuad.Spawn(position, Glow, Color.white, 0.6f * scale, 2f * scale, 0.14f, 2.4f);
-        FlashQuad.Spawn(position, Glow, color, 0.8f * scale, 3.2f * scale, 0.35f, 2.3f);
-        FlashQuad.Spawn(position, Ring, color, 0.4f * scale, 5.5f * scale, 0.5f, 2.2f);
+        // Sized for STACKING: splash weapons land one of these several times a
+        // second on the same spot, so each instance stays modest — brief small
+        // white pop, coloured flash under the whiteout line, and the ring and
+        // sparks doing the talking.
+        FlashQuad.Spawn(position, Glow, Color.white, 0.5f * scale, 1.5f * scale, 0.10f, 2.0f);
+        FlashQuad.Spawn(position, Glow, color, 0.7f * scale, 2.6f * scale, 0.28f, 1.9f);
+        FlashQuad.Spawn(position, Ring, color, 0.4f * scale, 5.5f * scale, 0.5f, 2.0f);
         SpawnSparks(position, color, Mathf.RoundToInt(26 * scale), 8f * scale);
         SpawnMotes(position, color, Mathf.RoundToInt(14 * scale), 2.2f * scale);
     }
