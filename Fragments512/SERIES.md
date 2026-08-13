@@ -79,6 +79,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | 011 | Hawk | the Thousand Panes: stacked mirror layers inside a giant | DONE 2026-08-13 (2 takes; v2 recommended) |
 | 012 | Samurai | the Chladni Plains: a vibrating crust patterned by its own note | DONE 2026-08-13 (2 takes; v1 recommended) |
 | 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | DONE 2026-08-13 (regenerated; v4 recommended — lattice respecified as a 3D cage; lyric guard added) |
+| 014 | Knight | the Sheen: a planet of colossal iridescent foam cells; duel with the Sheenwalker | DONE 2026-08-13 (first creature-antagonist episode; v1 recommended) |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the
@@ -113,3 +114,11 @@ retry of an identical prompt, so treat them as variance, not content faults.
 The LYRIC RULE (singer performs only the quoted lines; scene text is never
 sung) cut the stage-direction defect but did not eliminate it — ep010 v3 still
 sang "scale by scale". Transcribe every take.
+
+### Creature episodes (from ep014)
+
+A living antagonist needs its own beat budget: dive compressed to 3-13s, fight
+13-24s. Give the creature a dedicated THE CREATURE paragraph (build it out of
+the world's own material so it cannot default to an Earth animal) and a FIGHT
+RULE keeping the duel to impacts, sparks and throws, with the creature driven
+off rather than killed.
