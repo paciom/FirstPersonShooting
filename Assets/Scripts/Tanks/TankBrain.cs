@@ -145,6 +145,16 @@ public class TankBrain : MonoBehaviour
         heading += Unstick(side);
         heading += HomeToAnchor();
 
+        // Caught at the field's trail line (recruits are held there — see
+        // TankPawn.HeldAtTrail): the clamp cancels the down-field part of any
+        // drive, so whatever standoff manoeuvre is in `heading` renders as a
+        // sideways slide under a hull pointing somewhere else. Nothing about
+        // holding a range is worth looking broken for — drive up the field
+        // until clear of the line, and fight from formation.
+        if (anchor != null
+            && transform.position.z < TankField.Frontier - TankField.Trail + 1.5f)
+            heading += Vector3.forward * 2.5f;
+
         _self.Drive = new Vector2(heading.x, heading.z).normalized;
         // Aim at the hull's middle, not its feet: a shot at the floor line clips
         // the deck in front of a tank at this camera's angle.

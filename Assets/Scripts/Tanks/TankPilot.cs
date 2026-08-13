@@ -80,6 +80,9 @@ public class TankPilot : MonoBehaviour
             throttle = Mathf.Max(throttle, 0.75f);
         else if (outpostPull != Vector3.zero)
             throttle = Mathf.Max(throttle, 0.6f);
+        // The escort outranks every errand: a convoy that leaves its recruits
+        // pinned at the bottom edge is throwing its own rewards away.
+        throttle = WaitForEscort(throttle);
 
         Vector3 heading = Vector3.forward * throttle;
         heading += pickupPull * 1.6f;
@@ -97,6 +100,32 @@ public class TankPilot : MonoBehaviour
             _self.AimAt(quarry.Center);
         else
             _self.AimAlong(Vector3.forward);                // gun forward when idle
+    }
+
+    /// <summary>
+    /// Wait for the escort. A recruit caught at the field's trail line is
+    /// being dragged by the scroll, its drive projected sideways along the
+    /// clamp — the "tank sliding sideways at the bottom of the screen" tell —
+    /// and a hero that keeps cruising turns that into a permanent state. With
+    /// the throttle near zero the scroll closes the gap and the recruits (a
+    /// metre a second faster than the hero) are back in formation in seconds.
+    ///
+    /// The one thing that outranks waiting is running for its life: a hero at
+    /// a third shield keeps fleeing, because a dead hero rescues nobody.
+    /// </summary>
+    float WaitForEscort(float throttle)
+    {
+        if (_self.Shield != null && _self.Shield.Normalized < 0.35f)
+            return throttle;
+        foreach (var pawn in TankPawn.All)
+        {
+            if (pawn == null || pawn == _self || pawn.Team != _self.Team || pawn.IsDown
+                || pawn.Kind == TankPawn.Chassis.Structure)
+                continue;
+            if (pawn.transform.position.z < TankField.Frontier - TankField.Trail + 2.5f)
+                return Mathf.Min(throttle, 0.15f);
+        }
+        return throttle;
     }
 
     /// <summary>
