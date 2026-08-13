@@ -216,6 +216,16 @@ public static class WarFx
     const float AdditiveCeiling = 2.0f;
 
     /// <summary>
+    /// The FLAME sheets alone may run hotter. They are the fireball's whole
+    /// body — the proof frames with every layer at one ceiling showed embers
+    /// around a mass that wasn't there — and unlike the featureless glow
+    /// circles (the original whiteout culprits) the flame texture is detailed
+    /// enough to keep its structure hot: red saturates first and the core
+    /// reads yellow-orange, which is what fire looks like.
+    /// </summary>
+    const float FlameCeiling = 3.2f;
+
+    /// <summary>
     /// What the fire renders AS, whatever colour the particles think they
     /// are. Dimmed alone was not enough: the pack's gradients spend the whole
     /// visible span of every glow layer near WHITE (white to cream, alpha
@@ -265,7 +275,7 @@ public static class WarFx
             copy = new Material(source) { name = source.name + " (calmed)" };
             // The shader's output for a white particle is 4x tint, so this
             // puts the hottest channel exactly at the ceiling, in fire.
-            float scale = AdditiveCeiling / 4f;
+            float scale = (source.name.Contains("Flame") ? FlameCeiling : AdditiveCeiling) / 4f;
             copy.SetColor("_TintColor", new Color(
                 FireWarm.r * scale, FireWarm.g * scale, FireWarm.b * scale, tint.a));
         }
@@ -324,7 +334,7 @@ public static class WarFx
             // ceiling the WFX layers keep.
             bool smoke = source.name.Contains("Smoke");
             return VfxUtil.MakeAdditiveMaterial(texture as Texture2D,
-                smoke ? new Color(0.45f, 0.38f, 0.32f) : FireWarm,
+                smoke ? new Color(0.42f, 0.34f, 0.26f) : FireWarm,
                 smoke ? 0.45f : AdditiveCeiling);
         }
         else
