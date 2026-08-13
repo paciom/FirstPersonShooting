@@ -58,7 +58,6 @@ public class TankField : MonoBehaviour
     static readonly Color DeckDark = new Color(0.10f, 0.13f, 0.16f);
     static readonly Color EdgeAmber = new Color(1f, 0.62f, 0.15f);
     static readonly Color RockGrey = new Color(0.22f, 0.24f, 0.29f);
-    static readonly Color CrystalTeal = new Color(0.25f, 0.95f, 0.85f);
 
     /// <summary>
     /// The scroll line. Creeps forward on its own and never retreats, and the
@@ -241,7 +240,6 @@ public class TankField : MonoBehaviour
         var wood = ArenaMaterials.Style("tank-wood-os", ArenaMaterials.SurfaceStyle.Plank,
             new Color(0.52f, 0.37f, 0.20f), new Color(0.28f, 0.18f, 0.09f), 0.4f, 0.75f,
             objectSpace: true);
-        var crystal = ArenaMaterials.Emissive("tank-crystal", CrystalTeal, 1.5f);
 
         // Ground footprints already claimed on this band: x, z, circle radius.
         // Checked before anything is planted, so no two pieces of scenery can
@@ -314,13 +312,30 @@ public class TankField : MonoBehaviour
             block.gameObject.AddComponent<TankBlock>().Configure(kind);
         }
 
-        // One crystal spire every few bands: a landmark, and the only thing on
-        // the field that glows teal, so distance reads at a glance.
-        if (roll.Next(0, 3) == 0 && Claim(1.1f, HalfWidth - 4f, out float sx, out float sz))
+        // One crystal cluster every few bands: a landmark, and the only thing
+        // on the field that glows teal, so distance reads at a glance. Grown
+        // by BrawlCrystal — real faceted shards with a rock collar — because
+        // the old flat emissive box read as a missing texture. Its shape
+        // rolls UnityEngine.Random, so the state is pinned to the band index
+        // and restored: band N grows the same cluster every time it comes
+        // round, and nobody else's random draw is disturbed.
+        if (roll.Next(0, 3) == 0)
         {
-            var spire = Box(scatter, "Crystal", new Vector3(sx, 2.2f, sz),
-                new Vector3(1.1f, 4.4f, 1.1f), crystal, collide: true);
-            spire.localRotation = Quaternion.Euler(10f, (float)roll.NextDouble() * 90f, 6f);
+            float size = 2.2f + (float)roll.NextDouble() * 0.8f;
+            if (Claim(size * 0.8f, HalfWidth - 4f, out float sx, out float sz))
+            {
+                var state = Random.state;
+                Random.InitState(index * 131 + 7);
+                var cluster = BrawlCrystal.Build(scatter, new Vector3(sx, 0f, sz), size,
+                    light: true);
+                Random.state = state;
+                // The cluster is COVER, so it needs the collider the brawl
+                // prop never carried: bolts stop on it and hulls part around
+                // it, boxed to the tall central shard.
+                var box = cluster.AddComponent<BoxCollider>();
+                box.center = new Vector3(0f, size * 0.75f, 0f);
+                box.size = new Vector3(size * 0.95f, size * 1.5f, size * 0.95f);
+            }
         }
     }
 
