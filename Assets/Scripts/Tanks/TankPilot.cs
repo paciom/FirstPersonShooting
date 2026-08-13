@@ -188,7 +188,14 @@ public class TankPilot : MonoBehaviour
         if (_self.Shield != null && _self.Shield.Normalized < 0.35f)
             return 1f;
 
-        float nearest = float.MaxValue;
+        // COUNT the engagement rather than reacting to the nearest single
+        // enemy. The spawner keeps something in contact almost constantly,
+        // so "any enemy nearby → crawl" had the early run (slow kills, no
+        // upgrades) stuck at scroll speed for minutes, then visibly speeding
+        // up as boons made wave-clears instant — pacing that read as a bug.
+        // One attacker is a skirmish the hero fights on the move; a real
+        // crossfire is what earns the brake.
+        int near = 0, approaching = 0;
         foreach (var pawn in TankPawn.All)
         {
             if (pawn == null || pawn.Team == _self.Team || pawn.IsDown
@@ -198,14 +205,20 @@ public class TankPilot : MonoBehaviour
             gap.y = 0f;
             if (gap.z < -10f)
                 continue;                       // dropping behind: the scroll has it
-            nearest = Mathf.Min(nearest, gap.magnitude);
+            float distance = gap.magnitude;
+            if (distance < BrawlRange)
+                near++;
+            else if (distance < BrawlRange * 1.6f)
+                approaching++;
         }
 
-        if (nearest < BrawlRange)
-            return 0.2f;
-        if (nearest < BrawlRange * 1.6f)
-            return 0.4f;                        // ease in rather than braking on a line
-        return 0.55f;                           // cruise: the army can keep up
+        if (near >= 2)
+            return 0.35f;                       // a crossfire: stand and trade
+        if (near == 1)
+            return 0.5f;                        // a skirmish: fight on the move
+        if (approaching > 0)
+            return 0.55f;                       // contact soon: ease in
+        return 0.65f;                           // open road
     }
 
     /// <summary>
