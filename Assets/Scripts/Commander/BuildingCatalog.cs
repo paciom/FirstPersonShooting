@@ -34,6 +34,13 @@ public class BuildingDefinition
     /// <summary>Accent colour for the placeholder block's glow trim.</summary>
     public Color accent = new Color(1f, 0.72f, 0.25f);
 
+    /// <summary>
+    /// What this structure IS, for the build bar's info panel — a kid should
+    /// know what they are buying before they buy it. Keep the numbers in
+    /// here honest against the code they describe.
+    /// </summary>
+    public string description = "";
+
     /// <summary>Command Centers win/lose the match; exactly one per team, pre-placed.</summary>
     public bool isHeadquarters;
 }
@@ -68,6 +75,7 @@ public static class BuildingCatalog
                         cost = 2500, power = 50, footprint = new Vector2(6f, 6f), height = 5f,
                         maxShield = 900f, isHeadquarters = true,
                         accent = new Color(0.2f, 0.9f, 1f),
+                        description = "Your headquarters. If it falls, the war is over. Feeds +50 power to the grid.",
                     },
                     new BuildingDefinition
                     {
@@ -75,6 +83,7 @@ public static class BuildingCatalog
                         cost = 300, power = 100, footprint = new Vector2(4f, 4f), height = 3.4f,
                         prerequisite = CommandCenter, maxShield = 220f,
                         accent = new Color(0.55f, 1f, 0.4f),
+                        description = "+100 power. When you draw more than you make, EVERYTHING slows: factories build slower, turrets and missiles fire slower.",
                     },
                     new BuildingDefinition
                     {
@@ -82,6 +91,7 @@ public static class BuildingCatalog
                         cost = 1400, power = -30, footprint = new Vector2(6f, 4f), height = 3.8f,
                         prerequisite = PowerPlant, maxShield = 450f,
                         accent = new Color(1f, 0.72f, 0.25f),
+                        description = "Refines the crystal your team banks and unlocks the Robot Factory. No refinery, no army.",
                     },
                     new BuildingDefinition
                     {
@@ -89,6 +99,7 @@ public static class BuildingCatalog
                         cost = 1500, power = -50, footprint = new Vector2(6f, 6f), height = 4.2f,
                         prerequisite = Refinery, maxShield = 520f,
                         accent = new Color(0.9f, 0.5f, 1f),
+                        description = "Builds every robot below. Each extra factory is another assembly line working in parallel.",
                     },
                     new BuildingDefinition
                     {
@@ -96,6 +107,7 @@ public static class BuildingCatalog
                         cost = 600, power = -40, footprint = new Vector2(2f, 2f), height = 2.6f,
                         prerequisite = PowerPlant, maxShield = 260f,
                         accent = new Color(1f, 0.35f, 0.3f),
+                        description = "Base defense. Automatically shoots enemy robots within 24 m. Fire rate follows your power grid.",
                     },
                     new BuildingDefinition
                     {
@@ -103,6 +115,7 @@ public static class BuildingCatalog
                         cost = 1200, power = -60, footprint = new Vector2(4f, 4f), height = 3.6f,
                         prerequisite = Factory, maxShield = 380f,
                         accent = new Color(0.4f, 0.75f, 1f),
+                        description = "Research. Unlocks the TITAN heavy robot and the AIRBASE.",
                     },
                     new BuildingDefinition
                     {
@@ -113,6 +126,7 @@ public static class BuildingCatalog
                         cost = 1600, power = -40, footprint = new Vector2(5f, 5f), height = 3f,
                         prerequisite = TechLab, maxShield = 420f,
                         accent = new Color(0.45f, 0.85f, 1f),
+                        description = "Air power. Keeps 4 robots at a time flying as jets on long journeys - about twice tank speed, straight over walls and ridges.",
                     },
                     new BuildingDefinition
                     {
@@ -122,6 +136,7 @@ public static class BuildingCatalog
                         cost = 900, power = -30, footprint = new Vector2(3f, 3f), height = 2.2f,
                         prerequisite = Factory, maxShield = 300f,
                         accent = new Color(1f, 0.55f, 0.2f),
+                        description = "Anti-air only. Fires homing missiles at enemy JETS within 40 m. Cannot hit ground robots - pair it with turrets.",
                     },
                 };
             }

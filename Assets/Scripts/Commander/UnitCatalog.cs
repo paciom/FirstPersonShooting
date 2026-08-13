@@ -30,6 +30,13 @@ public class UnitDefinition
     /// </summary>
     public string secondaryWeapon;
 
+    /// <summary>
+    /// What this robot IS, for the build bar's info panel. Numbers here must
+    /// stay honest against the constants they describe (mining rates live in
+    /// CommanderUnit/CommanderCollector).
+    /// </summary>
+    public string description = "";
+
     /// <summary>Seconds of factory work at full power. Priced at cost/100.</summary>
     public float BuildSeconds => cost / 100f;
 
@@ -87,18 +94,21 @@ public static class UnitCatalog
                         key = Ranger, displayName = "RANGER", cost = 300, robotName = "ranger",
                         speed = 4.2f, maxShield = 80f, damage = 10f, shotsPerSecond = 4f,
                         sightRange = 26f, attackRange = 20f, secondaryWeapon = "plasma",
+                        description = "All-rounder. Laser + plasma, 80 shield. Off duty it MINES: 60 cr per trip, about 10 s of digging each - your army pays rent between battles.",
                     },
                     new UnitDefinition
                     {
                         key = Scout, displayName = "SCOUT", cost = 400, robotName = "scout",
                         speed = 6.5f, maxShield = 50f, damage = 6f, shotsPerSecond = 5f,
                         sightRange = 34f, attackRange = 20f, secondaryWeapon = "rail",
+                        description = "Recon. Fastest robot and sees farthest (34 m), but only 50 shield. Rail zapper stings from range. Finds trouble; should not stay in it.",
                     },
                     new UnitDefinition
                     {
                         key = Panther, displayName = "PANTHER", cost = 500, robotName = "panther",
                         speed = 5.5f, maxShield = 70f, damage = 12f, shotsPerSecond = 4f,
                         sightRange = 26f, attackRange = 20f, secondaryWeapon = "beam",
+                        description = "Raider. Fast, with a photon beam that melts shields up close. Send it after collectors and miners, not into turret fire.",
                     },
                     new UnitDefinition
                     {
@@ -106,12 +116,14 @@ public static class UnitCatalog
                         prerequisite = BuildingCatalog.TechLab,
                         speed = 3.2f, maxShield = 200f, damage = 22f, shotsPerSecond = 1.6f,
                         sightRange = 26f, attackRange = 22f, secondaryWeapon = "plasma",
+                        description = "Siege. 200 shield and a 22-damage cannon; slow. Walks through the turret fire that stops rangers cold. Needs the TECH LAB.",
                     },
                     new UnitDefinition
                     {
                         key = Collector, displayName = "COLLECTOR", cost = 1000, robotName = "knight",
                         prerequisite = BuildingCatalog.Refinery, isCollector = true,
                         speed = 3.6f, maxShield = 120f,
+                        description = "Full-time hauler: 300 cr per trip, about 8 s loading. Unarmed - it RUNS when shot. Protect it; it IS your economy.",
                     },
                 };
             }

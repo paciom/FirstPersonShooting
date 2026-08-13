@@ -97,6 +97,12 @@ public class CommanderHud : MonoBehaviour
                 top - i * rowHeight,
                 () => CommanderController.Instance?.Placer?.Arm(def));
             _buildButtons.Add((def, button, label));
+            string info = $"{def.cost} cr   ·   " +
+                (def.power >= 0 ? $"+{def.power}" : def.power.ToString()) + " power" +
+                (def.prerequisite != null
+                    ? $"\nneeds {BuildingCatalog.Get(def.prerequisite)?.displayName}" : "") +
+                $"\n\n{def.description}";
+            WireInfo(button, def.displayName, info);
         }
 
         float unitTop = top - buildingDefs.Count * rowHeight - sectionGap;
@@ -107,7 +113,173 @@ public class CommanderHud : MonoBehaviour
                 unitTop - i * rowHeight,
                 () => TryTrain(def));
             _unitButtons.Add((def, button, label));
+            string info = $"{def.cost} cr   ·   builds in ~{def.BuildSeconds:0} s" +
+                (def.prerequisite != null
+                    ? $"\nneeds {BuildingCatalog.Get(def.prerequisite)?.displayName}" : "") +
+                $"\n\n{def.description}";
+            WireInfo(button, def.displayName, info);
         }
+
+        BuildInfoPanel(parent);
+        BuildAdvice(parent, top);
+    }
+
+    // ------------------------------------------------------------- info panel
+
+    Image _infoPanel;
+    Text _infoTitle;
+    Text _infoBody;
+
+    /// <summary>
+    /// Hovering (or pressing, which is what a finger does) any bar button
+    /// opens the dossier: name, price, prerequisites, and what the thing IS —
+    /// a commander should know what they are buying before they buy it.
+    /// </summary>
+    void WireInfo(Button button, string title, string body)
+    {
+        var trigger = button.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+        var enter = new UnityEngine.EventSystems.EventTrigger.Entry
+        { eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter };
+        enter.callback.AddListener(_ => ShowInfo(title, body));
+        var press = new UnityEngine.EventSystems.EventTrigger.Entry
+        { eventID = UnityEngine.EventSystems.EventTriggerType.PointerDown };
+        press.callback.AddListener(_ => ShowInfo(title, body));
+        var exit = new UnityEngine.EventSystems.EventTrigger.Entry
+        { eventID = UnityEngine.EventSystems.EventTriggerType.PointerExit };
+        exit.callback.AddListener(_ => HideInfo());
+        trigger.triggers.Add(enter);
+        trigger.triggers.Add(press);
+        trigger.triggers.Add(exit);
+    }
+
+    void BuildInfoPanel(Transform parent)
+    {
+        var panelGo = new GameObject("InfoPanel");
+        panelGo.transform.SetParent(parent, false);
+        _infoPanel = panelGo.AddComponent<Image>();
+        _infoPanel.color = new Color(0.02f, 0.06f, 0.10f, 0.94f);
+        _infoPanel.raycastTarget = false;
+        var rect = _infoPanel.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.pivot = new Vector2(1f, 0.5f);
+        // Just left of the bar column.
+        rect.anchoredPosition = new Vector2(-14f - 250f - 10f, 0f);
+        rect.sizeDelta = new Vector2(320f, 190f);
+
+        _infoTitle = MakeReadout(panelGo.transform, "Title", 20, Color.white,
+            new Vector2(0f, -10f), new Vector2(0f, 28f));
+        _infoTitle.alignment = TextAnchor.UpperLeft;
+        _infoBody = MakeReadout(panelGo.transform, "Body", 16,
+            new Color(1f, 1f, 1f, 0.8f), new Vector2(0f, -42f), new Vector2(0f, 140f));
+        _infoBody.alignment = TextAnchor.UpperLeft;
+        foreach (var text in new[] { _infoTitle, _infoBody })
+        {
+            var textRect = text.rectTransform;
+            textRect.anchorMin = new Vector2(0f, 1f);
+            textRect.anchorMax = new Vector2(1f, 1f);
+            textRect.pivot = new Vector2(0.5f, 1f);
+            textRect.offsetMin = new Vector2(14f, textRect.offsetMin.y);
+            textRect.offsetMax = new Vector2(-12f, textRect.offsetMax.y);
+        }
+
+        panelGo.SetActive(false);
+    }
+
+    void ShowInfo(string title, string body)
+    {
+        if (_infoPanel == null)
+            return;
+        _infoTitle.text = title;
+        _infoBody.text = body;
+        _infoPanel.gameObject.SetActive(true);
+    }
+
+    void HideInfo()
+    {
+        if (_infoPanel != null)
+            _infoPanel.gameObject.SetActive(false);
+    }
+
+    // ------------------------------------------------------------- advisor
+
+    Text _adviceBanner;
+    Image _nowChip;
+    Text _nowChipText;
+    CommanderAdvisor.Advice _advice;
+
+    /// <summary>
+    /// The BUILD NOW voice: a banner above the bar saying what and why, and
+    /// a pulsing chip pointing at the recommended button. Same rule chain
+    /// the AI plays by, so following it is literally keeping pace.
+    /// </summary>
+    void BuildAdvice(Transform parent, float barTop)
+    {
+        _adviceBanner = MakeReadout(parent, "Advice", 17, CreditAmber,
+            new Vector2(-14f, 0f), new Vector2(560f, 46f));
+        var bannerRect = _adviceBanner.rectTransform;
+        bannerRect.anchorMin = bannerRect.anchorMax = new Vector2(1f, 0.5f);
+        bannerRect.pivot = new Vector2(1f, 0f);
+        bannerRect.anchoredPosition = new Vector2(-14f, barTop + 40f);
+        _adviceBanner.alignment = TextAnchor.LowerRight;
+
+        var chipGo = new GameObject("NowChip");
+        chipGo.transform.SetParent(parent, false);
+        _nowChip = chipGo.AddComponent<Image>();
+        _nowChip.color = CreditAmber;
+        _nowChip.raycastTarget = false;
+        var chipRect = _nowChip.rectTransform;
+        chipRect.anchorMin = chipRect.anchorMax = new Vector2(1f, 0.5f);
+        chipRect.pivot = new Vector2(1f, 0.5f);
+        chipRect.sizeDelta = new Vector2(64f, 24f);
+
+        var chipTextGo = new GameObject("Label");
+        chipTextGo.transform.SetParent(chipGo.transform, false);
+        _nowChipText = chipTextGo.AddComponent<Text>();
+        _nowChipText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _nowChipText.fontSize = 13;
+        _nowChipText.fontStyle = FontStyle.Bold;
+        _nowChipText.alignment = TextAnchor.MiddleCenter;
+        _nowChipText.color = new Color(0.08f, 0.05f, 0f);
+        _nowChipText.text = "NOW ▶";
+        _nowChipText.raycastTarget = false;
+        var chipTextRect = _nowChipText.rectTransform;
+        chipTextRect.anchorMin = Vector2.zero;
+        chipTextRect.anchorMax = Vector2.one;
+        chipTextRect.offsetMin = chipTextRect.offsetMax = Vector2.zero;
+
+        chipGo.SetActive(false);
+    }
+
+    void RefreshAdvice()
+    {
+        _advice = CommanderAdvisor.Recommend(_shownTeam);
+
+        var name = _advice.isUnit
+            ? UnitCatalog.Get(_advice.key)?.displayName
+            : BuildingCatalog.Get(_advice.key)?.displayName;
+        _adviceBanner.text = name == null ? "" : $"BUILD NOW:  {name}\n{_advice.reason}";
+
+        // Park the chip beside the recommended button.
+        Button target = null;
+        if (_advice.isUnit)
+        {
+            foreach (var (def, button, _) in _unitButtons)
+                if (def.key == _advice.key) { target = button; break; }
+        }
+        else
+        {
+            foreach (var (def, button, _) in _buildButtons)
+                if (def.key == _advice.key) { target = button; break; }
+        }
+        if (target == null)
+        {
+            _nowChip.gameObject.SetActive(false);
+            return;
+        }
+        var buttonRect = (RectTransform)target.transform;
+        _nowChip.rectTransform.anchoredPosition =
+            new Vector2(-14f - 250f - 6f, buttonRect.anchoredPosition.y);
+        _nowChip.gameObject.SetActive(true);
     }
 
     /// <summary>
@@ -189,6 +361,15 @@ public class CommanderHud : MonoBehaviour
 
     void Update()
     {
+        // The NOW chip breathes every frame — a still chip is furniture, a
+        // pulsing one is a finger tapping the board.
+        if (_nowChip != null && _nowChip.gameObject.activeSelf)
+        {
+            var pulse = CreditAmber;
+            pulse.a = 0.55f + 0.45f * Mathf.PingPong(Time.time * 1.6f, 1f);
+            _nowChip.color = pulse;
+        }
+
         // Slow tick: power and prereqs change when buildings rise or fall,
         // which no event announces yet — and at six buttons, polling is
         // cheaper than plumbing one through.
@@ -198,6 +379,7 @@ public class CommanderHud : MonoBehaviour
         RefreshPower();
         RefreshButtons();
         RefreshUnitButtons();
+        RefreshAdvice();
     }
 
     void Refresh()
