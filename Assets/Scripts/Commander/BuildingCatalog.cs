@@ -46,6 +46,8 @@ public static class BuildingCatalog
     public const string Factory = "factory";
     public const string Turret = "turret";
     public const string TechLab = "tech";
+    public const string Airbase = "airbase";
+    public const string Missiles = "missiles";
 
     static BuildingDefinition[] _all;
 
@@ -101,6 +103,25 @@ public static class BuildingCatalog
                         cost = 1200, power = -60, footprint = new Vector2(4f, 4f), height = 3.6f,
                         prerequisite = Factory, maxShield = 380f,
                         accent = new Color(0.4f, 0.75f, 1f),
+                    },
+                    new BuildingDefinition
+                    {
+                        // Each one standing sustains CommanderAir.JetsPerAirbase
+                        // robots in jet form at once — air power is a building
+                        // you protect, not a button you press.
+                        key = Airbase, displayName = "AIRBASE",
+                        cost = 1600, power = -40, footprint = new Vector2(5f, 5f), height = 3f,
+                        prerequisite = TechLab, maxShield = 420f,
+                        accent = new Color(0.45f, 0.85f, 1f),
+                    },
+                    new BuildingDefinition
+                    {
+                        // The counter: homing missiles from the Missiles Pack,
+                        // fired only at airborne robots. See BuildingMissiles.
+                        key = Missiles, displayName = "MISSILE BATTERY",
+                        cost = 900, power = -30, footprint = new Vector2(3f, 3f), height = 2.2f,
+                        prerequisite = Factory, maxShield = 300f,
+                        accent = new Color(1f, 0.55f, 0.2f),
                     },
                 };
             }

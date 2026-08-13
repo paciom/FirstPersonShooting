@@ -141,7 +141,8 @@ public class ProductionQueue : MonoBehaviour
             : CommanderUnit.Build<CommanderUnit>(name, entry.modelPrefab, entry.vehiclePrefab,
                 team, door, yaw, armed: true, secondaryWeapon: def.secondaryWeapon,
                 transformStages: entry.transformStages,
-                paintAnchorHue: entry.paintAnchorHue);
+                paintAnchorHue: entry.paintAnchorHue,
+                jetStages: entry.jetStages);
         def.ApplyTo(unit);
 
         VfxUtil.EnergyBurst(door + Vector3.up * 1f, MatchAnnouncer.TeamColor(team), 0.8f);

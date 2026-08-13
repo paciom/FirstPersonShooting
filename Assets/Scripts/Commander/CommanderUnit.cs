@@ -73,6 +73,7 @@ public class CommanderUnit : MonoBehaviour
     [SerializeField] GameObject _modelPrefab;
     [SerializeField] GameObject _vehiclePrefab;
     [SerializeField] GameObject[] _stages;
+    [SerializeField] GameObject[] _jetStages;
     [SerializeField] Color _tint;
 
     /// <summary>
@@ -89,6 +90,23 @@ public class CommanderUnit : MonoBehaviour
     [SerializeField] Transform _gunMuzzle;
     Coroutine _morphRoutine;
     TankTurret _turret;
+
+    // Jet travel: with an AIRBASE standing and a flight slot free, a long
+    // enough journey is flown — fold to jet, climb, cruise in a straight
+    // line over everything, land, unfold, fight. The flight owns the unit
+    // for its duration (the ground brain skips while airborne).
+    [SerializeField] bool _jetForm;
+    Coroutine _jetRoutine;
+    /// <summary>Journeys longer than this go by air when a slot is free.</summary>
+    const float JetDistance = 55f;
+    const float JetCruiseSpeed = 15f;
+    const float JetAltitude = 8f;
+    const float JetClimbSpeed = 7f;
+
+    /// <summary>In the air right now — what missile batteries hunt for.</summary>
+    public bool IsAirborne => _jetForm;
+
+    bool HasJetStages => _jetStages != null && _jetStages.Length > 1;
 
     /// <summary>Seconds each stop-motion stage holds; below ~0.15 a still never registers.</summary>
     const float StageSeconds = 0.11f;
@@ -190,7 +208,8 @@ public class CommanderUnit : MonoBehaviour
     /// </summary>
     public static T Build<T>(string name, GameObject modelPrefab, GameObject vehiclePrefab,
         int teamId, Vector3 position, float yaw, bool armed, string secondaryWeapon,
-        GameObject[] transformStages = null, float paintAnchorHue = -1f)
+        GameObject[] transformStages = null, float paintAnchorHue = -1f,
+        GameObject[] jetStages = null)
         where T : CommanderUnit
     {
         Color tint = MatchAnnouncer.TeamColor(teamId);
@@ -267,6 +286,7 @@ public class CommanderUnit : MonoBehaviour
         unit._modelPrefab = modelPrefab;
         unit._vehiclePrefab = vehiclePrefab;
         unit._stages = transformStages;
+        unit._jetStages = jetStages;
         unit._tint = tint;
         unit._paintAnchorHue = paintAnchorHue;
         unit._gunMuzzle = gunMuzzle;
@@ -545,6 +565,16 @@ public class CommanderUnit : MonoBehaviour
         if (_shield.IsDown)
         {
             HandleDeRez();
+            return;
+        }
+
+        // Airborne: the flight coroutine IS the brain. If a mid-play
+        // recompile killed that coroutine, the unit would hang in the sky
+        // forever — restart the leg toward wherever it was going.
+        if (_jetForm)
+        {
+            if (_jetRoutine == null)
+                _jetRoutine = StartCoroutine(JetRoutine(_destination));
             return;
         }
 
@@ -878,10 +908,9 @@ public class CommanderUnit : MonoBehaviour
     {
         if (_modelPrefab == null || _body == null)
             return;
-        if (_vehiclePrefab == null && !HasStages)
-            return;
+        if (_jetForm)
+            return;   // the flight owns its own exit
 
-        bool wantVehicle = false;
         Vector3 goal = transform.position;
         if (_order == OrderKind.Move || _order == OrderKind.AttackMove)
             goal = _destination;
@@ -889,10 +918,131 @@ public class CommanderUnit : MonoBehaviour
             goal = _target.transform.position;
         Vector3 flat = goal - transform.position;
         flat.y = 0f;
-        wantVehicle = flat.magnitude > TransformDistance;
 
+        // Air first: a truly long journey goes by jet — if this robot HAS a
+        // jet form, and an airbase has a flight slot to sustain it.
+        if (flat.magnitude > JetDistance && HasJetStages && _order != OrderKind.Idle
+            && CommanderAir.CanLaunch(TeamId))
+        {
+            if (_morphRoutine != null)
+            {
+                StopCoroutine(_morphRoutine);
+                _morphRoutine = null;
+            }
+            _jetRoutine = StartCoroutine(JetRoutine(goal));
+            return;
+        }
+
+        if (_vehiclePrefab == null && !HasStages)
+            return;
+        bool wantVehicle = flat.magnitude > TransformDistance;
         if (wantVehicle != _vehicleForm)
             Morph(wantVehicle);
+    }
+
+    /// <summary>
+    /// The air leg, end to end: fold through the jet stages, climb, cruise a
+    /// straight line over ridges and armies alike, descend on the goal, land
+    /// on the mesh, unfold — and hand back to whatever order was standing.
+    /// The flight replaces the ground brain for its whole duration.
+    /// </summary>
+    System.Collections.IEnumerator JetRoutine(Vector3 goal)
+    {
+        _jetForm = true;
+
+        // A tank folds up to fly: unwind the vehicle bookkeeping first.
+        if (_vehicleForm)
+        {
+            _vehicleForm = false;
+            if (_robotSpeed > 0f)
+                _agent.speed = _robotSpeed;
+        }
+
+        // Robot → jet, stop motion, same recipe as the tank fold.
+        for (int i = 0; i < _jetStages.Length; i++)
+        {
+            var current = _body.Find("Model");
+            if (current != null)
+                Destroy(current.gameObject);
+            if (_jetStages[i] != null)
+                GroundAlignedInstance(_jetStages[i], 2.4f);
+            VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
+            yield return new WaitForSeconds(StageSeconds);
+        }
+
+        // Wheels up: the agent lets go of the ground.
+        if (_agent.enabled)
+        {
+            if (_agent.isOnNavMesh)
+                _agent.isStopped = true;
+            _agent.enabled = false;
+        }
+
+        Vector3 destination = new Vector3(goal.x, CommanderMap.GroundY, goal.z);
+        while (transform.position.y < JetAltitude)
+        {
+            transform.position += Vector3.up * (JetClimbSpeed * Time.deltaTime);
+            FaceFlat(destination, 240f);
+            yield return null;
+        }
+
+        while (true)
+        {
+            Vector3 flat = destination - transform.position;
+            flat.y = 0f;
+            if (flat.magnitude < 5f)
+                break;
+            FaceFlat(destination, 240f);
+            transform.position += flat.normalized * (JetCruiseSpeed * Time.deltaTime);
+            yield return null;
+        }
+
+        while (transform.position.y > CommanderMap.GroundY + 0.05f)
+        {
+            transform.position += Vector3.down * (JetClimbSpeed * Time.deltaTime);
+            yield return null;
+        }
+
+        // Touchdown: back onto the mesh, wherever the mesh actually is.
+        var ground = new Vector3(transform.position.x, CommanderMap.GroundY, transform.position.z);
+        if (NavMesh.SamplePosition(ground, out NavMeshHit navHit, 8f, NavMesh.AllAreas))
+            ground = navHit.position;
+        transform.position = ground;
+        _agent.enabled = true;
+        _agent.Warp(ground);
+
+        // Jet → robot, stages in reverse, landing on the real animated rig.
+        for (int i = _jetStages.Length - 1; i >= 0; i--)
+        {
+            var current = _body.Find("Model");
+            if (current != null)
+                Destroy(current.gameObject);
+            if (_jetStages[i] != null)
+                GroundAlignedInstance(_jetStages[i], 2.4f);
+            VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
+            yield return new WaitForSeconds(StageSeconds);
+        }
+        var lastStage = _body.Find("Model");
+        if (lastStage != null)
+            Destroy(lastStage.gameObject);
+        RobotFactory.InstantiateNormalized(_modelPrefab, _body, _tint, _paintAnchorHue);
+
+        _jetForm = false;
+        _jetRoutine = null;
+        // Whatever order was standing (or arrived mid-flight) resumes with
+        // the next think tick; a Move that flew its whole distance simply
+        // finds itself Arrived.
+    }
+
+    void FaceFlat(Vector3 worldPoint, float degreesPerSecond)
+    {
+        Vector3 flat = worldPoint - transform.position;
+        flat.y = 0f;
+        if (flat.sqrMagnitude < 0.01f)
+            return;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation,
+            Quaternion.LookRotation(flat.normalized, Vector3.up),
+            degreesPerSecond * Time.deltaTime);
     }
 
     void Morph(bool toVehicle)
@@ -1076,7 +1226,10 @@ public class CommanderUnit : MonoBehaviour
             float sqr = effective * effective;
             Vector3 aim = building.transform.position
                 + Vector3.up * (def != null ? def.height * 0.45f : 1.5f);
-            bool turret = def != null && def.key == BuildingCatalog.Turret;
+            // "Turret" priority tier = anything that shoots back: photon
+            // turrets and missile batteries die before the economy does.
+            bool turret = def != null && (def.key == BuildingCatalog.Turret
+                || def.key == BuildingCatalog.Missiles);
             if (turret && sqr < bestTurretSqr && CanSeePoint(building.transform, aim))
             {
                 bestTurretSqr = sqr;
@@ -1162,11 +1315,17 @@ public class CommanderUnit : MonoBehaviour
         All.Remove(this);
         SetSelected(false);
         // A death mid-transformation stops the transformation; the shrink
-        // takes whatever form was showing.
+        // takes whatever form was showing. A death mid-FLIGHT stops the
+        // flight — the shrink happens in the sky, which a missile earned.
         if (_morphRoutine != null)
         {
             StopCoroutine(_morphRoutine);
             _morphRoutine = null;
+        }
+        if (_jetRoutine != null)
+        {
+            StopCoroutine(_jetRoutine);
+            _jetRoutine = null;
         }
         // Losing a collector is a strategic event worth the feed; losing a
         // soldier is a statistic the army count already tells.

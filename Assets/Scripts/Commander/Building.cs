@@ -89,6 +89,10 @@ public class Building : MonoBehaviour
             root.AddComponent<BuildingTurret>();
         if (def.key == BuildingCatalog.Factory)
             root.AddComponent<ProductionQueue>();
+        if (def.key == BuildingCatalog.Missiles)
+            root.AddComponent<BuildingMissiles>();
+        // The airbase needs no component: its whole behaviour is existing,
+        // which CommanderAir counts.
 
         CommanderOps.Log(teamId, $"+ {def.displayName}");
         return building;

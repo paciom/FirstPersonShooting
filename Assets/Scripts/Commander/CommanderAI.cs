@@ -99,6 +99,11 @@ public class CommanderAI : MonoBehaviour
         else if (!Has(BuildingCatalog.Factory)) want = BuildingCatalog.Factory;
         else if (Count(BuildingCatalog.Turret) < 2) want = BuildingCatalog.Turret;
         else if (CommanderPower.Efficiency(teamId) < 1f) want = BuildingCatalog.PowerPlant;
+        else if (EnemyHasAirbase() && Count(BuildingCatalog.Missiles) < 2)
+            want = BuildingCatalog.Missiles;   // answer air power before matching it
+        else if (Has(BuildingCatalog.TechLab) && !Has(BuildingCatalog.Airbase)
+                 && Credits() > 2600)
+            want = BuildingCatalog.Airbase;
         else if (!Has(BuildingCatalog.TechLab) && Credits() > 1800) want = BuildingCatalog.TechLab;
         else if (Count(BuildingCatalog.Factory) < 2 && Credits() > 2600) want = BuildingCatalog.Factory;
 
@@ -329,6 +334,16 @@ public class CommanderAI : MonoBehaviour
             if (building != null && building.TeamId == teamId && building.IsAlive)
                 own.Add(building);
         return own;
+    }
+
+    bool EnemyHasAirbase()
+    {
+        foreach (var building in Building.All)
+            if (building != null && building.TeamId != teamId && building.IsAlive
+                && building.Definition != null
+                && building.Definition.key == BuildingCatalog.Airbase)
+                return true;
+        return false;
     }
 
     Building Headquarters()

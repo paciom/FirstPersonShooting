@@ -17,7 +17,7 @@ public static class CommanderArmy
     public static void SpawnSkirmish(RobotRoster roster)
     {
         GameObject model = null, vehicle = null;
-        GameObject[] stages = null;
+        GameObject[] stages = null, jetStages = null;
         float anchorHue = -1f;
         if (roster != null && roster.HasRobots)
         {
@@ -26,6 +26,7 @@ public static class CommanderArmy
             vehicle = entry.vehiclePrefab;
             stages = entry.transformStages;
             anchorHue = entry.paintAnchorHue;
+            jetStages = entry.jetStages;
         }
 
         for (int team = 0; team < 2; team++)
@@ -45,7 +46,8 @@ public static class CommanderArmy
                     forward * (11f + rank * 2.2f));
                 CommanderUnit.Build<CommanderUnit>($"CmdUnit{team}_{i}", model, vehicle,
                     team, pos, yaw, armed: true, secondaryWeapon: "plasma",
-                    transformStages: stages, paintAnchorHue: anchorHue);
+                    transformStages: stages, paintAnchorHue: anchorHue,
+                    jetStages: jetStages);
             }
 
             // Two collectors, offset east and west so each picks the safe

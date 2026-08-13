@@ -18,7 +18,10 @@ public static class CommanderEconomy
     public const int Teams = 2;
 
     /// <summary>Enough to open with a Power Plant + Refinery and change.</summary>
-    public const int StartingCredits = 3000;
+    // 8000, up from 3000 by playtest decree: enough to open with power,
+    // refinery AND factory on day one and still buy robots — the opening
+    // act should be about building fast, not waiting on the first hauls.
+    public const int StartingCredits = 8000;
 
     static readonly int[] _credits = new int[Teams];
 
