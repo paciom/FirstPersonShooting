@@ -107,9 +107,14 @@ public class TankPickup : MonoBehaviour
             // pickups that all read white are three the player cannot tell apart
             // from across the field.
             1.8f);
-        var body = ArenaMaterials.Lit($"tank-pickup-body-{Sort}", color * 0.85f, 0.45f, 0.35f);
+        // Mid-tone bodies, not bright ones: these sit under the field's key
+        // light PLUS their own beacon, and any lit surface that starts near
+        // white ends past the bloom threshold — a medkit rendered as a
+        // glowing egg. The accents carry the brightness; the bodies carry
+        // the shape.
+        var body = ArenaMaterials.Lit($"tank-pickup-body-{Sort}", color * 0.6f, 0.3f, 0.2f);
         var casing = ArenaMaterials.Lit("tank-pickup-case",
-            new Color(0.92f, 0.93f, 0.95f), 0.4f);
+            new Color(0.62f, 0.64f, 0.68f), 0.25f);
 
         switch (Sort)
         {
@@ -156,8 +161,10 @@ public class TankPickup : MonoBehaviour
         light.transform.localPosition = new Vector3(0f, 1.4f, 0f);
         light.type = LightType.Point;
         light.color = color;
-        light.intensity = 3.2f;
-        light.range = 8f;
+        // Enough to tint the ground and the body's near side, not enough to
+        // push either past the bloom threshold from half a metre away.
+        light.intensity = 1.6f;
+        light.range = 7f;
         light.shadows = LightShadows.None;
     }
 
