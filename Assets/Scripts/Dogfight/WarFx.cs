@@ -185,7 +185,10 @@ public static class WarFx
                         replacement = Convert(material);
                         Converted[material] = replacement;
                     }
-                    materials[i] = replacement;
+                    // Converted materials land on the pack's own WFX shaders,
+                    // so they carry the same overbright tints — the smoke goes
+                    // through the same calming as everything else.
+                    materials[i] = Calm(replacement) ?? replacement;
                     touched = true;
                 }
                 else
@@ -232,23 +235,46 @@ public static class WarFx
     /// rather than trusted. Cached per source; the pack's own asset is never
     /// written.
     /// </summary>
+    /// <summary>What SMOKE may reach after its shader's 2x — safely under the
+    /// 0.8 bloom threshold, because glowing smoke is a contradiction. The
+    /// pack's smoke tints sit at 0.5, which its shader doubles to exactly
+    /// white-at-threshold: the "same white blob" that survived two rounds of
+    /// calming the additive layers was the smoke blooming all along.</summary>
+    const float SmokeCeiling = 0.55f;
+
     static Material Calm(Material source)
     {
         var shader = source.shader;
-        if (shader == null || !shader.name.StartsWith("WFX/") || !shader.name.Contains("Add"))
+        if (shader == null || !shader.name.StartsWith("WFX/")
+            || !source.HasProperty("_TintColor"))
             return null;
+        if (shader.name.Contains("Multiply"))
+            return null;                   // multiplies darken; bloom cannot bite them
         if (Calmed.TryGetValue(source, out var cached) && cached != null)
             return cached;
-        if (!source.HasProperty("_TintColor"))
-            return null;
 
         Color tint = source.GetColor("_TintColor");
-        var copy = new Material(source) { name = source.name + " (calmed)" };
-        // The shader's output for a white particle is 4x tint, so this puts
-        // the hottest channel exactly at the ceiling, in fire.
-        float scale = AdditiveCeiling / 4f;
-        copy.SetColor("_TintColor", new Color(
-            FireWarm.r * scale, FireWarm.g * scale, FireWarm.b * scale, tint.a));
+        Material copy;
+        if (shader.name.Contains("Add"))
+        {
+            copy = new Material(source) { name = source.name + " (calmed)" };
+            // The shader's output for a white particle is 4x tint, so this
+            // puts the hottest channel exactly at the ceiling, in fire.
+            float scale = AdditiveCeiling / 4f;
+            copy.SetColor("_TintColor", new Color(
+                FireWarm.r * scale, FireWarm.g * scale, FireWarm.b * scale, tint.a));
+        }
+        else
+        {
+            // Alpha-blended layers: the smoke. Its shader doubles the tint too.
+            float peak = 2f * Mathf.Max(tint.r, Mathf.Max(tint.g, tint.b));
+            if (peak <= SmokeCeiling)
+                return null;
+            copy = new Material(source) { name = source.name + " (calmed)" };
+            float scale = SmokeCeiling / peak;
+            copy.SetColor("_TintColor",
+                new Color(tint.r * scale, tint.g * scale, tint.b * scale, tint.a));
+        }
         Calmed[source] = copy;
         return copy;
     }
@@ -274,7 +300,9 @@ public static class WarFx
         Material replacement;
         if (was.Contains("Multiply"))
         {
-            var multiply = Shader.Find("WFX/Multiply Soft");
+            // The shader's declared name, not its file name — the file says
+            // "WFX_S Multiply Soft.shader", the Shader block says "Tint".
+            var multiply = Shader.Find("WFX/Multiply Soft Tint");
             replacement = multiply != null
                 ? new Material(multiply)
                 : VfxUtil.MakeAdditiveMaterial(null, Color.white, 1f);
