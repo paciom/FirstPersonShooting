@@ -84,6 +84,9 @@ public class CommanderUnit : MonoBehaviour
     [SerializeField] float _paintAnchorHue = -1f;
     [SerializeField] bool _vehicleForm;
     [SerializeField] float _robotSpeed;
+    /// <summary>The gun's own muzzle — where shots come FROM in robot form,
+    /// and what the weapons return to when a fold unwinds.</summary>
+    [SerializeField] Transform _gunMuzzle;
     Coroutine _morphRoutine;
     TankTurret _turret;
 
@@ -251,8 +254,9 @@ public class CommanderUnit : MonoBehaviour
             && NavMesh.SamplePosition(position, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
             agent.Warp(navHit.position);
 
+        Transform gunMuzzle = null;
         if (armed)
-            BuildGun(root, body, tint, secondaryWeapon);
+            gunMuzzle = BuildGun(root, body, tint, secondaryWeapon);
 
         // Selection ring: white so it reads as "yours, selected" against both
         // team colours, flat on the ground like the team rings.
@@ -265,6 +269,7 @@ public class CommanderUnit : MonoBehaviour
         unit._stages = transformStages;
         unit._tint = tint;
         unit._paintAnchorHue = paintAnchorHue;
+        unit._gunMuzzle = gunMuzzle;
 
         return unit;
     }
@@ -276,7 +281,7 @@ public class CommanderUnit : MonoBehaviour
     /// gun shares the muzzle: it is added AFTER activation, when Awake's
     /// defaults (muzzle = its own transform, owner = root) are already right.
     /// </summary>
-    static void BuildGun(GameObject root, Transform body, Color tint, string secondaryWeapon)
+    static Transform BuildGun(GameObject root, Transform body, Color tint, string secondaryWeapon)
     {
         var gun = new GameObject("Blaster");
         gun.SetActive(false);
@@ -318,6 +323,7 @@ public class CommanderUnit : MonoBehaviour
             secondary.color = tint;
             secondary.damage = 10f;
         }
+        return muzzle;
     }
 
     /// <summary>
@@ -569,6 +575,11 @@ public class CommanderUnit : MonoBehaviour
         {
             if (_turret != null)
                 _turret.enabled = false;
+            // Shots come from the shoulder again the moment the fold unwinds.
+            if (_gunMuzzle != null)
+                foreach (var weapon in _weapons)
+                    if (weapon != null)
+                        weapon.muzzle = _gunMuzzle;
             return;
         }
 
@@ -576,8 +587,23 @@ public class CommanderUnit : MonoBehaviour
             _turret = gameObject.AddComponent<TankTurret>();
         _turret.enabled = true;
 
+        // While the rig has a real cut turret, the guns fire out of its
+        // barrel — the anchor outlives model swaps, which is its whole point.
+        if (_turret.HasTurret)
+            foreach (var weapon in _weapons)
+                if (weapon != null)
+                    weapon.muzzle = _turret.Muzzle;
+
         if (_target != null && _target.IsAlive)
+        {
             _turret.AimAt(_target.transform.position + Vector3.up * 1.1f);
+        }
+        else if (_targetBuilding != null && _targetBuilding.IsAlive)
+        {
+            var def = _targetBuilding.Definition;
+            _turret.AimAt(_targetBuilding.transform.position
+                + Vector3.up * (def != null ? def.height * 0.45f : 1.5f));
+        }
     }
 
     /// <summary>The slow tick: registry self-heal, arrivals, target acquisition.</summary>
@@ -813,14 +839,23 @@ public class CommanderUnit : MonoBehaviour
             return;
         }
 
-        // In range: stand, face, shoot.
+        // In range: stand and shoot. A robot turns its whole body to face;
+        // a tank with a real cut turret HOLDS ITS HULL and lets the turret
+        // do the aiming (TickTurret is already slewing it) — a tank that
+        // pirouettes in place is a robot in a costume. The fire gate asks
+        // whichever part actually aims.
         if (_agent.enabled && _agent.isOnNavMesh && !_agent.isStopped)
             _agent.isStopped = true;
 
+        bool turretAims = _vehicleForm && _turret != null && _turret.enabled && _turret.HasTurret;
         Quaternion face = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, face, 540f * Time.deltaTime);
+        if (!turretAims)
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, face, 540f * Time.deltaTime);
 
-        if (_weapon != null && Quaternion.Angle(transform.rotation, face) < 15f)
+        bool onTarget = turretAims
+            ? _turret.OnTarget
+            : Quaternion.Angle(transform.rotation, face) < 15f;
+        if (_weapon != null && onTarget)
         {
             Vector3 aim = aimPoint - _weapon.muzzle.position;
             _weapon.TryFire(aim.normalized);
