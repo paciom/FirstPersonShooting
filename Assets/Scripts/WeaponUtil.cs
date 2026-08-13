@@ -245,8 +245,12 @@ public static class WeaponUtil
     /// </summary>
     public static void DressAsFireball(GenericBolt bolt, Color color)
     {
+        // Warm-white heart under the bloom whiteout line (~2.5, and lower here
+        // because the body's own glow adds under it): at white x 3 the heart
+        // bloomed into a featureless white ball that hid the entire fireball
+        // dressing for the bolt's whole flight.
         var heart = GlowPrimitive(PrimitiveType.Sphere, bolt.transform.position,
-            Vector3.one * 0.4f, Color.white, 3f);
+            Vector3.one * 0.34f, new Color(1f, 0.8f, 0.5f), 1.9f);
         heart.transform.SetParent(bolt.transform, true);
 
         var corona = GhostShell(PrimitiveType.Sphere, bolt.transform.position,

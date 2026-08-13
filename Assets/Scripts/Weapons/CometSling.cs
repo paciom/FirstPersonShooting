@@ -31,7 +31,7 @@ public class CometSling : Weapon
             color = color,
             shape = PrimitiveType.Sphere,
             size = 0.8f,
-            glow = 2.2f,               // orange fireball; the white heat lives in the core child
+            glow = 1.8f,               // orange fireball; the warm heat lives in the core child
             trailTime = 0.3f,          // modest ribbon — the embers carry the tail
             trailWidth = 0.16f,
             trailGlow = 1.3f,
@@ -40,7 +40,9 @@ public class CometSling : Weapon
             lifetime = 6f,
         };
         var bolt = GenericBolt.Spawn(muzzle.position, direction.normalized, spec, TeamId, ownerRoot);
-        WeaponUtil.DressAsFireball(bolt, color);   // white heart + corona + ember tail
-        FlashMuzzle(5f);
+        WeaponUtil.DressAsFireball(bolt, color);   // warm heart + corona + ember tail
+        // 5 lit the firer's own hull past the bloom threshold — a white ball
+        // ON the tank every shot, from a top-down camera.
+        FlashMuzzle(2.5f);
     }
 }
