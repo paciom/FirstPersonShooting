@@ -66,7 +66,7 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | Ep  | Robot | Entity                                | Status |
 |-----|-------|---------------------------------------|--------|
 | 000 | Scout+Hawk | Prologue: Cube 0, rebellion, exodus | DONE 2026-08-12 — v7 recommended (rewritten three-party narration; v1-v5 use the old pronoun script). Narration flubs ~half of rolls: transcribe before accepting. |
-| 001 | Scout | Frozen world, mirror lake (v2 canonical) | DONE 2026-08-12 |
+| 001 | Scout | the Stillwater: an ocean frozen mid-break with its spray still hanging in the air | DONE 2026-08-13 (regenerated to current standard; v3 recommended — the 2026-08-12 v2 cut predates the sung anthem and still has digits in its close) |
 | 002 | Hawk  | Sky-Sea: floating ocean, upward rain, the Upfall | DONE 2026-08-12 (song_v3 canonical) |
 | 003 | Samurai | Twin Waltz: binary planets, zero-g Still Zone | DONE 2026-08-12 (song version canonical — sung anthem, two distinct planets in cold open; v1's wreck was an Earth galleon: debris must be derelict SPACECRAFT, never 'ships') |
 | 004 | Titan | the Spindle: a world tidally stretched toward a dead star | DONE 2026-08-12 (first take accepted; sung anthem) |
