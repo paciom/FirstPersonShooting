@@ -27,11 +27,18 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 - **The fragment**: a fist-sized golden metallic cube etched with glowing
   circuit glyphs, always identical, always rising on a column of light.
 - **The counter**: holographic `FRAGMENT NNN / 512` in the cold open.
-- **The ritual close**: close-up of the robot's open palm holding the ONE cube
-  (never show multiple cubes), holographic text "FRAGMENT — SECURED" (NO digits
-  — the model reliably mistypes numbers in this shot; ep002 typed "516" twice),
-  a calm epic voice says "Fragment <n>... secured." The cold-open counter and
-  the voice line carry the numbers.
+- **The ritual close** (changed 2026-08-13, from ep014): close-up of the
+  robot's open palm holding the ONE cube (never show multiple cubes), with
+  holographic text "<n> SECURED. <512-n> TO GO." and NO spoken line at all.
+  The anthem plays unbroken to the last frame.
+  Why: the old spoken "Fragment <n>... secured." duplicated the on-screen text,
+  cut the anthem at its climax, and closed the loop on the exact beat where a
+  short either repeats or gets scrolled — and it was the series' single most
+  frequent defect. The countdown card keeps the ritual but ends on an open
+  loop. Digits render fine in this short form (verified ep014 v4/v5); the old
+  "516" mistype came from the longer "FRAGMENT NNN / 512 — SECURED" string.
+  State the silence rule three times in the prompt (close, LYRIC RULE, audio
+  paragraph) — that reliably produces a silent tail.
 - **Hard rules learned from ep001 v1**: no moons (they render as unnaturally
   stacked with inconsistent lighting); ONE sun with consistent shadows; jets
   fly NOSE-FIRST (give front-3/4, rear-3/4 and profile angle refs from
