@@ -100,8 +100,12 @@ public static class VfxUtil
     /// </summary>
     public static void SplashPop(Vector3 position, Color color, float scale = 1f)
     {
-        FlashQuad.Spawn(position, Ring, color, 0.3f * scale, 3.6f * scale, 0.32f, 1.6f);
-        SpawnImpactSparks(position, color, Mathf.RoundToInt(9 * scale), 5f * scale, 0.12f * scale);
+        // One brief filled pop IS allowed: at 0.07s it cannot overlap its
+        // successor even at cannon rate, so it reads as a bang per shell
+        // rather than accumulating into fog.
+        FlashQuad.Spawn(position, Glow, color, 0.5f * scale, 1.0f * scale, 0.07f, 1.6f);
+        FlashQuad.Spawn(position, Ring, color, 0.3f * scale, 3.6f * scale, 0.32f, 2.2f);
+        SpawnImpactSparks(position, color, Mathf.RoundToInt(14 * scale), 5.5f * scale, 0.14f * scale);
     }
 
     /// <summary>

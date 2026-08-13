@@ -208,13 +208,12 @@ public static class WarFx
 
     /// <summary>
     /// Peak brightness ONE additive particle may reach — on its hottest
-    /// channel, after the shader's own 4x. Deliberately near the bloom
-    /// threshold rather than above it, because additive particles STACK:
-    /// the fireball's core is five or ten of them deep, and the stack is
-    /// what should carry the heat. A ceiling of 1.6 looked right for one
-    /// particle and still summed to a white core.
+    /// channel, after the shader's own 4x. Calibrated by the proof frames:
+    /// 0.9 left the fire invisible once the white smoke stopped covering for
+    /// it; the deep-orange tint means even a stacked core blooms orange, so
+    /// this can sit above the threshold where a white tint could not.
     /// </summary>
-    const float AdditiveCeiling = 0.9f;
+    const float AdditiveCeiling = 2.0f;
 
     /// <summary>
     /// What the fire renders AS, whatever colour the particles think they
@@ -325,8 +324,8 @@ public static class WarFx
             // ceiling the WFX layers keep.
             bool smoke = source.name.Contains("Smoke");
             return VfxUtil.MakeAdditiveMaterial(texture as Texture2D,
-                smoke ? new Color(0.5f, 0.45f, 0.4f) : FireWarm,
-                smoke ? 0.5f : AdditiveCeiling);
+                smoke ? new Color(0.45f, 0.38f, 0.32f) : FireWarm,
+                smoke ? 0.45f : AdditiveCeiling);
         }
         else
         {
