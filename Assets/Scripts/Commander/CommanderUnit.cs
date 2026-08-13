@@ -958,14 +958,24 @@ public class CommanderUnit : MonoBehaviour
                 _agent.speed = _robotSpeed;
         }
 
-        // Robot → jet, stop motion, same recipe as the tank fold.
+        // Robot → jet, stop motion, same recipe as the tank fold. The set's
+        // early frames are robot-framed; from JetRobotFramesFor on they are
+        // AIRCRAFT-framed and take Dogfight's measured yaw — the long-axis
+        // guess reads a wingspan as a fuselage and flies the jet backwards.
+        int robotFrames = JetPawn.JetRobotFramesFor(JetRobotName());
         for (int i = 0; i < _jetStages.Length; i++)
         {
             var current = _body.Find("Model");
             if (current != null)
                 Destroy(current.gameObject);
             if (_jetStages[i] != null)
-                GroundAlignedInstance(_jetStages[i], 2.4f);
+            {
+                if (i < robotFrames)
+                    GroundAlignedInstance(_jetStages[i], 2.4f);
+                else
+                    GroundAlignedInstance(_jetStages[i], 2.4f, JetPawn.StageYaw,
+                        absoluteYaw: true);
+            }
             VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
             yield return new WaitForSeconds(StageSeconds);
         }
@@ -1018,7 +1028,13 @@ public class CommanderUnit : MonoBehaviour
             if (current != null)
                 Destroy(current.gameObject);
             if (_jetStages[i] != null)
-                GroundAlignedInstance(_jetStages[i], 2.4f);
+            {
+                if (i < robotFrames)
+                    GroundAlignedInstance(_jetStages[i], 2.4f);
+                else
+                    GroundAlignedInstance(_jetStages[i], 2.4f, JetPawn.StageYaw,
+                        absoluteYaw: true);
+            }
             VfxUtil.Explosion(transform.position + Vector3.up * 0.9f, _tint, 0.35f);
             yield return new WaitForSeconds(StageSeconds);
         }
@@ -1033,6 +1049,13 @@ public class CommanderUnit : MonoBehaviour
         // the next think tick; a Move that flew its whole distance simply
         // finds itself Arrived.
     }
+
+    /// <summary>
+    /// The roster name this unit's model came from — "ranger-robot" wears
+    /// ranger's jet set. JetRobotFramesFor falls back sensibly on unknowns.
+    /// </summary>
+    string JetRobotName() =>
+        _modelPrefab != null ? _modelPrefab.name.Replace("-robot", "") : "";
 
     void FaceFlat(Vector3 worldPoint, float degreesPerSecond)
     {
@@ -1134,7 +1157,8 @@ public class CommanderUnit : MonoBehaviour
     /// SIDEWAYS. Rotation lands before anything is measured; fitting first
     /// would solve centring and grounding for the wrong orientation.
     /// </summary>
-    void GroundAlignedInstance(GameObject prefab, float targetSize, float extraYaw = 0f)
+    void GroundAlignedInstance(GameObject prefab, float targetSize, float extraYaw = 0f,
+        bool absoluteYaw = false)
     {
         if (prefab == null)
             return;
@@ -1156,7 +1180,13 @@ public class CommanderUnit : MonoBehaviour
         // in particular, and half the army ends up crabbing sideways.
         instance.transform.rotation = Quaternion.identity;
         var bounds = MeasureBounds(renderers);
-        float yaw = (bounds.size.x > bounds.size.z ? 90f : 0f) + extraYaw;
+        // absoluteYaw skips the long-axis guess entirely: a JET's wingspan
+        // usually beats its length, so the guess turns airframes sideways or
+        // tail-first at random — those callers pass Dogfight's measured yaw
+        // instead (JetPawn.StageYaw doctrine: trust the screenshot).
+        float yaw = absoluteYaw
+            ? extraYaw
+            : (bounds.size.x > bounds.size.z ? 90f : 0f) + extraYaw;
         instance.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
         bounds = MeasureBounds(renderers);
 
