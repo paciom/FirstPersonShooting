@@ -315,7 +315,18 @@ public static class WarFx
         }
         else if (was.Contains("Add") || source.name.Contains("Add"))
         {
-            return VfxUtil.MakeAdditiveMaterial(texture as Texture2D, Color.white, 1f);
+            // The proof rig's material dump caught this branch red-handed:
+            // the pack's SMOKE sits on the built-in Particles/Additive (2015
+            // glow-smoke), so it landed here and came out as untinted white
+            // additive at full intensity — the white cloud that survived
+            // every calming pass, because it had left the WFX shader family
+            // Calm watches. Smoke gets a warm-grey ember-lit haze under the
+            // bloom threshold; anything else additive gets fire at the same
+            // ceiling the WFX layers keep.
+            bool smoke = source.name.Contains("Smoke");
+            return VfxUtil.MakeAdditiveMaterial(texture as Texture2D,
+                smoke ? new Color(0.5f, 0.45f, 0.4f) : FireWarm,
+                smoke ? 0.5f : AdditiveCeiling);
         }
         else
         {
