@@ -91,6 +91,20 @@ public static class VfxUtil
     }
 
     /// <summary>
+    /// A splash weapon's impact: RING AND SPARKS ONLY. Five rounds of
+    /// whiteout evidence established that any filled glow quad — whatever its
+    /// colour, size or intensity — merges into one white cloud at cannon
+    /// rate, because impacts land on the same spot faster than they fade. A
+    /// ring is hollow and sparks are streaks; neither can fill an area, so
+    /// the stack reads as rapid fire instead of fog.
+    /// </summary>
+    public static void SplashPop(Vector3 position, Color color, float scale = 1f)
+    {
+        FlashQuad.Spawn(position, Ring, color, 0.3f * scale, 3.6f * scale, 0.32f, 1.6f);
+        SpawnImpactSparks(position, color, Mathf.RoundToInt(9 * scale), 5f * scale, 0.12f * scale);
+    }
+
+    /// <summary>
     /// The pop where a shot or a fist lands. Small on purpose: a robot is
     /// <see cref="RobotFactory.NormalizedHeight"/> tall, so an impact reads as
     /// an impact only while it stays a fraction of that — the streaks here are
