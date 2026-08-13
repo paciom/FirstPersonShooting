@@ -108,9 +108,13 @@ public class TankRaid : MonoBehaviour
     /// <summary>Recruits the hero may keep at once, before any factory is taken.</summary>
     const int BaseAllyCap = 3;
 
-    /// <summary>Shield and speed a recruit drives with.</summary>
+    /// <summary>Shield and speed a recruit drives with. FASTER than the hero's
+    /// 12: an escort slower than the tank it escorts is shed on the first long
+    /// sprint, and a reward the mode quietly deletes taught the player not to
+    /// want it. The pace never shows in a fight — the brain holds standoff and
+    /// circles there — it only shows as the escort actually keeping up.</summary>
     const float AllyShield = 190f;
-    const float AllySpeed = 10.5f;
+    const float AllySpeed = 13f;
 
     /// <summary>Metres to the first outpost, and between them after that.</summary>
     const float FirstOutpostAt = 420f;
@@ -357,8 +361,9 @@ public class TankRaid : MonoBehaviour
             // that fell behind to race back into a brawl the hero slowed down
             // for (its guns stay silent out there — see TankBrain), little
             // enough that sprint-dropped stragglers free their slots within
-            // seconds. Recruits go the same way — one that cannot keep up has
-            // been lost.
+            // seconds. Recruits can never get here: they are held at the
+            // trail line (see Recruit), because a reward the mode silently
+            // deletes is worse than one that visibly lags.
             if (TankField.FallenBehind(pawn.transform.position, 10f))
             {
                 Destroy(pawn.gameObject);
@@ -397,6 +402,11 @@ public class TankRaid : MonoBehaviour
             AllyShield, TankArsenal.Role.Ally);
         ally.speed = AllySpeed;
         ally.turnSpeed = 165f;
+        // Held at the trail line like the hero: a recruit is the player's
+        // property, and losing one to the sweep because a rock held it up for
+        // two seconds is a punishment nobody can read. Worst case it waits at
+        // the bottom edge, visibly, until the hero slows and it catches up.
+        ally.HeldAtTrail = true;
         ally.OnWrecked += AllyWrecked;
 
         var brain = ally.gameObject.AddComponent<TankBrain>();
