@@ -58,6 +58,14 @@ public static class VfxUtil
         // white here is the last coat of paint on a whiteout.
         FlashQuad.Spawn(position, Glow, new Color(1f, 0.85f, 0.55f),
             0.4f * scale, 1.2f * scale, 0.08f, 1.8f);
+        // The fire BODY is ours. The pack's flame and glow layers render
+        // nothing usable once their 4x-white overdrive is denied (proven by
+        // layer-isolation frames: zero pixels at any sane tint), so the
+        // orange mass comes from these puffs — colours fully owned, so the
+        // core runs yellow-hot and cools through orange to ash instead of
+        // ever touching white. The pack still brings what works: smoke,
+        // embers, spark streaks.
+        SpawnFirePuffs(position, scale);
         // NO team-coloured glow quad. A metres-wide soft glow at flash
         // intensity spends a fifth of a second past the bloom threshold and
         // paints a white ball squarely over the fireball — it was the last
@@ -190,6 +198,46 @@ public static class VfxUtil
         // are the most frequent effect in the game, and holding a dead
         // GameObject open for a second each is a crowd of them in a firefight.
         Object.Destroy(ps.gameObject, lifeMax + 0.4f);
+    }
+
+    /// <summary>
+    /// The fireball: billowing puffs that ignite yellow-hot, cool through
+    /// deep orange and die as ash. Rises a little, because fire does.
+    /// </summary>
+    static void SpawnFirePuffs(Vector3 position, float scale)
+    {
+        var ps = MakeSystem(position + Vector3.up * (0.3f * scale), Puff,
+            new Color(1f, 0.5f, 0.16f));
+        var main = ps.main;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f * scale, 3.6f * scale);
+        main.startSize = new ParticleSystem.MinMaxCurve(1.0f * scale, 2.1f * scale);
+        main.gravityModifier = -0.14f;
+
+        var limit = ps.limitVelocityOverLifetime;
+        limit.enabled = true;
+        limit.dampen = 0.45f;
+
+        var colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        var gradient = new Gradient();
+        gradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(new Color(1f, 0.88f, 0.45f), 0f),
+                new GradientColorKey(new Color(1f, 0.45f, 0.12f), 0.35f),
+                new GradientColorKey(new Color(0.4f, 0.1f, 0.03f), 1f),
+            },
+            new[]
+            {
+                new GradientAlphaKey(0.95f, 0f),
+                new GradientAlphaKey(0.6f, 0.5f),
+                new GradientAlphaKey(0f, 1f),
+            });
+        colorOverLifetime.color = gradient;
+
+        ps.Emit(Mathf.RoundToInt(6 + 4 * scale));
+        Object.Destroy(ps.gameObject, 1.2f);
     }
 
     static void SpawnMotes(Vector3 position, Color color, int count, float speed)
