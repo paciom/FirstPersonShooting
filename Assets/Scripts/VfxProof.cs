@@ -51,26 +51,53 @@ class VfxProofDriver : MonoBehaviour
 
         BuildStage();
 
-        // A comet in flight, the wreck fireball, and a stacked splash barrage —
-        // the three effects the whiteout hunt has been circling.
+        // A comet in flight, the pack's fireball ALONE, the full wreck, and a
+        // stacked splash barrage — plus a dump of what materials the fireball
+        // actually spawned with, because the calming pipeline believes one
+        // thing and the frames show another.
         _events = new List<(float, string, System.Action)>
         {
+            (0.1f, null, DumpFireballMaterials),
             (0.6f, null, SpawnComet),
             (1.2f, "comet_a", null),
             (1.7f, "comet_b", null),
             (2.2f, null, () =>
             {
                 if (_comet != null) Destroy(_comet.gameObject);
-                VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f);
+                WarFx.Spawn(WarFx.Kind.Big, Focus, 1.3f);
             }),
-            (2.35f, "wreck_a", null),
-            (2.7f, "wreck_b", null),
-            (3.3f, "wreck_c", null),
-            (4.0f, null, () => _nextSplash = 0f),
-            (5.0f, "splash_a", null),
-            (5.45f, "splash_b", null),
-            (6.4f, null, Finish),
+            (2.4f, "fireball_a", null),
+            (2.9f, "fireball_b", null),
+            (3.8f, null, () => VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f)),
+            (3.95f, "wreck_a", null),
+            (4.4f, "wreck_b", null),
+            (5.2f, null, () => _nextSplash = 0f),
+            (6.2f, "splash_a", null),
+            (6.65f, "splash_b", null),
+            (7.4f, null, Finish),
         };
+    }
+
+    /// <summary>Every renderer on a sanitized fireball instance: object,
+    /// material, shader, tint. The ground truth the theorising lacked.</summary>
+    void DumpFireballMaterials()
+    {
+        var probe = WarFx.Spawn(WarFx.Kind.Big, Focus + Vector3.up * 60f, 1.3f);
+        if (probe == null)
+        {
+            File.WriteAllText(Path.Combine(VfxProof.OutDir, "materials.txt"), "SPAWN FAILED");
+            return;
+        }
+        var sb = new System.Text.StringBuilder();
+        foreach (var renderer in probe.GetComponentsInChildren<Renderer>(true))
+            foreach (var material in renderer.sharedMaterials)
+                sb.AppendLine(material == null
+                    ? $"{renderer.gameObject.name} | NULL"
+                    : $"{renderer.gameObject.name} | {material.name} | {material.shader?.name} | "
+                      + (material.HasProperty("_TintColor")
+                          ? material.GetColor("_TintColor").ToString() : "no tint"));
+        File.WriteAllText(Path.Combine(VfxProof.OutDir, "materials.txt"), sb.ToString());
+        Destroy(probe);
     }
 
     /// <summary>A deck, two suns, the game's own post profile, and a camera at
@@ -154,7 +181,7 @@ class VfxProofDriver : MonoBehaviour
     {
         _t += Time.deltaTime;
 
-        if (_t >= _nextSplash && _t < 5.6f)
+        if (_t >= _nextSplash && _t < 6.7f)
         {
             _nextSplash = _t + 0.15f;
             VfxUtil.SplashPop(Focus + new Vector3(Random.Range(-0.5f, 0.5f), 0f,
