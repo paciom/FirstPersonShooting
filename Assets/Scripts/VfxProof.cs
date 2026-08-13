@@ -55,31 +55,27 @@ class VfxProofDriver : MonoBehaviour
         // stacked splash barrage — plus a dump of what materials the fireball
         // actually spawned with, because the calming pipeline believes one
         // thing and the frames show another.
+        // Isolated layers FIRST on a clean field — the last round's flame
+        // isolation was contaminated by the previous burst's lingering smoke.
         _events = new List<(float, string, System.Action)>
         {
             (0.1f, null, DumpFireballMaterials),
-            (0.6f, null, SpawnComet),
-            (1.2f, "comet_a", null),
-            (1.7f, "comet_b", null),
-            (2.2f, null, () =>
-            {
-                if (_comet != null) Destroy(_comet.gameObject);
-                WarFx.Spawn(WarFx.Kind.Big, Focus, 1.3f);
-            }),
-            (2.4f, "fireball_a", null),
-            (2.9f, "fireball_b", null),
-            // The flame sheets alone: every other renderer switched off, so
-            // the frame shows exactly what that one layer contributes.
-            (3.8f, null, SpawnFlamesOnly),
-            (3.95f, "flames_a", null),
-            (4.25f, "flames_b", null),
-            (5.0f, null, () => VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f)),
-            (5.15f, "wreck_a", null),
-            (5.6f, "wreck_b", null),
-            (6.4f, null, () => _nextSplash = 0f),
-            (7.4f, "splash_a", null),
-            (7.85f, "splash_b", null),
-            (8.6f, null, Finish),
+            (0.6f, null, () => SpawnLayer("Explosion")),
+            (0.75f, "flames_a", null),
+            (1.05f, "flames_b", null),
+            (2.4f, null, () => SpawnLayer("Glow")),
+            (2.55f, "glows_a", null),
+            (2.85f, "glows_b", null),
+            (4.2f, null, () => WarFx.Spawn(WarFx.Kind.Big, Focus, 1.3f)),
+            (4.4f, "fireball_a", null),
+            (4.9f, "fireball_b", null),
+            (6.2f, null, () => VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f)),
+            (6.35f, "wreck_a", null),
+            (6.8f, "wreck_b", null),
+            (7.6f, null, () => _nextSplash = 0f),
+            (8.6f, "splash_a", null),
+            (9.05f, "splash_b", null),
+            (9.8f, null, Finish),
         };
     }
 
@@ -182,13 +178,16 @@ class VfxProofDriver : MonoBehaviour
         WeaponUtil.DressAsFireball(_comet, spec.color);
     }
 
-    void SpawnFlamesOnly()
+    /// <summary>A burst with only the renderers whose object name starts
+    /// with <paramref name="keep"/> left on ("Explosion" = the flame sheets,
+    /// "Glow" = the glow circles and sparkles).</summary>
+    void SpawnLayer(string keep)
     {
         var fx = WarFx.Spawn(WarFx.Kind.Big, Focus, 1.3f);
         if (fx == null)
             return;
         foreach (var renderer in fx.GetComponentsInChildren<Renderer>(true))
-            if (renderer.gameObject.name != "Explosion")
+            if (!renderer.gameObject.name.StartsWith(keep))
                 renderer.enabled = false;
     }
 
@@ -196,7 +195,7 @@ class VfxProofDriver : MonoBehaviour
     {
         _t += Time.deltaTime;
 
-        if (_t >= _nextSplash && _t < 7.9f)
+        if (_t >= _nextSplash && _t < 9.1f)
         {
             _nextSplash = _t + 0.15f;
             VfxUtil.SplashPop(Focus + new Vector3(Random.Range(-0.5f, 0.5f), 0f,
