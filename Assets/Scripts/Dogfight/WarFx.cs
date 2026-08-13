@@ -204,22 +204,33 @@ public static class WarFx
     }
 
     /// <summary>
-    /// Peak brightness an additive layer may reach. This project's bloom
-    /// (threshold 0.8, intensity 2.2) whitewashes additive colour much past
-    /// ~2 — the same ceiling every native effect respects — and past it an
-    /// orange fireball reads as a stack of white blobs.
+    /// Peak brightness an additive layer may reach — on its hottest channel,
+    /// after the shader's own 4x. This project's bloom (threshold 0.8,
+    /// intensity 2.2) turns anything much hotter into one soft blob.
     /// </summary>
-    const float AdditiveCeiling = 1.8f;
+    const float AdditiveCeiling = 1.6f;
+
+    /// <summary>
+    /// What the fire renders AS, whatever colour the particles think they
+    /// are. Dimmed alone was not enough: the pack's gradients spend the whole
+    /// visible span of every glow layer near WHITE (white to cream, alpha
+    /// gone by the time the keys turn orange) — its look depends on drawing
+    /// that white core with no bloom, where the edges stay sharp. Under this
+    /// project's bloom a white core of any real brightness smears into a
+    /// featureless blob. Forcing the tint to a fire colour makes even the
+    /// white-phase particles render orange, so the bloom spreads FIRE.
+    /// </summary>
+    static readonly Color FireWarm = new Color(1f, 0.58f, 0.26f);
 
     /// <summary>
     /// The pack's additive shaders OVERBRIGHTEN BY DESIGN: they multiply
-    /// vertex colour by tint by four (2x tint, 2x alpha), which was the 2015
-    /// built-in-pipeline way to get punch in gamma space with no bloom. Under
-    /// this project's linear space and hot bloom that same punch clips to
-    /// white — the fire is orange, the screen just cannot show it. A clone
-    /// with the tint pulled down to the ceiling keeps the shape, the motion
-    /// and the palette, and loses only the whiteout. Cached per source, and
-    /// the pack's own asset is never written.
+    /// vertex colour by tint by four (2x tint, 2x alpha) — the 2015 built-in-
+    /// pipeline way to get punch in gamma space with no bloom. Under linear
+    /// space and hot bloom that punch clips to white. Every additive WFX
+    /// material is re-seated onto a clone whose tint is the fire colour at
+    /// the ceiling: same shapes, same motion, but the palette is imposed
+    /// rather than trusted. Cached per source; the pack's own asset is never
+    /// written.
     /// </summary>
     static Material Calm(Material source)
     {
@@ -232,14 +243,12 @@ public static class WarFx
             return null;
 
         Color tint = source.GetColor("_TintColor");
-        float peak = Mathf.Max(tint.r, Mathf.Max(tint.g, tint.b)) * 4f;
-        if (peak <= AdditiveCeiling)
-            return null;                       // already temperate (the flames are)
-
         var copy = new Material(source) { name = source.name + " (calmed)" };
-        float scale = AdditiveCeiling / peak;
-        copy.SetColor("_TintColor",
-            new Color(tint.r * scale, tint.g * scale, tint.b * scale, tint.a));
+        // The shader's output for a white particle is 4x tint, so this puts
+        // the hottest channel exactly at the ceiling, in fire.
+        float scale = AdditiveCeiling / 4f;
+        copy.SetColor("_TintColor", new Color(
+            FireWarm.r * scale, FireWarm.g * scale, FireWarm.b * scale, tint.a));
         Calmed[source] = copy;
         return copy;
     }
