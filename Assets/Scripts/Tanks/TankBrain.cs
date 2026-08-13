@@ -112,12 +112,19 @@ public class TankBrain : MonoBehaviour
             return;
         }
 
+        // Off the bottom of the screen: guns silent. A pawn out there is either
+        // seconds from the sweep or racing to rejoin a brawl the hero slowed
+        // down for — either way, fire arriving from off camera reads as shots
+        // from nowhere. It still drives (rejoining is the point), it just does
+        // not shoot until it is back in the picture.
+        bool inPlay = !TankField.FallenBehind(transform.position, 2f);
+
         // A bolted-down gun has no manoeuvre to make. Everything below this is
         // about closing, holding and circling, none of which an outpost can do.
         if (_self.Kind == TankPawn.Chassis.Structure)
         {
             _self.AimAt(_target.Center);
-            _self.Firing = true;
+            _self.Firing = inPlay;
             return;
         }
 
@@ -142,9 +149,10 @@ public class TankBrain : MonoBehaviour
         // Aim at the hull's middle, not its feet: a shot at the floor line clips
         // the deck in front of a tank at this camera's angle.
         _self.AimAt(_target.Center);
-        // Held down always. TankPawn will not let a shot out until the barrel has
-        // arrived, so the gate is the turret's slew and not this decision.
-        _self.Firing = true;
+        // Held down whenever on screen. TankPawn will not let a shot out until
+        // the barrel has arrived, so the gate is the turret's slew and not this
+        // decision.
+        _self.Firing = inPlay;
     }
 
     /// <summary>

@@ -343,12 +343,15 @@ public class TankRaid : MonoBehaviour
             var pawn = pawns[i];
             if (pawn == null || pawn == _hero)
                 continue;
-            // Swept once it drops off the bottom of the screen: anything left
-            // trailing the frontier forever is a pawn burning a slot in the
-            // pressure budget for a fight that can no longer happen. Recruits go
-            // the same way — one that cannot keep up has been lost, and saying so
-            // beats an invisible tank fighting somewhere off camera.
-            if (TankField.FallenBehind(pawn.transform.position, 26f))
+            // Swept shortly after it drops off the bottom of the screen — a
+            // pawn out there burns a slot in the pressure budget for a fight
+            // nobody can see. Ten metres of grace, not more: enough for one
+            // that fell behind to race back into a brawl the hero slowed down
+            // for (its guns stay silent out there — see TankBrain), little
+            // enough that sprint-dropped stragglers free their slots within
+            // seconds. Recruits go the same way — one that cannot keep up has
+            // been lost.
+            if (TankField.FallenBehind(pawn.transform.position, 10f))
             {
                 Destroy(pawn.gameObject);
                 continue;
