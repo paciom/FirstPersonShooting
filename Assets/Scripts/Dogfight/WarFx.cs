@@ -37,6 +37,7 @@ public static class WarFx
 
     static readonly Dictionary<Kind, GameObject> Prefabs = new Dictionary<Kind, GameObject>();
     static readonly Dictionary<Material, Material> Converted = new Dictionary<Material, Material>();
+    static readonly Dictionary<Material, Material> Calmed = new Dictionary<Material, Material>();
     static GameObject _firePrefab;
     static Material _smokePuff;
     static Material _flame;
@@ -160,11 +161,11 @@ public static class WarFx
     }
 
     /// <summary>
-    /// Re-seat any legacy-shader material on this instance. Additive-flavoured
-    /// names go to the project's own additive; multiplies to the pack's URP-
-    /// safe multiply; the rest to the pack's plain alpha blend. Converted
-    /// materials are cached per source, so a hundred explosions build three
-    /// materials, not three hundred.
+    /// Re-seat any legacy-shader material on this instance, and CALM the hot
+    /// ones. Additive-flavoured names go to the project's own additive;
+    /// multiplies to the pack's URP-safe multiply; the rest to the pack's
+    /// plain alpha blend. Converted materials are cached per source, so a
+    /// hundred explosions build three materials, not three hundred.
     /// </summary>
     static void Sanitize(GameObject instance)
     {
@@ -175,19 +176,72 @@ public static class WarFx
             for (int i = 0; i < materials.Length; i++)
             {
                 var material = materials[i];
-                if (material == null || !IsLegacy(material.shader))
+                if (material == null)
                     continue;
-                if (!Converted.TryGetValue(material, out var replacement) || replacement == null)
+                if (IsLegacy(material.shader))
                 {
-                    replacement = Convert(material);
-                    Converted[material] = replacement;
+                    if (!Converted.TryGetValue(material, out var replacement) || replacement == null)
+                    {
+                        replacement = Convert(material);
+                        Converted[material] = replacement;
+                    }
+                    materials[i] = replacement;
+                    touched = true;
                 }
-                materials[i] = replacement;
-                touched = true;
+                else
+                {
+                    var calmed = Calm(material);
+                    if (calmed != null)
+                    {
+                        materials[i] = calmed;
+                        touched = true;
+                    }
+                }
             }
             if (touched)
                 renderer.sharedMaterials = materials;
         }
+    }
+
+    /// <summary>
+    /// Peak brightness an additive layer may reach. This project's bloom
+    /// (threshold 0.8, intensity 2.2) whitewashes additive colour much past
+    /// ~2 — the same ceiling every native effect respects — and past it an
+    /// orange fireball reads as a stack of white blobs.
+    /// </summary>
+    const float AdditiveCeiling = 1.8f;
+
+    /// <summary>
+    /// The pack's additive shaders OVERBRIGHTEN BY DESIGN: they multiply
+    /// vertex colour by tint by four (2x tint, 2x alpha), which was the 2015
+    /// built-in-pipeline way to get punch in gamma space with no bloom. Under
+    /// this project's linear space and hot bloom that same punch clips to
+    /// white — the fire is orange, the screen just cannot show it. A clone
+    /// with the tint pulled down to the ceiling keeps the shape, the motion
+    /// and the palette, and loses only the whiteout. Cached per source, and
+    /// the pack's own asset is never written.
+    /// </summary>
+    static Material Calm(Material source)
+    {
+        var shader = source.shader;
+        if (shader == null || !shader.name.StartsWith("WFX/") || !shader.name.Contains("Add"))
+            return null;
+        if (Calmed.TryGetValue(source, out var cached) && cached != null)
+            return cached;
+        if (!source.HasProperty("_TintColor"))
+            return null;
+
+        Color tint = source.GetColor("_TintColor");
+        float peak = Mathf.Max(tint.r, Mathf.Max(tint.g, tint.b)) * 4f;
+        if (peak <= AdditiveCeiling)
+            return null;                       // already temperate (the flames are)
+
+        var copy = new Material(source) { name = source.name + " (calmed)" };
+        float scale = AdditiveCeiling / peak;
+        copy.SetColor("_TintColor",
+            new Color(tint.r * scale, tint.g * scale, tint.b * scale, tint.a));
+        Calmed[source] = copy;
+        return copy;
     }
 
     static bool IsLegacy(Shader shader)
