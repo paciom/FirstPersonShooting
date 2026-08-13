@@ -30,6 +30,9 @@ public class TDTower : MonoBehaviour
     /// <summary>Re-derived from the key on demand — same trap and same cure as Building.Definition.</summary>
     TDTowerDefinition Def => _def ?? (_def = TDTowerCatalog.Get(_key));
 
+    /// <summary>The catalog entry, for anyone appraising the defense (the director does).</summary>
+    public TDTowerDefinition Definition => Def;
+
     /// <summary>Placement entry point: bind the definition and build the working parts.</summary>
     public void Configure(TDTowerDefinition def)
     {

@@ -93,6 +93,10 @@ public class TDGarrison : MonoBehaviour
                 blaster.shotsPerSecond = def.shotsPerSecond;
         }
 
+        // The price tag rides along: the director appraises the corps by
+        // what it cost, and only the hire moment knows that.
+        unit.gameObject.AddComponent<TDHireWorth>().worth = def.cost;
+
         VfxUtil.Explosion(pos + Vector3.up * 1f, MatchAnnouncer.TeamColor(0), 0.9f);
         unit.IssueAttackMove(_rally);
         return true;

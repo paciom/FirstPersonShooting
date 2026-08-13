@@ -205,11 +205,14 @@ public class TDWaves : MonoBehaviour
     }
 
     /// <summary>
-    /// The wave recipe with the director's dial applied: headcount scales
-    /// with pressure in full, per-raider strength gently. Bounty rides the
-    /// strength scale — tougher raiders pay better, so a hard dial is also
-    /// a rich one. Called per spawn and per wave start with the same wave
-    /// number; the dial only moves between waves, so both read one truth.
+    /// The wave recipe with the director's judgement applied: headcount is
+    /// POWER-MATCHED — the authored themed count scaled by how the player's
+    /// appraised defense compares to par, times the pressure dial — so a
+    /// fat defense meets a wave that can actually wound it and a thin one
+    /// is not steamrolled by the calendar. Per-raider strength scales
+    /// gently with pressure alone; bounty rides that same scale. Called per
+    /// spawn and per wave start with the same wave number; the appraisal
+    /// and the dial only move between waves, so both read one truth.
     /// </summary>
     Recipe ScaledRecipe(int wave)
     {
@@ -217,10 +220,15 @@ public class TDWaves : MonoBehaviour
         var director = TDDirector.Instance;
         if (director != null)
         {
-            recipe.count = Mathf.Max(3, Mathf.RoundToInt(recipe.count * director.CountScale));
+            recipe.count = Mathf.Clamp(
+                Mathf.RoundToInt(recipe.count * director.CountFactor(wave)), 3, 30);
             recipe.hp *= director.PowerScale;
             recipe.damage *= director.PowerScale;
             recipe.bounty = Mathf.RoundToInt(recipe.bounty * director.PowerScale);
+            // Big waves spawn brisker, or thirty raiders arrive as a drizzle
+            // that never masses into the assault the sizing promised.
+            if (recipe.count > 16)
+                recipe.interval *= Mathf.Clamp(16f / recipe.count, 0.6f, 1f);
         }
         return recipe;
     }

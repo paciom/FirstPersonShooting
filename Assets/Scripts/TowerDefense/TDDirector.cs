@@ -51,8 +51,74 @@ public class TDDirector : MonoBehaviour
 
     public float Pressure => _pressure;
 
-    /// <summary>What raiders a wave gets: the dial, straight.</summary>
-    public float CountScale => _pressure;
+    // ------------------------------------------------- power-matched sizing
+
+    /// <summary>What a player with no purchases still is: the Core and its towers' ground.</summary>
+    const float BaseGarrisonWorth = 250f;
+
+    /// <summary>Banked credits are POTENTIAL defense, discounted accordingly.</summary>
+    const float BankWeight = 0.4f;
+
+    /// <summary>A refinery shoots nothing; it counts as the defense it will buy.</summary>
+    const float RefineryWeight = 0.3f;
+
+    /// <summary>
+    /// The worth curve of a par player — roughly a tower and a robot added
+    /// per wave. The measured defense is judged AGAINST this, so the wave
+    /// curve keeps its authored growth and only the player's DISTANCE from
+    /// par moves the headcount.
+    /// </summary>
+    static float ParWorth(int wave) => 650f + 260f * (wave - 1);
+
+    /// <summary>How far off par the sizing may swing, before softening.</summary>
+    const float RatioFloor = 0.55f;
+    const float RatioCeiling = 1.8f;
+
+    /// <summary>
+    /// What raiders a wave gets: the authored themed count, scaled by how
+    /// the player's ACTUAL defense compares to par — appraised directly,
+    /// towers plus robots plus discounted bank — then by the pressure dial.
+    /// Measurement answers "they just built three towers" this wave;
+    /// the rubric's dial still answers "the measurement runs hot or cold
+    /// for this player" over several. Softened by the 0.7 exponent so a
+    /// double-par fortress meets a meaningfully bigger wave, not double.
+    /// </summary>
+    public float CountFactor(int wave)
+    {
+        float ratio = Mathf.Clamp(DefenseWorth() / ParWorth(wave), RatioFloor, RatioCeiling);
+        return Mathf.Pow(ratio, 0.7f) * _pressure;
+    }
+
+    /// <summary>
+    /// The defense, appraised in credits: every standing tower at its price
+    /// (refineries discounted — they shoot nothing yet), every living robot
+    /// at its hire cost, and a slice of the bank. Reads live components
+    /// (TDTower definitions, TDHireWorth tags), never Building.Definition —
+    /// the reload-null trap.
+    /// </summary>
+    public float DefenseWorth()
+    {
+        float worth = BaseGarrisonWorth + TDEconomy.Credits * BankWeight;
+        foreach (var building in Building.All)
+        {
+            if (building == null || building.TeamId != 0 || !building.IsAlive)
+                continue;
+            var tower = building.GetComponent<TDTower>();
+            var def = tower != null ? tower.Definition : null;
+            if (def == null)
+                continue;
+            worth += def.kind == TDTowerKind.Refinery ? def.cost * RefineryWeight : def.cost;
+        }
+        foreach (var unit in CommanderUnit.All)
+        {
+            if (unit == null || unit.TeamId != 0 || !unit.IsAlive)
+                continue;
+            var tag = unit.GetComponent<TDHireWorth>();
+            if (tag != null)
+                worth += tag.worth;
+        }
+        return worth;
+    }
 
     /// <summary>
     /// What each raider is made of: the dial, softened — doubling the horde
