@@ -58,11 +58,15 @@ public static class VfxUtil
         // white here is the last coat of paint on a whiteout.
         FlashQuad.Spawn(position, Glow, new Color(1f, 0.85f, 0.55f),
             0.4f * scale, 1.2f * scale, 0.08f, 1.8f);
-        FlashQuad.Spawn(position, Glow, color, 0.7f * scale, 2.2f * scale, 0.22f, 1.8f);
-        FlashQuad.Spawn(position, Ring, color, 0.4f * scale, 5.5f * scale, 0.5f, 2.2f);
+        // NO team-coloured glow quad. A metres-wide soft glow at flash
+        // intensity spends a fifth of a second past the bloom threshold and
+        // paints a white ball squarely over the fireball — it was the last
+        // whiteout layer standing after the pack itself was calmed. The ring
+        // and the sparks say whose explosion it was; the fire says what kind.
+        FlashQuad.Spawn(position, Ring, color, 0.4f * scale, 5.5f * scale, 0.5f, 1.8f);
         SpawnSparks(position, color, Mathf.RoundToInt(22 * scale), 8f * scale);
-        // No glow motes: the fireball brings its own embers, and additive
-        // blobs drifting over smoke read as bloom artefacts.
+        // No glow motes either: the fireball brings its own embers, and
+        // additive blobs drifting over smoke read as bloom artefacts.
 
         // A wrecked tank (scale ~1.3) earns the full fireball — the small
         // burst under the old 1.6 bar was a campfire from eighteen metres up.
