@@ -74,11 +74,11 @@ creature it preserves (whale, butterfly, wolf...) — a collect-the-animals hook
 | 006 | Racer | the Timetide: moving wavefronts of accelerated time | DONE 2026-08-13 (2 takes; v2 recommended) |
 | 007 | Knight | the Hanging Works: hollow world of inward-hanging machine-spires | DONE 2026-08-13 (2 takes; v1 recommended) |
 | 008 | Bolt | the Petrified Storm: lightning frozen mid-strike, re-firing in waves | DONE 2026-08-13 (2 takes; v2 recommended) |
-| 009 | Ranger | Respira: the crust is one breathing membrane | DONE 2026-08-13 (2 takes; v2 recommended) |
-| 010 | Scout | the Reiteration: mountains built of smaller copies of themselves | DONE 2026-08-13 (2 takes; v2 recommended) |
+| 009 | Ranger | Respira: the crust is one breathing membrane | DONE 2026-08-13 (regenerated; v4 recommended — prompt de-anatomised after a moderation refusal; lyric guard added) |
+| 010 | Scout | the Reiteration: mountains built of smaller copies of themselves | DONE 2026-08-13 (regenerated; v4 recommended — world rewritten — recursion was invisible as snowy peaks) |
 | 011 | Hawk | the Thousand Panes: stacked mirror layers inside a giant | DONE 2026-08-13 (2 takes; v2 recommended) |
 | 012 | Samurai | the Chladni Plains: a vibrating crust patterned by its own note | DONE 2026-08-13 (2 takes; v1 recommended) |
-| 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | DONE 2026-08-13 (2 takes; v1 recommended) |
+| 013 | Titan | the Sunlattice: sunbeams hardened into solid girders over a void | DONE 2026-08-13 (regenerated; v4 recommended — lattice respecified as a 3D cage; lyric guard added) |
 
 Episode 1 v2 verified: counter and "FRAGMENT 001 / 512 — SECURED" text crisp,
 voice line confirmed by STT, no moons, nose-first flight, single cube in the
@@ -105,3 +105,11 @@ the likely trigger, so soften anatomical wording if it recurs.
 Recurring audio defect across the series: the singer sometimes performs a
 stage direction as a lyric (ep009 v1 sings "sphere pulses gold"; ep012 v2
 sings "collapses flat at once"). Transcribe every take before accepting it.
+
+Regeneration round (009, 010, 012, 013): BytePlus refuses takes under two
+separate filters — `OutputVideoSensitiveContentDetected` and
+`OutputAudioSensitiveContentDetected.PolicyViolation`. Both cleared on a plain
+retry of an identical prompt, so treat them as variance, not content faults.
+The LYRIC RULE (singer performs only the quoted lines; scene text is never
+sung) cut the stage-direction defect but did not eliminate it — ep010 v3 still
+sang "scale by scale". Transcribe every take.
