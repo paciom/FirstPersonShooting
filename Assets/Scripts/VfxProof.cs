@@ -68,13 +68,18 @@ class VfxProofDriver : MonoBehaviour
             }),
             (2.4f, "fireball_a", null),
             (2.9f, "fireball_b", null),
-            (3.8f, null, () => VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f)),
-            (3.95f, "wreck_a", null),
-            (4.4f, "wreck_b", null),
-            (5.2f, null, () => _nextSplash = 0f),
-            (6.2f, "splash_a", null),
-            (6.65f, "splash_b", null),
-            (7.4f, null, Finish),
+            // The flame sheets alone: every other renderer switched off, so
+            // the frame shows exactly what that one layer contributes.
+            (3.8f, null, SpawnFlamesOnly),
+            (3.95f, "flames_a", null),
+            (4.25f, "flames_b", null),
+            (5.0f, null, () => VfxUtil.Explosion(Focus, new Color(1f, 0.25f, 0.85f), 1.3f)),
+            (5.15f, "wreck_a", null),
+            (5.6f, "wreck_b", null),
+            (6.4f, null, () => _nextSplash = 0f),
+            (7.4f, "splash_a", null),
+            (7.85f, "splash_b", null),
+            (8.6f, null, Finish),
         };
     }
 
@@ -177,11 +182,21 @@ class VfxProofDriver : MonoBehaviour
         WeaponUtil.DressAsFireball(_comet, spec.color);
     }
 
+    void SpawnFlamesOnly()
+    {
+        var fx = WarFx.Spawn(WarFx.Kind.Big, Focus, 1.3f);
+        if (fx == null)
+            return;
+        foreach (var renderer in fx.GetComponentsInChildren<Renderer>(true))
+            if (renderer.gameObject.name != "Explosion")
+                renderer.enabled = false;
+    }
+
     void Update()
     {
         _t += Time.deltaTime;
 
-        if (_t >= _nextSplash && _t < 6.7f)
+        if (_t >= _nextSplash && _t < 7.9f)
         {
             _nextSplash = _t + 0.15f;
             VfxUtil.SplashPop(Focus + new Vector3(Random.Range(-0.5f, 0.5f), 0f,
