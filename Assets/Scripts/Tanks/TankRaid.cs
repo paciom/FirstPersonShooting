@@ -85,17 +85,25 @@ public class TankRaid : MonoBehaviour
     /// tank clears the old cap faster than it refilled, and an army that is
     /// mostly not there is not an army. Numbers, not toughness, is the honest
     /// way to pressure a hero that is meant to be stronger than any one of them.
+    /// The escort raises it further — see <see cref="Spawn"/>.
     /// </summary>
     const int StartingPressure = 5;
-    const int MaxPressure = 14;
+    const int MaxPressure = 18;
+
+    /// <summary>Extra raiders the field feeds per recruit driving with the
+    /// hero. Two per: a recruit is worth roughly two raiders in a trade, so
+    /// this is what keeps a full escort a fight rather than a parade.</summary>
+    const int PressurePerAlly = 2;
 
     /// <summary>Metres of progress it takes to add one to the pressure.</summary>
     const float MetresPerStep = 260f;
 
     const float SpawnInterval = 0.9f;
 
-    /// <summary>Odds a wreck leaves anything at all.</summary>
-    const float DropChance = 0.45f;
+    /// <summary>Odds a wreck leaves anything at all. Generous on purpose: the
+    /// drops are the run's story beats, and a field that mostly pays out keeps
+    /// both a player and a broadcast busy collecting.</summary>
+    const float DropChance = 0.6f;
 
     /// <summary>Recruits the hero may keep at once, before any factory is taken.</summary>
     const int BaseAllyCap = 3;
@@ -431,8 +439,14 @@ public class TankRaid : MonoBehaviour
             return;
         _nextSpawn = SpawnInterval;
 
+        // Distance is the difficulty curve; the ESCORT is the balance term. A
+        // hero with recruits beside it clears waves sized for a hero alone
+        // without slowing down, and the broadcast turns into a parade — so
+        // every recruit buys the other side reinforcements, and the fight
+        // stays a fight at any escort size.
         int pressure = Mathf.Min(MaxPressure,
-            StartingPressure + Mathf.FloorToInt(_furthest / MetresPerStep));
+            StartingPressure + Mathf.FloorToInt(_furthest / MetresPerStep)
+            + AllyCount() * PressurePerAlly);
         // Raiders only. Counting the hero's recruits here would have the army
         // thin out exactly as the player got stronger, and counting outposts
         // would stop the field feeding entirely while one stood.
@@ -566,8 +580,8 @@ public class TankRaid : MonoBehaviour
     // ----------------------------------------------------------------- casualties
 
     /// <summary>
-    /// A raider is down. It leaves the field in a burst and, just under half the
-    /// time, leaves something behind.
+    /// A raider is down. It leaves the field in a burst and, more often than
+    /// not, leaves something behind.
     ///
     /// WHAT it leaves is chosen against the state of the run, not rolled flat.
     /// The repair odds rise as the hero's shield falls, so a run going badly is
@@ -596,9 +610,11 @@ public class TankRaid : MonoBehaviour
         float hurt = _hero != null && _hero.Shield != null ? 1f - _hero.Shield.Normalized : 0f;
         if (Random.value < Mathf.Lerp(0.25f, 0.8f, hurt))
             return TankPickup.Kind.Repair;
-        // A beacon is the rarer of the two remaining, and only while there is
-        // room in the escort for it to mean anything.
-        if (AllyCount() < AllyCap && Random.value < 0.35f)
+        // A beacon leads the two remaining while there is room in the escort:
+        // a new tank falling in beside you is the mode's best moment, and the
+        // pressure math above means taking one also invites more raiders — a
+        // reward that raises the stakes rather than lowering them.
+        if (AllyCount() < AllyCap && Random.value < 0.55f)
             return TankPickup.Kind.Recruit;
         return TankPickup.Kind.Weapon;
     }

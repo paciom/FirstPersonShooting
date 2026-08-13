@@ -35,8 +35,10 @@ using UnityEngine;
 [DefaultExecutionOrder(-50)]
 public class TankPilot : MonoBehaviour
 {
-    /// <summary>How far it will go out of its way for a pickup.</summary>
-    const float PickupReach = 30f;
+    /// <summary>How far it will go out of its way for a pickup. Most of the
+    /// strip's width: collecting is the show, so almost nothing on screen is
+    /// too far to fetch.</summary>
+    const float PickupReach = 45f;
 
     /// <summary>Closer than this and it gives ground.</summary>
     const float TooClose = 13f;
@@ -136,11 +138,17 @@ public class TankPilot : MonoBehaviour
     }
 
     /// <summary>
-    /// The throttle. Full ahead on open road; eased right down when the army
-    /// is actually engaging, so the hero stands and trades fire — the scroll
-    /// still creeps the run forward underneath the brawl, and the moment the
-    /// contact is cleared the sprint resumes. Enemies already dropping off the
-    /// bottom are not a fight, so they do not slow it.
+    /// The throttle — and it never opens right up. This pilot exists for the
+    /// broadcast, and a hero at full speed outruns its own 7 m/s enemies: the
+    /// war slides off the bottom of the screen and the show is a tank driving
+    /// alone. Cruise sits just under raider speed, so the army genuinely
+    /// arrives, the escort keeps formation, and the drops get collected —
+    /// distance still accumulates because the fights end.
+    ///
+    /// Eased right down when the army is actually engaging, so the hero
+    /// stands and trades fire — the scroll still creeps the run forward
+    /// underneath the brawl. Enemies already dropping off the bottom are not
+    /// a fight, so they do not slow it.
     ///
     /// The exception is a hero at low shield, which runs THROUGH fights: the
     /// mode's own repair-drop logic hands medicine to a hurt hero, and going
@@ -167,8 +175,8 @@ public class TankPilot : MonoBehaviour
         if (nearest < BrawlRange)
             return 0.2f;
         if (nearest < BrawlRange * 1.6f)
-            return 0.55f;                       // ease in rather than braking on a line
-        return 1f;
+            return 0.4f;                        // ease in rather than braking on a line
+        return 0.55f;                           // cruise: the army can keep up
     }
 
     /// <summary>
