@@ -7,17 +7,26 @@
 //
 // Protocol (JSON text frames):
 //   client -> server:
-//     {t:"host"}                      create a room, get a match code
+//     {t:"host", arena, name}         create a room, get a match code
 //     {t:"join", code:"ABCDE"}        join a hosted room
+//     {t:"quick", arena, name}        auto-match: take the oldest open room, else host
+//     {t:"list", page}                page of open rooms, oldest first
 //     {t:"signal", data:{...}}        opaque payload relayed to the room's other peer
 //     {t:"leave"}                     leave the current room
 //   server -> client:
 //     {t:"hosted", code, ice:[...]}   room created; ice = RTCIceServer list
 //     {t:"joined", ice:[...]}         joined; sent to the guest
+//     {t:"rooms", page, pages, total, rooms:[{code, arena, name, age}]}
 //     {t:"peer-joined"}               sent to the host when the guest arrives
 //     {t:"signal", data:{...}}        relayed from the other peer
 //     {t:"peer-left"}                 the other peer disconnected
 //     {t:"error", reason}             bad code, full room, malformed message
+//
+// The room list is the lobby: a player picks an arena off it and joins, so
+// every waiting room carries the arena its host will load and the name to show
+// beside it. Sorted OLDEST FIRST — the top of the list is whoever has been
+// waiting longest, which is both the fair pick and the one "quick" takes, so
+// the button and the list never disagree about who is next.
 //
 // TURN: with CF_TURN_KEY_ID + CF_TURN_API_TOKEN set, short-lived Cloudflare
 // TURN credentials are minted server-side and included in the ice list (the
@@ -41,6 +50,8 @@ const ROOM_TTL_MS = 30 * 60 * 1000;
 const HEARTBEAT_MS = 30 * 1000;
 const MAX_ROOMS = 500;
 const MAX_CONNECTIONS_PER_IP = 16;
+const LIST_PAGE_SIZE = 5;
+const MAX_NAME_LENGTH = 16;
 
 // A stray rejection anywhere (Node >=15) would otherwise kill the process —
 // one bad frame taking the server down for every player.
@@ -54,11 +65,68 @@ const STUN_SERVERS = [
 ];
 
 /**
- * code -> { host, guest, idleSince }. idleSince is set whenever the room is
- * waiting for a guest (creation, or the guest leaving) and cleared while the
- * room is full — the TTL sweep only reaps waiting rooms, never live matches.
+ * code -> { host, guest, idleSince, createdAt, arena, name }. idleSince is set
+ * whenever the room is waiting for a guest (creation, or the guest leaving) and
+ * cleared while the room is full — the TTL sweep only reaps waiting rooms,
+ * never live matches.
+ *
+ * createdAt is separate from idleSince on purpose: idleSince restarts when a
+ * guest bails, and a room that jumped back to the top of the lobby every time
+ * somebody peeked at it would never let the longest waiter through.
  */
 const rooms = new Map();
+
+/** Rooms still waiting for a guest, longest wait first. */
+function openRooms() {
+  const open = [];
+  for (const [code, room] of rooms)
+    if (room.host && !room.guest) open.push([code, room]);
+  open.sort((a, b) => a[1].createdAt - b[1].createdAt);
+  return open;
+}
+
+/**
+ * Names are typed by one player and shown to every other one, so they are
+ * clamped to printable characters and a length the lobby row can fit. Falls
+ * back rather than rejecting: an empty name is a fine reason to be listed as
+ * a challenger, not a reason to refuse the room.
+ */
+function cleanName(raw) {
+  const name = String(raw || "")
+    .replace(/[^\w \-']/g, "")
+    .trim()
+    .slice(0, MAX_NAME_LENGTH);
+  return name || "CHALLENGER";
+}
+
+/** Arena index, clamped to something plausible — the client owns the names. */
+function cleanArena(raw) {
+  const arena = Number.parseInt(raw, 10);
+  return Number.isFinite(arena) && arena >= 0 && arena < 64 ? arena : 0;
+}
+
+function sendRoomPage(ws, page) {
+  const open = openRooms();
+  const pages = Math.max(1, Math.ceil(open.length / LIST_PAGE_SIZE));
+  const wanted = Math.min(Math.max(0, Number.parseInt(page, 10) || 0), pages - 1);
+  const now = Date.now();
+  const slice = open.slice(wanted * LIST_PAGE_SIZE, (wanted + 1) * LIST_PAGE_SIZE);
+  send(ws, {
+    t: "rooms",
+    // The CLAMPED page goes back, not the requested one: a client paging past
+    // the end while rooms drain would otherwise sit on an empty page forever,
+    // asking for a page that no longer exists.
+    page: wanted,
+    pages,
+    total: open.length,
+    rooms: slice.map(([code, room]) => ({
+      code,
+      arena: room.arena,
+      name: room.name,
+      age: Math.max(0, Math.round((now - room.createdAt) / 1000)),
+    })),
+  });
+}
 
 function makeCode() {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -145,6 +213,41 @@ function leaveRoom(ws, notifyPeer) {
   }
 }
 
+async function hostRoom(ws, msg) {
+  leaveRoom(ws, true);
+  if (rooms.size >= MAX_ROOMS)
+    return send(ws, { t: "error", reason: "server-full" });
+  const code = makeCode();
+  if (!code) return send(ws, { t: "error", reason: "server-full" });
+  const now = Date.now();
+  rooms.set(code, {
+    host: ws,
+    guest: null,
+    idleSince: now,
+    createdAt: now,
+    arena: cleanArena(msg.arena),
+    name: cleanName(msg.name),
+  });
+  ws.roomCode = code;
+  // ice is stringified: the Unity client (JsonUtility) can't parse nested
+  // arrays, so it relays this string to the browser's RTCPeerConnection
+  // without ever parsing it.
+  send(ws, { t: "hosted", code, ice: JSON.stringify(await getIceServers()) });
+}
+
+async function joinRoom(ws, code) {
+  const room = rooms.get(code);
+  if (!room || !room.host) return send(ws, { t: "error", reason: "no-such-room" });
+  if (room.guest) return send(ws, { t: "error", reason: "room-full" });
+  if (room.host === ws) return send(ws, { t: "error", reason: "own-room" });
+  leaveRoom(ws, true);
+  room.guest = ws;
+  room.idleSince = null;
+  ws.roomCode = code;
+  send(ws, { t: "joined", ice: JSON.stringify(await getIceServers()) });
+  send(room.host, { t: "peer-joined" });
+}
+
 async function handleMessage(ws, raw) {
   let msg;
   try {
@@ -158,33 +261,27 @@ async function handleMessage(ws, raw) {
   }
 
   switch (msg.t) {
-    case "host": {
-      leaveRoom(ws, true);
-      if (rooms.size >= MAX_ROOMS)
-        return send(ws, { t: "error", reason: "server-full" });
-      const code = makeCode();
-      if (!code) return send(ws, { t: "error", reason: "server-full" });
-      rooms.set(code, { host: ws, guest: null, idleSince: Date.now() });
-      ws.roomCode = code;
-      // ice is stringified: the Unity client (JsonUtility) can't parse nested
-      // arrays, so it relays this string to the browser's RTCPeerConnection
-      // without ever parsing it.
-      send(ws, { t: "hosted", code, ice: JSON.stringify(await getIceServers()) });
+    case "host":
+      await hostRoom(ws, msg);
+      break;
+
+    case "join":
+      await joinRoom(ws, String(msg.code || "").trim().toUpperCase());
+      break;
+
+    case "quick": {
+      // Auto-match. Take the longest waiting room that isn't ours; with none
+      // to take, become that room — so two players pressing the same button
+      // pair up instead of both sitting in empty lobbies.
+      const open = openRooms().filter(([, room]) => room.host !== ws);
+      if (open.length > 0) await joinRoom(ws, open[0][0]);
+      else await hostRoom(ws, msg);
       break;
     }
-    case "join": {
-      const code = String(msg.code || "").trim().toUpperCase();
-      const room = rooms.get(code);
-      if (!room || !room.host) return send(ws, { t: "error", reason: "no-such-room" });
-      if (room.guest) return send(ws, { t: "error", reason: "room-full" });
-      leaveRoom(ws, true);
-      room.guest = ws;
-      room.idleSince = null;
-      ws.roomCode = code;
-      send(ws, { t: "joined", ice: JSON.stringify(await getIceServers()) });
-      send(room.host, { t: "peer-joined" });
+
+    case "list":
+      sendRoomPage(ws, msg.page);
       break;
-    }
     case "signal": {
       // Signals racing a departure (peer left while ours was on the wire)
       // are dropped silently — the sender learns the real news from

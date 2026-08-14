@@ -8,12 +8,26 @@ public enum NetStatus
     Offline,
     /// <summary>Reaching the signaling server / waiting for its answer.</summary>
     Connecting,
+    /// <summary>Signed on to the server but in no room — reading the lobby list.</summary>
+    Browsing,
     /// <summary>Room created — the match code is up, waiting for a challenger.</summary>
     Hosting,
     /// <summary>Both players present, WebRTC handshake in flight.</summary>
     LinkingUp,
     Connected,
     Failed,
+}
+
+/// <summary>One waiting room as the lobby lists it.</summary>
+[Serializable]
+public class NetRoom
+{
+    public string code;
+    /// <summary>Index into ArenaLibrary — the arena this room's host will load.</summary>
+    public int arena;
+    public string name;
+    /// <summary>Seconds this room has been waiting for a challenger.</summary>
+    public int age;
 }
 
 /// <summary>
@@ -50,6 +64,33 @@ public class NetSession : MonoBehaviour
     /// <summary>Game messages from the unreliable channel (phase 2 snapshots).</summary>
     public event Action<string> StateReceived;
 
+    // ---------- lobby ----------
+
+    /// <summary>The current page of waiting rooms, longest wait first.</summary>
+    public NetRoom[] Rooms { get; private set; } = new NetRoom[0];
+    /// <summary>Zero-based page the server actually served (it clamps).</summary>
+    public int RoomPage { get; private set; }
+    public int RoomPages { get; private set; } = 1;
+    /// <summary>Rooms waiting server-wide, not just on this page.</summary>
+    public int RoomTotal { get; private set; }
+    /// <summary>Fires when a page arrives, so the lobby only rebuilds rows on real news.</summary>
+    public event Action RoomsUpdated;
+
+    /// <summary>
+    /// Why the last lobby action bounced ("that match just filled up"), or
+    /// empty. Reading it clears it — it belongs to the next frame of the
+    /// screen, not to the session.
+    /// </summary>
+    public string ConsumeLobbyNotice()
+    {
+        string notice = _lobbyNotice;
+        _lobbyNotice = "";
+        return notice;
+    }
+
+    /// <summary>What this connection was opened to do.</summary>
+    enum Intent { Browse, Host, Join, Quick }
+
     readonly byte[] _buffer = new byte[16384];
     string _iceJson = "[]";
     bool _rtcRunning;
@@ -57,9 +98,19 @@ public class NetSession : MonoBehaviour
     float _handshakeDeadline;
     float _nextPing;
     float _nextPath;
+    Intent _intent = Intent.Browse;
+    int _pendingArena;
+    string _pendingName = "";
+    int _wantPage;
+    string _lobbyNotice = "";
 
     [Serializable]
-    class SigMsg { public string t; public string code; public string reason; public string ice; public SigPayload data; }
+    class SigMsg
+    {
+        public string t; public string code; public string reason; public string ice;
+        public SigPayload data;
+        public int page; public int pages; public int total; public NetRoom[] rooms;
+    }
     [Serializable]
     class SigPayload { public string kind; public string payload; }
     [Serializable]
@@ -146,11 +197,24 @@ public class NetSession : MonoBehaviour
         return null;
     }
 
-    public void Host() => Begin(isHost: true, code: "");
+    /// <summary>Sign on to the server without taking a room — the lobby list.</summary>
+    public void Browse() => Begin(Intent.Browse, "", 0, "");
 
-    public void Join(string code) => Begin(isHost: false, SanitizeCode(code));
+    /// <summary>Open a room others can find in the lobby, in this arena.</summary>
+    public void Host(int arena, string name) => Begin(Intent.Host, "", arena, name);
 
-    void Begin(bool isHost, string code)
+    /// <summary>Join a specific room — a lobby row's code, or one typed by hand.</summary>
+    public void Join(string code) => Begin(Intent.Join, SanitizeCode(code), 0, "");
+
+    /// <summary>
+    /// Auto-match: the server hands us the longest-waiting room, or makes us
+    /// that room if there are none. Which of the two happened is not known
+    /// until it answers, which is why <see cref="IsHost"/> is set from the
+    /// reply rather than from the request.
+    /// </summary>
+    public void QuickMatch(int arena, string name) => Begin(Intent.Quick, "", arena, name);
+
+    void Begin(Intent intent, string code, int arena, string name)
     {
         if (!NetBridge.Available)
         {
@@ -158,7 +222,7 @@ public class NetSession : MonoBehaviour
             Status = NetStatus.Failed;
             return;
         }
-        if (!isHost && code.Length == 0)
+        if (intent == Intent.Join && code.Length == 0)
         {
             FailReason = "type the match code first";
             Status = NetStatus.Failed;
@@ -173,15 +237,75 @@ public class NetSession : MonoBehaviour
             return;
         }
 
-        Disconnect();
-        IsHost = isHost;
-        MatchCode = code;
+        _intent = intent;
+        _pendingArena = arena;
+        _pendingName = name;
         FailReason = "";
+
+        // Already signed on — which is the normal case now, because the lobby
+        // opens the socket the moment the screen does. Reconnecting here would
+        // drop the room list, blank the screen and cost a round trip to say
+        // exactly what the open socket can say immediately.
+        if (NetBridge.PN_SigState() == NetBridge.SigOpen)
+        {
+            MatchCode = intent == Intent.Join ? code : "";
+            SendIntent();
+            return;
+        }
+
+        Disconnect();
+        MatchCode = intent == Intent.Join ? code : "";
         RttMs = -1f;
         Path = "unknown";
         _sentIntro = false;
         Status = NetStatus.Connecting;
         NetBridge.PN_SigConnect(serverUrl);
+    }
+
+    /// <summary>
+    /// Say what we came for. Split out of Begin because it happens at two
+    /// different times: straight away on an open socket, or later from
+    /// PumpSignaling when a fresh one finishes connecting.
+    /// </summary>
+    void SendIntent()
+    {
+        _sentIntro = true;
+        _handshakeDeadline = Time.unscaledTime + HandshakeTimeout;
+        switch (_intent)
+        {
+            case Intent.Browse:
+                // No room is taken, so there is no handshake to time out and
+                // nothing to wait for beyond the first page.
+                Status = NetStatus.Browsing;
+                RequestRooms(_wantPage);
+                break;
+            case Intent.Host:
+                Status = NetStatus.Connecting;
+                NetBridge.PN_SigSend("{\"t\":\"host\",\"arena\":" + _pendingArena
+                    + ",\"name\":\"" + SanitizeName(_pendingName) + "\"}");
+                break;
+            case Intent.Join:
+                Status = NetStatus.Connecting;
+                NetBridge.PN_SigSend("{\"t\":\"join\",\"code\":\"" + MatchCode + "\"}");
+                break;
+            case Intent.Quick:
+                Status = NetStatus.Connecting;
+                NetBridge.PN_SigSend("{\"t\":\"quick\",\"arena\":" + _pendingArena
+                    + ",\"name\":\"" + SanitizeName(_pendingName) + "\"}");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Ask for a page of the lobby. Cheap enough to poll on a timer: a page is
+    /// five rows of four short fields over a socket that is already open and
+    /// otherwise idle between matches.
+    /// </summary>
+    public void RequestRooms(int page)
+    {
+        _wantPage = Mathf.Max(0, page);
+        if (NetBridge.PN_SigState() == NetBridge.SigOpen)
+            NetBridge.PN_SigSend("{\"t\":\"list\",\"page\":" + _wantPage + "}");
     }
 
     public void Disconnect()
@@ -192,6 +316,10 @@ public class NetSession : MonoBehaviour
         MatchCode = "";
         RttMs = -1f;
         Path = "unknown";
+        Rooms = new NetRoom[0];
+        RoomTotal = 0;
+        RoomPages = 1;
+        _intent = Intent.Browse;
         Status = NetStatus.Offline;
     }
 
@@ -224,13 +352,7 @@ public class NetSession : MonoBehaviour
         int sigState = NetBridge.PN_SigState();
 
         if (Status == NetStatus.Connecting && sigState == NetBridge.SigOpen && !_sentIntro)
-        {
-            _sentIntro = true;
-            _handshakeDeadline = Time.unscaledTime + HandshakeTimeout;
-            NetBridge.PN_SigSend(IsHost
-                ? "{\"t\":\"host\"}"
-                : "{\"t\":\"join\",\"code\":\"" + MatchCode + "\"}");
-        }
+            SendIntent();
 
         if (sigState == NetBridge.SigClosed && Status != NetStatus.Connected)
         {
@@ -256,6 +378,11 @@ public class NetSession : MonoBehaviour
         switch (msg.t)
         {
             case "hosted":
+                // The server decides which side we ended up on, not the button
+                // that was pressed: QUICK MATCH asks for either, and finds out
+                // here. Setting IsHost from the request instead is how an
+                // auto-matched guest would end up building the offer twice.
+                IsHost = true;
                 MatchCode = msg.code ?? "";
                 if (!string.IsNullOrEmpty(msg.ice)) _iceJson = msg.ice;
                 Status = NetStatus.Hosting;
@@ -267,8 +394,21 @@ public class NetSession : MonoBehaviour
                 break;
 
             case "joined":
+                IsHost = false;
                 if (!string.IsNullOrEmpty(msg.ice)) _iceJson = msg.ice;
                 StartRtc(asOfferer: false);
+                break;
+
+            case "rooms":
+                RoomPage = Mathf.Max(0, msg.page);
+                RoomPages = Mathf.Max(1, msg.pages);
+                RoomTotal = Mathf.Max(0, msg.total);
+                Rooms = msg.rooms ?? new NetRoom[0];
+                // Adopt the server's clamp: it drops us back onto the last real
+                // page when the one we asked for drained away, and a client
+                // that kept asking for the empty page would never come back.
+                _wantPage = RoomPage;
+                RoomsUpdated?.Invoke();
                 break;
 
             case "signal":
@@ -311,6 +451,19 @@ public class NetSession : MonoBehaviour
                 // Once the peer link is live, only the link itself decides.
                 if (Status == NetStatus.Connected)
                     break;
+                // A room that went away between the list being drawn and the
+                // row being clicked is ordinary lobby life, not a broken
+                // session: say so and go back to the list. Tearing the socket
+                // down here would make a busy lobby feel like a flaky one.
+                if (IsLobbyMiss(msg.reason)
+                    && NetBridge.PN_SigState() == NetBridge.SigOpen)
+                {
+                    _lobbyNotice = DescribeServerError(msg.reason);
+                    _intent = Intent.Browse;
+                    Status = NetStatus.Browsing;
+                    RequestRooms(_wantPage);
+                    break;
+                }
                 Fail(DescribeServerError(msg.reason));
                 break;
         }
@@ -457,10 +610,32 @@ public class NetSession : MonoBehaviour
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The lobby name, safe to paste into a hand-built JSON frame. The server
+    /// clamps it again for everyone else's benefit — this pass is about not
+    /// writing a quote or a backslash into our own message and desyncing the
+    /// frame.
+    /// </summary>
+    static string SanitizeName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return "";
+        var sb = new StringBuilder(name.Length);
+        foreach (char c in name)
+            if (char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_')
+                sb.Append(c);
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>A room we tried to take that simply wasn't there any more.</summary>
+    static bool IsLobbyMiss(string reason) =>
+        reason == "no-such-room" || reason == "room-full" || reason == "own-room";
+
     static string DescribeServerError(string reason) => reason switch
     {
-        "no-such-room" => "no match with that code",
-        "room-full" => "that match already has two players",
+        "no-such-room" => "that match is over — pick another",
+        "room-full" => "that match just filled up — pick another",
+        "own-room" => "that one is yours",
         "room-expired" => "the match code expired — host again",
         _ => "server error: " + reason,
     };
@@ -469,6 +644,9 @@ public class NetSession : MonoBehaviour
     public string StatusLine => Status switch
     {
         NetStatus.Connecting => "calling the match server...",
+        NetStatus.Browsing => RoomTotal == 0
+            ? "no open arenas right now — host one and wait"
+            : RoomTotal + (RoomTotal == 1 ? " arena open" : " arenas open"),
         NetStatus.Hosting => "waiting for a challenger...",
         NetStatus.LinkingUp => "linking up...",
         NetStatus.Connected =>

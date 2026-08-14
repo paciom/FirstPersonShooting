@@ -6,6 +6,25 @@ up (match codes + WebRTC offer/answer/ICE relay); the battle itself then runs
 peer-to-peer over WebRTC DataChannels. See `Assets/Scripts/Net/` for the
 Unity side.
 
+## The lobby
+
+Waiting rooms are public: a host advertises the arena it will load and a name,
+and anyone signed on to the server can page through the open ones and click in.
+The exact frames are in the header of `server.js`; the parts that matter:
+
+- `{t:"host", arena, name}` — open a room. `arena` is an index into the
+  client's `ArenaLibrary`; the server clamps it and never interprets it, so
+  adding arenas needs no server change. `name` is stripped to word characters
+  and capped at 16.
+- `{t:"list", page}` — one page of five, **oldest first**, so the top of the
+  list is whoever has waited longest. The reply echoes the CLAMPED page, which
+  is what walks a client back onto a real page as rooms drain.
+- `{t:"quick", arena, name}` — auto-match: takes the longest-waiting room, or
+  hosts one when the lobby is empty. Two players pressing it pair up. Which
+  side you got is in the reply (`joined` vs `hosted`), not in the request.
+
+Only rooms with a host and no guest are listed — a full room is a live match.
+
 ## Accounts API
 
 `accounts.js` serves register / login / logout / me under `/api/` (see its
