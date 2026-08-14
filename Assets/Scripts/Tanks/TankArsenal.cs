@@ -67,14 +67,21 @@ public static class TankArsenal
     /// </summary>
     const float PodDamageScale = 2.5f;
 
+    /// <summary>A recruit's pod amplify — real help while its pod runs, but a
+    /// podded recruit must never out-gun the hero, or the star of the mode is
+    /// suddenly whichever escort tank got lucky at the crate.</summary>
+    public const float AllyPodScale = 1.6f;
+
     /// <summary>
     /// Attach the rack and hand it back in canonical order.
     ///
-    /// Only <see cref="Role.Hero"/> gets the pods. Everyone else gets the main
-    /// gun and nothing else: pods are a reward the player collects, so nobody
-    /// else's other eleven guns could ever be reached — and eleven unreachable
-    /// <see cref="Weapon"/> components on every one of a dozen live raiders is a
-    /// hundred and thirty MonoBehaviours a frame doing nothing at all.
+    /// The HERO'S SIDE gets the pods — hero and recruits alike, because every
+    /// drop is squad property and a recruit that takes a pod must have the gun
+    /// to grant. Raiders and outposts get the main gun and nothing else: no
+    /// reward can ever reach them, and a dozen unreachable <see cref="Weapon"/>
+    /// components on every live raider is a hundred-plus MonoBehaviours a
+    /// frame doing nothing at all. An escort caps at a handful, so its racks
+    /// stay cheap.
     /// </summary>
     public static Weapon[] Attach(GameObject host, Transform muzzle, Transform owner,
         TankPawn.Chassis kind, Role role, Color boltColor)
@@ -82,7 +89,7 @@ public static class TankArsenal
         // Slot 0 for everyone: the main gun. Slower and heavier than the FPS
         // blaster — a tank's cannon should land, not chatter.
         var cannon = Cannon(host, muzzle, owner, kind, role, boltColor);
-        if (role != Role.Hero)
+        if (role != Role.Hero && role != Role.Ally)
             return new[] { cannon };
 
         var rack = new Weapon[]
@@ -171,13 +178,13 @@ public static class TankArsenal
     /// the weapon itself. Slot 0 is skipped — the cannon's numbers are the ones
     /// everything else is scaled against.
     /// </summary>
-    public static void AmplifyPods(Weapon[] rack)
+    public static void AmplifyPods(Weapon[] rack, float scale = PodDamageScale)
     {
         if (rack == null)
             return;
         for (int i = 1; i < rack.Length; i++)
             if (rack[i] != null)
-                rack[i].damage *= PodDamageScale;
+                rack[i].damage *= scale;
     }
 
     static T Add<T>(GameObject host, Transform muzzle, Transform owner) where T : Weapon

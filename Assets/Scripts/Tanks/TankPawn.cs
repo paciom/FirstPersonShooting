@@ -289,10 +289,10 @@ public class TankPawn : MonoBehaviour
             pawn.Turret = turret;
         }
 
-        // Only the hero can ever pick up a pod, so only the hero carries a rack
-        // to grant one out of. Bolts take the team's colour so the player can
-        // tell their own fire from the army's.
-        bool hero = role == TankArsenal.Role.Hero;
+        // The hero's whole side carries a rack — every drop is squad property,
+        // so a recruit that takes a weapon pod has the gun to grant. Bolts
+        // take the team's colour so the player can tell their own fire from
+        // the army's.
         pawn._guns = TankArsenal.Attach(go, pawn.Muzzle, go.transform, kind, role, tint);
         pawn.Loadout = go.AddComponent<WeaponLoadout>();
         pawn.Loadout.all = pawn._guns;
@@ -301,9 +301,12 @@ public class TankPawn : MonoBehaviour
 
         go.SetActive(true);
         // Only now: the pod guns write their own damage in Awake, which has just
-        // this moment run. See TankArsenal.AmplifyPods.
-        if (hero)
+        // this moment run. See TankArsenal.AmplifyPods. The hero's pods hit at
+        // full amplify; a recruit's at AllyPodScale — help, never the star.
+        if (role == TankArsenal.Role.Hero)
             TankArsenal.AmplifyPods(pawn._guns);
+        else if (role == TankArsenal.Role.Ally)
+            TankArsenal.AmplifyPods(pawn._guns, TankArsenal.AllyPodScale);
         // Captured AFTER that, so the numbers banked here are the ones the pawn
         // is meant to fight at. TankBoons rescales from these on every capture
         // and every respawn; see RestampGuns.

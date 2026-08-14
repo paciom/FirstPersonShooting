@@ -629,16 +629,20 @@ public class TankRaid : MonoBehaviour
         return TankPickup.Kind.Weapon;
     }
 
-    void Collect(TankPickup pickup)
+    /// <summary>The reward lands on whoever drove over it — hero or recruit;
+    /// <see cref="TankPickup"/> decides who that may be.</summary>
+    void Collect(TankPickup pickup, TankPawn collector)
     {
-        if (_hero == null || _hero.IsDown)
+        if (collector == null || collector.Shield == null)
             return;
+        bool hero = collector == _hero;
 
         switch (pickup.Sort)
         {
             case TankPickup.Kind.Repair:
-                _hero.Shield.Restore(_hero.Shield.maxShield * 0.4f);
-                _hud.Flash("REPAIRED", new Color(0.35f, 1f, 0.6f));
+                collector.Shield.Restore(collector.Shield.maxShield * 0.4f);
+                _hud.Flash(hero ? "REPAIRED" : "RECRUIT REPAIRED",
+                    new Color(0.35f, 1f, 0.6f));
                 return;
 
             case TankPickup.Kind.Recruit:
@@ -646,23 +650,30 @@ public class TankRaid : MonoBehaviour
                 {
                     // The escort filled up between the drop and the pickup. Pay
                     // out in shield rather than nothing at all.
-                    _hero.Shield.Restore(_hero.Shield.maxShield * 0.25f);
+                    collector.Shield.Restore(collector.Shield.maxShield * 0.25f);
                     _hud.Flash("ESCORT FULL", new Color(0.35f, 0.7f, 1f));
                     return;
                 }
-                // Beside the hero, not on top of it: a tank materialising inside
-                // another tank is two pawns shoving each other apart on frame one.
+                if (_hero == null)
+                    return;
+                // Beside the HERO whoever tripped the beacon — the new tank
+                // joins the convoy, and the hero is the thing it escorts. And
+                // beside, not on top: a tank materialising inside another is
+                // two pawns shoving each other apart on frame one.
                 Recruit(_hero.transform.position + new Vector3(
                     Random.value < 0.5f ? -4.5f : 4.5f, 0f, -2f));
                 _hud.Flash("RECRUIT JOINED", new Color(0.35f, 0.7f, 1f));
                 return;
 
             default:
-                var granted = _hero.Loadout != null ? _hero.Loadout.GrantRandom() : null;
-                // Re-stamped: a pod's gun is built once at spawn and knows nothing
-                // about the outposts captured since.
-                _boons.Apply(_hero);
-                _hud.Flash(granted != null ? granted.weaponName.ToUpperInvariant() : "WEAPON POD",
+                var granted = collector.Loadout != null ? collector.Loadout.GrantRandom() : null;
+                // Re-stamped: a pod's gun is built once at spawn and knows
+                // nothing about the outposts captured since. Only the hero's
+                // guns carry boons; a recruit's pod stays as attached.
+                if (hero)
+                    _boons.Apply(_hero);
+                _hud.Flash((hero ? "" : "RECRUIT  ·  ")
+                    + (granted != null ? granted.weaponName.ToUpperInvariant() : "WEAPON POD"),
                     new Color(1f, 0.75f, 0.2f));
                 return;
         }

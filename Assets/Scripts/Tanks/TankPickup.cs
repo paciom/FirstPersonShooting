@@ -11,9 +11,13 @@ using UnityEngine;
 /// only ever be collected by accident. Distance to the hero, once a frame, is
 /// the rule that actually works.
 ///
-/// Only the hero can collect. A raider driving over the pod that fell out of its
-/// team-mate would be an invisible loss the player never sees happen, and the
-/// drops exist to reward the shot that earned them.
+/// Every drop is SQUAD PROPERTY: the hero or any recruit may take it — a kit
+/// patches whoever drove over it, a pod arms them, a beacon calls the next
+/// recruit in. The hero gets first claim when both are in reach, and a
+/// recruit only takes a repair kit while meaningfully damaged, so a healthy
+/// escort cannot vacuum up the kit a bleeding hero was driving toward.
+/// Raiders take nothing — a pod that fell out of their team-mate vanishing
+/// into an enemy would be an invisible loss the player never sees happen.
 ///
 /// They expire by falling off the bottom of the screen, not on a timer: the one
 /// thing that can put a pickup out of reach in a scroller is the scroll, and a
@@ -57,8 +61,9 @@ public class TankPickup : MonoBehaviour
 
     public Kind Sort { get; private set; }
 
-    /// <summary>Raised when the hero reaches it — the mode grants the reward and says so.</summary>
-    public System.Action<TankPickup> OnCollected;
+    /// <summary>Raised when someone entitled to it reaches it — the mode
+    /// grants the reward to the collector and says so.</summary>
+    public System.Action<TankPickup, TankPawn> OnCollected;
 
     Transform _spinner;
     float _phase;
@@ -202,15 +207,45 @@ public class TankPickup : MonoBehaviour
             return;
         }
 
-        if (hero == null || hero.IsDown)
-            return;
-        Vector3 gap = hero.transform.position - transform.position;
-        gap.y = 0f;
-        if (gap.sqrMagnitude > Reach * Reach)
+        var taker = Taker(hero);
+        if (taker == null)
             return;
 
         VfxUtil.SpawnBurst(transform.position + Vector3.up, ColorOf(Sort), 16, 5f, 0.14f);
-        OnCollected?.Invoke(this);
+        OnCollected?.Invoke(this, taker);
         Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// Who gets this pickup this frame. The hero first, always; otherwise any
+    /// recruit in reach — except that a repair kit asks the recruit to be
+    /// MEANINGFULLY damaged, so a healthy escort cannot vacuum up the kit a
+    /// bleeding hero was driving toward.
+    /// </summary>
+    TankPawn Taker(TankPawn hero)
+    {
+        if (InReach(hero))
+            return hero;
+        foreach (var pawn in TankPawn.All)
+        {
+            if (pawn == null || pawn == hero || pawn.Team != 0
+                || pawn.Kind == TankPawn.Chassis.Structure)
+                continue;
+            if (Sort == Kind.Repair
+                && (pawn.Shield == null || pawn.Shield.Normalized >= 0.7f))
+                continue;
+            if (InReach(pawn))
+                return pawn;
+        }
+        return null;
+    }
+
+    bool InReach(TankPawn pawn)
+    {
+        if (pawn == null || pawn.IsDown)
+            return false;
+        Vector3 gap = pawn.transform.position - transform.position;
+        gap.y = 0f;
+        return gap.sqrMagnitude <= Reach * Reach;
     }
 }
