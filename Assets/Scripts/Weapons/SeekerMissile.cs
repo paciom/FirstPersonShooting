@@ -43,6 +43,8 @@ public class SeekerMissile : Weapon
         };
         var bolt = GenericBolt.Spawn(muzzle.position, direction.normalized, spec, TeamId, ownerRoot);
         MissileModels.Dress(bolt, 0, 1.0f);
-        FlashMuzzle(4f);
+        // Under the bloom whiteout line — 4+ lit the firer's own hull into a
+        // white ball from the tank mode's top-down camera (the Comet lesson).
+        FlashMuzzle(2.5f);
     }
 }

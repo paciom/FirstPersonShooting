@@ -3,16 +3,18 @@ using UnityEngine;
 /// <summary>
 /// What a tank can be holding.
 ///
-/// A CURATED TWELVE, not the arena's fifty-four. Two reasons, and neither is
+/// A CURATED THIRTEEN, not the arena's fifty-four. Two reasons, and neither is
 /// laziness. The first is legibility: a weapon pod is a prize, and a prize the
-/// player cannot tell apart from the last one is not a prize — twelve guns that
-/// each look and sound like themselves beat fifty where a third are variations
-/// on a theme. The second is the camera. This mode watches from eighteen metres
-/// up, where a weapon that shines only up close (the whips, the palms, the
-/// melee-range projectors) does nothing you can see, and a weapon that fills the
-/// screen with a dome hides the fight underneath it.
+/// player cannot tell apart from the last one is not a prize — a dozen guns
+/// that each look and sound like themselves beat fifty where a third are
+/// variations on a theme. The second is the camera. This mode watches from
+/// eighteen metres up, where a weapon that shines only up close (the whips,
+/// the palms, the melee-range projectors) does nothing you can see, and a
+/// weapon that fills the screen with a dome hides the fight underneath it.
 ///
-/// Everything here fires forward, travels, and arrives somewhere visible.
+/// Everything here fires forward, travels, and arrives somewhere visible —
+/// and one of them (the Seeker) turns on the way, which from this camera is
+/// the best show in the rack.
 ///
 /// Slot 0 is the cannon every tank always has; the rest are pod-only. That is
 /// exactly the shape <see cref="WeaponLoadout"/> wants (basics plus one granted
@@ -95,6 +97,11 @@ public static class TankArsenal
             Add<HaloRingGun>(host, muzzle, owner),
             Add<SunflareCannon>(host, muzzle, owner),
             Add<DrumlineCannon>(host, muzzle, owner),
+            // The guided missile: picks the nearest enemy and bends after it
+            // all the way in. Homing is the one behaviour the rest of the rack
+            // does not have, and the top-down camera is where a missile
+            // visibly hunting a fleeing tank reads best.
+            Add<SeekerMissile>(host, muzzle, owner),
             Add<SwarmHive>(host, muzzle, owner),
             Add<FireworksFinale>(host, muzzle, owner),
         };
