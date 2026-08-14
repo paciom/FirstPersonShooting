@@ -15,6 +15,13 @@ public class FloatingShieldBar : MonoBehaviour
 
     static readonly Color WarnOrange = new Color(1f, 0.45f, 0.1f);
 
+    /// <summary>
+    /// Permanently visible instead of hit-flashed. Tank Raid sets this on the
+    /// hero's recruits: the escort is the player's running score, and a score
+    /// you can only read while it is being shot at is not a readout.
+    /// </summary>
+    public bool alwaysOn;
+
     EnergyShield _shield;
     Transform _holder;
     Transform _fill;
@@ -116,7 +123,8 @@ public class FloatingShieldBar : MonoBehaviour
 
     void LateUpdate()
     {
-        bool visible = Time.time < _visibleUntil && _shield != null && !_shield.IsDown;
+        bool visible = (alwaysOn || Time.time < _visibleUntil)
+            && _shield != null && !_shield.IsDown;
         if (_holder.gameObject.activeSelf != visible)
             _holder.gameObject.SetActive(visible);
         if (!visible)

@@ -409,6 +409,12 @@ public class TankRaid : MonoBehaviour
         ally.HeldAtTrail = true;
         ally.OnWrecked += AllyWrecked;
 
+        // A recruit's shield bar stays up permanently — the escort is the
+        // player's running score. Added here rather than left to the
+        // spawner's scan so the bar exists (and is pinned on) from frame one.
+        var bar = ally.gameObject.AddComponent<FloatingShieldBar>();
+        bar.alwaysOn = true;
+
         var brain = ally.gameObject.AddComponent<TankBrain>();
         brain.anchor = _hero.transform;
         brain.leash = 20f;
