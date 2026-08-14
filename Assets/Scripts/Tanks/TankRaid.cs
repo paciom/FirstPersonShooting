@@ -588,13 +588,23 @@ public class TankRaid : MonoBehaviour
         }
     }
 
+    /// <summary>Scratch list for the HUD's escort bars — refilled every frame,
+    /// kept to avoid an allocation per frame.</summary>
+    readonly List<float> _escortShields = new List<float>();
+
     void Readout()
     {
         float z = _hero.transform.position.z;
         _furthest = Mathf.Max(_furthest, z);
         _hud.SetProgress(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks);
         _hud.SetShield(_hero.Shield.Normalized, _hero.Shield.Current);
-        _hud.SetEscort(AllyCount(), AllyCap);
+
+        _escortShields.Clear();
+        foreach (var pawn in TankPawn.All)
+            if (pawn != null && pawn != _hero && pawn.Team == 0 && !pawn.IsDown
+                && pawn.Kind != TankPawn.Chassis.Structure && pawn.Shield != null)
+                _escortShields.Add(pawn.Shield.Normalized);
+        _hud.SetEscort(_escortShields, AllyCap);
 
         var gun = _hero.CurrentGun;
         var loadout = _hero.Loadout;

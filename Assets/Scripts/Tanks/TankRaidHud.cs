@@ -25,13 +25,19 @@ public class TankRaidHud : MonoBehaviour
     static readonly Color Recruit = new Color(0.35f, 0.7f, 1f);
     static readonly Color Panel = new Color(0.04f, 0.09f, 0.14f, 0.72f);
 
+    /// <summary>Escort slots the HUD can show. Base cap is 3 and outpost boons
+    /// raise it a little; eight covers any build the mode can produce.</summary>
+    const int MaxEscortSlots = 8;
+
     RectTransform _shieldFill;
     Image _shieldImage;
     Text _shieldText;
     Image[] _lifePips;
     Text _distance;
     Text _wrecks;
-    Text _escort;
+    GameObject[] _escortSlots;
+    Image[] _escortFills;
+    RectTransform[] _escortFillRects;
     Text _boons;
     Text _weapon;
     RectTransform _weaponClock;
@@ -111,10 +117,40 @@ public class TankRaidHud : MonoBehaviour
             _lifePips[i] = Box($"Life{i}", Cyan, new Vector2(0f, 1f),
                 new Vector2(38f + i * 24f, -80f), new Vector2(16f, 16f));
 
-        // The escort, beside the lives: both answer "how much of me is left".
-        _escort = Label("Escort", "", 16, Recruit, FontStyle.Bold,
-            new Vector2(0f, 1f), new Vector2(210f, -80f), new Vector2(240f, 22f));
-        _escort.alignment = TextAnchor.MiddleLeft;
+        // The escort, beside the lives: both answer "how much of me is left" —
+        // and each recruit gets ITS OWN bar, because "1/3" answers how many
+        // but never which one is about to die. Dim empty tracks show the
+        // capacity waiting to be filled.
+        var escortLabel = Label("EscortLabel", "ESCORT", 15, new Color(1f, 1f, 1f, 0.5f),
+            FontStyle.Normal, new Vector2(0f, 1f), new Vector2(210f, -80f), new Vector2(120f, 20f));
+        escortLabel.alignment = TextAnchor.MiddleLeft;
+
+        _escortSlots = new GameObject[MaxEscortSlots];
+        _escortFills = new Image[MaxEscortSlots];
+        _escortFillRects = new RectTransform[MaxEscortSlots];
+        for (int i = 0; i < MaxEscortSlots; i++)
+        {
+            var track = Box($"EscortTrack{i}", new Color(0f, 0f, 0f, 0.45f),
+                new Vector2(0f, 1f), new Vector2(262f + i * 56f, -80f), new Vector2(48f, 13f));
+            _escortSlots[i] = track.gameObject;
+
+            // The same pivoted-rect drain as the shield bar — see the class
+            // note on why none of these are filled Images.
+            var fill = new GameObject($"EscortFill{i}");
+            fill.transform.SetParent(track.transform, false);
+            _escortFills[i] = fill.AddComponent<Image>();
+            _escortFills[i].color = Recruit;
+            _escortFills[i].raycastTarget = false;
+            var rect = _escortFills[i].rectTransform;
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.anchoredPosition = new Vector2(2f, 0f);
+            rect.sizeDelta = new Vector2(44f, -4f);
+            _escortFillRects[i] = rect;
+
+            track.gameObject.SetActive(false);
+        }
 
         // The trophy shelf, under everything. Empty — and therefore invisible —
         // until the first outpost comes down.
@@ -187,12 +223,31 @@ public class TankRaidHud : MonoBehaviour
         _wrecks.text = wrecks == 1 ? "1 WRECK" : $"{wrecks} WRECKS";
     }
 
-    /// <summary>Recruits driving with you, out of how many you may keep. Blank
-    /// while the escort is empty — a readout that says "0" every run until the
-    /// first beacon is a readout that teaches nothing.</summary>
-    public void SetEscort(int allies, int cap)
+    /// <summary>
+    /// One bar per recruit, in the order the mode hands them over, plus a dim
+    /// empty track for every unfilled slot up to the cap — so the row reads
+    /// "who is hurt" and "how much room is left" in the same glance.
+    /// </summary>
+    public void SetEscort(System.Collections.Generic.IReadOnlyList<float> shields, int cap)
     {
-        _escort.text = allies > 0 ? $"ESCORT {allies}/{cap}" : "";
+        for (int i = 0; i < MaxEscortSlots; i++)
+        {
+            bool inCap = i < cap;
+            if (_escortSlots[i].activeSelf != inCap)
+                _escortSlots[i].SetActive(inCap);
+            if (!inCap)
+                continue;
+
+            bool filled = shields != null && i < shields.Count;
+            _escortFills[i].enabled = filled;
+            if (!filled)
+                continue;
+
+            float n = Mathf.Clamp01(shields[i]);
+            _escortFillRects[i].sizeDelta = new Vector2(44f * n, -4f);
+            // The shield bar's own drain vocabulary, in the escort's blue.
+            _escortFills[i].color = n > 0.34f ? Recruit : n > 0.16f ? Warn : Danger;
+        }
     }
 
     /// <summary>What has been captured, as one line. See TankBoons.Summary.</summary>
