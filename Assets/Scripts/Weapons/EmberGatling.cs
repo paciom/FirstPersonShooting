@@ -42,7 +42,10 @@ public class EmberGatling : Weapon
             color = color,
             size = 0.07f,
             glow = 2.6f,             // orange tracer, not yellow-white
-            lifetime = 1f,
+            // Reach ~48 m: the stream must outrange Tank Raid's standoff
+            // fights (15-40 m) or the prize gun falls short of the cannon it
+            // replaced.
+            lifetime = 1.4f,
             trailTime = 0.07f,
             trailWidth = 0.05f,
             trailGlow = 1.5f,

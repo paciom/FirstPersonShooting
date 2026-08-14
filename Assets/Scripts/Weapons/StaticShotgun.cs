@@ -43,7 +43,12 @@ public class StaticShotgun : Weapon
                 color = color,
                 size = 0.06f,
                 glow = 1.7f,        // soft pure-blue sparks — no white core
-                lifetime = 0.3f,
+                // 0.3 gave the pellets a 9 m reach — fine in an arena
+                // corridor, but a DOWNGRADE next to Tank Raid's 70 m/s
+                // cannon, where fights happen at 15-40 m. The spread still
+                // does the falloff; the pellets just live long enough to
+                // arrive.
+                lifetime = 0.9f,
                 trailTime = 0.06f,
                 trailWidth = 0.045f,
                 trailGlow = 1.5f,

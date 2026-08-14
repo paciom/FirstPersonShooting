@@ -26,7 +26,10 @@ public class MagmaMortar : Weapon
 
         var spec = new BoltSpec
         {
-            speed = 17f,
+            // The lob: 21 against -14 gravity arcs ~10 m further than the old
+            // 17, so the mortar outranges the fights it is dropped into
+            // instead of landing at the hero's own feet.
+            speed = 21f,
             gravity = -14f,
             damage = damage,
             color = color,

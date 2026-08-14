@@ -26,7 +26,10 @@ public class CometSling : Weapon
 
         var spec = new BoltSpec
         {
-            speed = 13f,
+            // Slow on purpose — you watch it fly — but 13 read as a downgrade
+            // beside a 70 m/s cannon; 18 keeps the spectacle and loses the
+            // wait.
+            speed = 18f,
             damage = damage,
             color = color,
             shape = PrimitiveType.Sphere,
