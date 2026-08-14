@@ -130,15 +130,15 @@ public class TankRaidHud : MonoBehaviour
         _escortFillRects = new RectTransform[MaxEscortSlots];
         for (int i = 0; i < MaxEscortSlots; i++)
         {
-            var track = Box($"EscortTrack{i}", new Color(0f, 0f, 0f, 0.45f),
+            var slotTrack = Box($"EscortTrack{i}", new Color(0f, 0f, 0f, 0.45f),
                 new Vector2(0f, 1f), new Vector2(262f + i * 56f, -80f), new Vector2(48f, 13f));
-            _escortSlots[i] = track.gameObject;
+            _escortSlots[i] = slotTrack.gameObject;
 
             // The same pivoted-rect drain as the shield bar — see the class
             // note on why none of these are filled Images.
-            var fill = new GameObject($"EscortFill{i}");
-            fill.transform.SetParent(track.transform, false);
-            _escortFills[i] = fill.AddComponent<Image>();
+            var slotFill = new GameObject($"EscortFill{i}");
+            slotFill.transform.SetParent(slotTrack.transform, false);
+            _escortFills[i] = slotFill.AddComponent<Image>();
             _escortFills[i].color = Recruit;
             _escortFills[i].raycastTarget = false;
             var rect = _escortFills[i].rectTransform;
@@ -149,7 +149,7 @@ public class TankRaidHud : MonoBehaviour
             rect.sizeDelta = new Vector2(44f, -4f);
             _escortFillRects[i] = rect;
 
-            track.gameObject.SetActive(false);
+            slotTrack.gameObject.SetActive(false);
         }
 
         // The trophy shelf, under everything. Empty — and therefore invisible —
