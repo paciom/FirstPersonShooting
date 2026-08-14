@@ -464,28 +464,38 @@ public class TankRaid : MonoBehaviour
         foreach (var pawn in TankPawn.All)
             if (pawn != null && pawn.Team == 1 && pawn.Kind != TankPawn.Chassis.Structure)
                 alive++;
-        if (alive >= pressure)
+        int deficit = pressure - alive;
+        if (deficit <= 0)
             return;
+
+        // Reinforce at a RATE that matches the deficit, not a fixed trickle: a
+        // raised cap balances nothing if the refill still arrives one tank per
+        // interval — a big convoy would wipe each dribble as it came and the
+        // battle would stay one-sided. A deep deficit sends a wave.
+        int batch = deficit >= 6 ? 3 : deficit >= 3 ? 2 : 1;
 
         // Walkers early, tanks increasingly: the first minute should teach the
         // controls against something forgiving.
         float tankOdds = Mathf.Lerp(0.3f, 0.7f, Mathf.Clamp01(_furthest / 900f));
-        bool tank = Random.value < tankOdds;
 
-        float x = Random.Range(-TankField.HalfWidth + 4f, TankField.HalfWidth - 4f);
-        var where = new Vector3(x, 0f, TankField.Frontier + SpawnLead);
+        for (int i = 0; i < batch; i++)
+        {
+            bool tank = Random.value < tankOdds;
+            float x = Random.Range(-TankField.HalfWidth + 4f, TankField.HalfWidth - 4f);
+            var where = new Vector3(x, 0f, TankField.Frontier + SpawnLead);
 
-        var raider = TankPawn.Spawn(RaiderEntry(),
-            tank ? TankPawn.Chassis.Tank : TankPawn.Chassis.Walker, 1, where, 180f,
-            tank ? RaiderTankShield : RaiderWalkerShield, TankArsenal.Role.Raider);
-        raider.speed = tank ? RaiderTankSpeed : RaiderWalkerSpeed;
-        raider.turnSpeed = tank ? 110f : 260f;
-        raider.OnWrecked += RaiderWrecked;
+            var raider = TankPawn.Spawn(RaiderEntry(),
+                tank ? TankPawn.Chassis.Tank : TankPawn.Chassis.Walker, 1, where, 180f,
+                tank ? RaiderTankShield : RaiderWalkerShield, TankArsenal.Role.Raider);
+            raider.speed = tank ? RaiderTankSpeed : RaiderWalkerSpeed;
+            raider.turnSpeed = tank ? 110f : 260f;
+            raider.OnWrecked += RaiderWrecked;
 
-        var brain = raider.gameObject.AddComponent<TankBrain>();
-        brain.favourite = _hero;
-        brain.standoff = tank ? 19f : 13f;
-        brain.orbit = Random.value < 0.5f ? 1f : -1f;
+            var brain = raider.gameObject.AddComponent<TankBrain>();
+            brain.favourite = _hero;
+            brain.standoff = tank ? 19f : 13f;
+            brain.orbit = Random.value < 0.5f ? 1f : -1f;
+        }
     }
 
     // -------------------------------------------------------------------- outposts

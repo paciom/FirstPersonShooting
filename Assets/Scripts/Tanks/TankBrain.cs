@@ -144,6 +144,7 @@ public class TankBrain : MonoBehaviour
 
         heading += Unstick(side);
         heading += HomeToAnchor();
+        heading += TowardPickup();
 
         // Caught at the field's trail line (recruits are held there — see
         // TankPawn.HeldAtTrail): the clamp cancels the down-field part of any
@@ -197,13 +198,52 @@ public class TankBrain : MonoBehaviour
         return best;
     }
 
-    /// <summary>Nothing to fight: drift, or go back to whoever we are escorting.</summary>
+    /// <summary>Nothing to fight: drift, or go back to whoever we are escorting
+    /// — and run an errand on the way if there is one nearby.</summary>
     void Idle()
     {
         Vector3 heading = new Vector3(0f, 0f, idleDrift);
         heading += HomeToAnchor();
+        heading += TowardPickup();
         _self.Drive = new Vector2(heading.x, heading.z);
         _self.Firing = false;
+    }
+
+    /// <summary>How far an escorting brain will go out of its way for a drop.
+    /// Kept near the leash so an errand never becomes a desertion.</summary>
+    const float PickupReach = 22f;
+
+    /// <summary>
+    /// Recruits run errands too. Every drop is squad property (see
+    /// <see cref="TankPickup"/>), so an escorting tank detours for one it may
+    /// actually take — a repair kit only while meaningfully damaged, the same
+    /// floor the pickup itself enforces. The pull strengthens as it closes,
+    /// the same commitment curve the hero's pilot uses, so a recruit turns in
+    /// and takes the drop instead of forever shading toward it. Raiders have
+    /// no anchor and no claim, and skip the scan entirely.
+    /// </summary>
+    Vector3 TowardPickup()
+    {
+        if (anchor == null || _self == null || _self.Team != 0)
+            return Vector3.zero;
+        Vector3 best = Vector3.zero;
+        float bestDistance = PickupReach;
+        foreach (var pickup in TankPickup.All)
+        {
+            if (pickup == null)
+                continue;
+            if (pickup.Sort == TankPickup.Kind.Repair
+                && (_self.Shield == null || _self.Shield.Normalized >= 0.7f))
+                continue;
+            Vector3 gap = pickup.transform.position - transform.position;
+            gap.y = 0f;
+            float distance = gap.magnitude;
+            if (distance >= bestDistance || distance < 1e-3f)
+                continue;
+            bestDistance = distance;
+            best = gap / distance * (1f + 1.8f * (1f - distance / PickupReach));
+        }
+        return best;
     }
 
     /// <summary>

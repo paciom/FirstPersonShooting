@@ -67,7 +67,7 @@ public class TankPilot : MonoBehaviour
             return;
 
         Vector3 heading = Vector3.forward;
-        heading += TowardPickup() * 1.6f;
+        heading += TowardPickup();          // carries its own urgency — see below
         heading += TowardOutpost() * 1.1f;
         heading += AwayFromCrowding() * 1.2f;
         heading += TowardOpenLane() * 0.7f;
@@ -177,7 +177,13 @@ public class TankPilot : MonoBehaviour
         return Vector3.zero;
     }
 
-    /// <summary>The nearest pickup worth a detour, as a pull toward it.</summary>
+    /// <summary>
+    /// The nearest pickup worth a detour, as a pull that STRENGTHENS as it
+    /// closes. A fixed-weight pull only ever shaded the heading, and a hero at
+    /// full speed shaded past its own prizes; by the time a drop is near, this
+    /// out-votes forward, lanes and walls combined — the hero commits, turns
+    /// in and takes it, then the pull vanishes and the convoy rolls on.
+    /// </summary>
     Vector3 TowardPickup()
     {
         Vector3 best = Vector3.zero;
@@ -196,7 +202,7 @@ public class TankPilot : MonoBehaviour
             if (distance >= bestDistance || distance < 1e-3f)
                 continue;
             bestDistance = distance;
-            best = gap / distance;
+            best = gap / distance * (1.2f + 2.8f * (1f - distance / PickupReach));
         }
         return best;
     }
