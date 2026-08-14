@@ -88,8 +88,11 @@ public static class BrawlAudio
         switch (id)
         {
             // Real recordings first: every Resources/BrawlSfx/punch*.wav
-            // joins the random pool (ExternalData/Punch, converted). The
-            // synth clang is only the no-files fallback.
+            // joins the random pool — 25 impacts cut out of the Seedance
+            // samurai-vs-panther fight, which is robots hitting robots
+            // rather than the human foley that used to sit here. Ordered
+            // strongest first; see Renders/fight_shorts/audio/punches/.
+            // The synth clang is only the no-files fallback.
             case Id.Hit:
             case Id.HitHeavy:
             {
