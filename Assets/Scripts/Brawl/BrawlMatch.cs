@@ -299,7 +299,7 @@ public class BrawlMatch : MonoBehaviour
             finisher = _deciderFinisher,
             knockout = _deciderWasKo,
             score = cyanWon ? $"{_cyanPips}-{_magentaPips}" : $"{_magentaPips}-{_cyanPips}",
-            pilot = AccountClient.DisplayName,
+            pilot = PilotName(),
             // P1 is the human corner in Brawl proper; in the exhibition nobody
             // is playing, so nobody won "as" anything.
             playerWon = _bout.playerControls && cyanWon,
@@ -315,7 +315,7 @@ public class BrawlMatch : MonoBehaviour
             magenta = _bout.magentaRobot,
             stage = _bout.stage,
             difficulty = _bout.difficulty,
-            from = AccountClient.DisplayName,
+            from = PilotName(),
             score = card.score,
             cyanWon = cyanWon,
         };
@@ -349,6 +349,20 @@ public class BrawlMatch : MonoBehaviour
             },
             onRobots: () => GameModeController.Instance.RestartBrawlSelect(),
             onMenu: () => GameModeController.Instance.EnterMenu());
+    }
+
+    /// <summary>
+    /// The signed-in pilot's name, or empty when nobody is signed in — NOT
+    /// AccountClient.DisplayName, which answers "GUEST" so that a HUD always
+    /// has something to print. On a card and in a link, empty is the useful
+    /// answer: it is what turns the by-line into "CAN YOU BEAT IT?" rather
+    /// than into "GUEST · CAN YOU BEAT IT?", and it is what the share metric
+    /// counts to tell a named challenge from an anonymous one.
+    /// </summary>
+    static string PilotName()
+    {
+        var account = AccountClient.Instance;
+        return account != null && account.SignedIn ? account.Username : "";
     }
 
     void SetLocked(bool locked)

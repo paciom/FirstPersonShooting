@@ -131,7 +131,17 @@ public static class ShareCard
                 Object.Destroy(target);
             }
             if (rig != null)
+            {
+                // Deactivated before the deferred Destroy, not just handed to
+                // it: Destroy does not take effect until the end of the frame,
+                // and a live world-space canvas is drawn by any camera that can
+                // reach it. Nothing here is within the fight camera's far
+                // plane, but a rig that renders once by accident would render
+                // a full-screen card over the game, and that is not a bug
+                // worth leaving to arithmetic.
+                rig.SetActive(false);
                 Object.Destroy(rig);
+            }
         }
     }
 
