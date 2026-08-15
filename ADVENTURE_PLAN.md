@@ -177,19 +177,30 @@ same week, so the shelf reads as a season and not as one story rewritten:
 - [ ] Video mode: 4–6 clips per beat straight off the `shots` array, VO from
       each shot's `vo` line, with the reader's graph walk kept exactly as it
       is. 180 shots for the whole file; a single run is ~50 clips.
-- [ ] **One-pass art, blocked on one click.** The better pipeline is to hand a
-      model the robot's own reference render and get character and room back in
-      a single generation. It is written and waiting behind
-      `python Tools/adventure_art.py --ark`, which picks each beat's cast off
-      its own shot list and sends their reference renders with the prompt.
-      It cannot run yet: `seedream-4-0-250828` answers `ModelNotOpen` on this
-      BytePlus account and has to be activated once in the Ark console
-      (Model Services → Seedream 4.0). Until then the tool exits with that
-      message and touches nothing.
+- [ ] **One-pass art — written, waiting on a key.** The better pipeline is one
+      generation per beat with the robots' own reference renders conditioning
+      it: character and room together, no compositing, and the characters can
+      hold poses the reference renders cannot strike. It lives in
+      `Tools/adventure_onepass.py`, which reads each beat's cast off its KEY
+      shot (33 of 36 beats have one; the other three are prop inserts), sends
+      those reference renders with the prompt, and writes straight over the
+      composited still so the two approaches can be compared beat by beat.
 
-      MiniMax cannot do it — tested four ways (keyed cutout on white, the front
-      preview render, width/height instead of aspect_ratio, optimizer on and
-      off). `subject_reference` returns a handsome robot that is not Panther
-      every single time and trades the toon look for photoreal gloom. That is
-      the second independent confirmation of the house rule, after the menu
-      cards.
+      | Provider | State |
+      |---|---|
+      | MiniMax image-01 | **Cannot do it.** `subject_reference` tested four ways — keyed cutout on white, front preview render, width/height instead of aspect_ratio, optimizer on and off. Returns a robot that is not Panther every time, and trades the toon look for photoreal gloom. Second confirmation of the house rule after the menu cards. |
+      | BytePlus Seedream 4.0 | Recognised, answers `ModelNotOpen`. One activation in the Ark console (Model Services → Seedream 4.0). |
+      | OpenAI `gpt-image-1` | No key. Drop one in `.secrets/openai_key.txt`; the model needs a verified organisation. Uses `/v1/images/edits` with the references as `image[]`. |
+      | Gemini 2.5 Flash Image | No key. Drop one in `.secrets/gemini_key.txt`. Uses `inline_data` parts. |
+
+      The OpenAI and Gemini paths are written from the documented request
+      shapes and have **never been run**, because there is no key on this
+      machine for either. The first invocation is the test, and it prints
+      whatever the API actually returned rather than guessing.
+
+      Two things the prompt builder has to get right, both learned the hard
+      way: read the cast from the KEY shot only (scanning all six shots drags
+      in characters standing somewhere else in the thirty seconds, and sending
+      their reference invites the model to paint them into frame), and strip
+      the plate's compositing clauses (a plate deliberately reserves empty
+      ground for a cutout, which is the exact opposite of what one-pass wants).
