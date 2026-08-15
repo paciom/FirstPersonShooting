@@ -89,36 +89,56 @@ graph shape is what makes it affordable, not the clip price.
 | Import rules for the stills | `Assets/Editor/AdventureArtImporter.cs` |
 | Side File 01 | `Assets/Resources/Adventures/quiet-confirmation.json` |
 
-## The art: paint the room, composite the real robots
+## The art: one pass, conditioned on the real robots
 
-One still per beat, and it is **not** generated whole. Prompting an image model
-for "a sleek orange panther robot" returns a handsome robot that is not
-Panther — this project already rejected exactly that once, for the menu cards.
-So the still is assembled in three stages:
+One still per beat, generated in a single call with the robots' own reference
+renders attached, so the character is the character and the pose is whatever
+the beat needs. `Tools/adventure_onepass.py --openai` runs the whole file.
 
-| Stage | Tool | What it makes |
-|---|---|---|
-| 1. Paint the room | `Tools/adventure_art.py` | 36 environment plates, explicitly empty of characters, framed from each beat's `key` shot |
-| 2. Cut out the cast | `Tools/adventure_cutout.py` | RGBA cutouts of the ACTUAL robots, jets and tanks from `ExternalData/` and `PreviewCaptures/` |
-| 3. Put them in | `Tools/adventure_compose.py` | Places, scales, grades and shadows the cutouts into the plate |
+| Piece | What it does |
+|---|---|
+| `Tools/adventure_onepass.py` | Reads each beat's cast off its KEY shot, attaches those robots' reference renders, asks gpt-image-1 for character and room together |
+| `Tools/adventure_cutout.py` | Keys the reference renders out of `ExternalData/` and `PreviewCaptures/` — robots, six jet angles each, tank forms from the transformation clips |
+| `Tools/adventure_art.py` | Paints character-free plates (the fallback pipeline, below) |
+| `Tools/adventure_compose.py` | Composites cutouts into plates (the fallback pipeline, below) |
 
-What the compositor had to learn, both worth keeping:
+**What works, verified rather than assumed:**
 
-- **Never multiply a robot by the scene light.** An orange robot times a teal
-  night comes back gold, and his colour is his identity. The scene tint is a
-  28% blend, and the glowing panels are treated as emissive and exempt from
-  the dimming entirely.
-- **A contact shadow and a one-sided rim light** are the difference between a
-  character standing in a scene and a sticker lying on top of one.
+- **OpenAI `gpt-image-1`, via `/v1/images/edits` with the references as
+  repeated `image[]` fields.** Panther comes back as Panther, and — the thing
+  compositing could never do — he *kneels*, reaches, hangs. Titan's
+  blue-and-yellow, Samurai's horned ice-blue crest and Bolt's navy all survive,
+  and 36 independently generated stills share one cel-shaded look.
+  Key in `.secrets/openai_key.txt`; ~40 s per image, so run the full set
+  detached (a foreground shell call dies at ten minutes).
+- **MiniMax image-01 cannot do it.** `subject_reference` tested four ways —
+  keyed cutout on white, front preview render, width/height instead of
+  aspect_ratio, optimizer on and off. A robot that is not Panther every time,
+  in photoreal gloom instead of the toon look.
+- **BytePlus Seedream 4.0** answers `ModelNotOpen`; never activated.
 
-The keyer flood-fills the background in from the border rather than keying by
-colour distance, so the dark navy ON a robot survives a dark navy background,
-and it keeps only the largest blob, which is what silently drops watermarks
-and video letterbox bars.
+**Two things the prompt builder has to get right:** take the cast from the KEY
+shot only (scanning all six shots drags in characters standing somewhere else
+in the thirty seconds, and sending their reference invites the model to paint
+them in), and strip the plate prompt's compositing clauses ("the right half is
+empty ground") — they are the exact opposite of what one pass wants.
 
-Roughly a third of the beats are prop and place shots — a heel print, a name
-tag, one word on a wet display — and those are the bare plate with no cutout
-at all, which is both cheaper and better.
+**Known limitation:** the model favours character portraits over choreography.
+Beats asking for a specific physical action — a hand catching a falling kid off
+a ladder — come back as two robots standing near a ladder. Identity and mood
+are excellent; staging is looser than the storyboard asks.
+
+### The fallback: paint the room, composite the real robots
+
+Still built, still runs, and worth keeping because it cannot get a character
+wrong: `adventure_art.py` paints 36 plates empty of characters,
+`adventure_cutout.py` keys the actual models, `adventure_compose.py` places,
+grades and shadows them in. All 36 composited stills are kept in
+`Tools/adventure_composited/` for comparison. Two lessons from it that still
+apply anywhere art gets graded: never multiply a robot by the scene light (an
+orange robot times a teal night comes back gold, and his colour is his
+identity), and a contact shadow plus a one-sided rim light is the difference
+between standing in a scene and lying on top of one.
 
 **Adding a mini adventure is one file.** Drop a JSON in
 `Assets/Resources/Adventures/` and the shelf finds it — there is no index to
