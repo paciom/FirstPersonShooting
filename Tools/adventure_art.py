@@ -21,9 +21,11 @@ marked "key"), and reserves empty ground where the compositor will stand
 somebody. Output: Tools/adventure_plates/<node>.png
 """
 
+import base64
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -258,6 +260,96 @@ def generate(name, force=False):
     return path
 
 
+# ---------------------------------------------------------------- one-pass
+# The other way to make these stills: hand a model the robot's own reference
+# render and ask for the whole frame, character and room together, in one go.
+# That is the better pipeline when it works — no compositing, and the character
+# can be in poses the reference renders cannot strike.
+#
+# It does not work on MiniMax. Tested four ways (clean cutout on white, the
+# front preview render, width/height instead of aspect_ratio, optimizer on and
+# off): subject_reference returns a handsome robot that is not Panther every
+# time, and drops the toon look for photoreal gloom.
+#
+# It should work on BytePlus Seedream 4.0, which does real reference
+# conditioning — but that model answers "ModelNotOpen" on this account: it has
+# to be activated once in the Ark console. Everything below is ready for the
+# moment it is, and until then it fails with that message and changes nothing.
+
+ARK_MODEL = "seedream-4-0-250828"
+CAST_REFS = {                       # which real render stands in for whom
+    "panther": "Tools/adventure_cutouts/panther_hero.png",
+    "titan": "Tools/adventure_cutouts/titan_hero.png",
+    "samurai": "Tools/adventure_cutouts/samurai_hero.png",
+    "bolt": "Tools/adventure_cutouts/bolt_front.png",
+    "warden": "Tools/adventure_cutouts/ranger_front.png",
+}
+
+
+def ark_config():
+    env = {}
+    path = os.path.join(ROOT, ".secrets", "byteplus.env")
+    for line in open(path, encoding="utf-8"):
+        if "=" in line:
+            key, value = line.strip().split("=", 1)
+            env[key] = value
+    return env["BYTEPLUS_ARK_BASE_URL"].rstrip("/"), env["ARK_API_KEY"]
+
+
+def data_uri(path):
+    with open(os.path.join(ROOT, path), "rb") as handle:
+        return "data:image/png;base64," + base64.b64encode(handle.read()).decode()
+
+
+def cast_in(node):
+    """Who is in this beat, read off the key shot's own words."""
+    text = " ".join(s.get("action", "") + " " + s.get("vo", "")
+                    for s in node.get("shots", [])).lower()
+    return [name for name in CAST_REFS if name in text]
+
+
+def generate_ark(node, force=False):
+    """One pass: the room and the real robots together, conditioned on the
+    reference renders."""
+    name = node["id"]
+    path = os.path.join(ADVENTURES, STORY, name + ".png")
+    if os.path.exists(path) and not force:
+        print(f"  skip  {name}")
+        return
+    key = next((s for s in node.get("shots", []) if s.get("key")), node["shots"][0])
+    who = cast_in(node)
+    refs = [data_uri(CAST_REFS[w]) for w in who]
+    prompt = (
+        f"{key['cam']} shot. {key['action']} "
+        + (f"Use the robots in the reference images EXACTLY as the characters: same "
+           f"colours, same proportions, same head designs, same plating. " if refs else "")
+        + f"Setting: {PLATES[name].split('. ' + EMPTY)[0]}. {STYLE}. {NO_TEXT}")
+
+    host, api_key = ark_config()
+    body = {"model": ARK_MODEL, "prompt": prompt, "size": "1280x720",
+            "response_format": "url", "watermark": False}
+    if refs:
+        body["image"] = refs if len(refs) > 1 else refs[0]
+    req = urllib.request.Request(host + "/images/generations",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"})
+    try:
+        payload = json.loads(urllib.request.urlopen(req, timeout=300).read())
+    except urllib.error.HTTPError as error:
+        detail = json.loads(error.read().decode()).get("error", {})
+        if detail.get("code") == "ModelNotOpen":
+            raise SystemExit(
+                f"\n{ARK_MODEL} is not activated on this BytePlus account.\n"
+                "Activate it once in the Ark console (Model Services -> Seedream 4.0),\n"
+                "then re-run:  python Tools/adventure_art.py --ark --force\n")
+        raise RuntimeError(f"{name}: {detail}")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    url = payload["data"][0]["url"]
+    with urllib.request.urlopen(url, timeout=300) as src, open(path, "wb") as dst:
+        dst.write(src.read())
+    print(f"  ok    {name}  ({', '.join(who) or 'no cast'})")
+
+
 def main(argv):
     if "--check" in argv:
         sys.exit(0 if check() else 1)
@@ -266,6 +358,13 @@ def main(argv):
     for name in wanted:
         if name not in PLATES:
             sys.exit("unknown beat: " + name)
+
+    if "--ark" in argv:
+        with open(os.path.join(ADVENTURES, STORY + ".json"), "r", encoding="utf-8") as f:
+            story = {n["id"]: n for n in json.load(f)["nodes"]}
+        for name in wanted:
+            generate_ark(story[name], force=force)
+        return
     failures = []
 
     def run(name):

@@ -25,7 +25,13 @@ public class AdventureReader : MonoBehaviour
     static readonly Color Muted = new Color(1f, 1f, 1f, 0.55f);
 
     const float Column = 1320f;
-    const float StillHeight = 300f;
+    // The still is shown WHOLE. It was a 300px band with a centre crop, which
+    // sliced the top and bottom off every frame — and the characters stand at
+    // the bottom of the frame, so it cut them off at the waist. 16:9, uncropped,
+    // and the text lays out underneath it.
+    const float StillWidth = 780f;
+    const float StillHeight = StillWidth * 9f / 16f;   // 461
+    const float StillCentreY = 214f;
 
     GameModeController _owner;
     AdventureStory _story;
@@ -99,28 +105,27 @@ public class AdventureReader : MonoBehaviour
         rule.sprite = null;
         Place(rule.rectTransform, new Vector2(0f, 438f), new Vector2(Column, 1f));
 
-        // The beat's still. It is a 16:9 frame shown in a letterbox strip, so
-        // the uvRect crops the top and bottom rather than squashing the art —
-        // the paintings are composed for the middle band.
+        // The beat's still, whole: the rect is exactly 16:9 and the uvRect is
+        // the full texture, so nothing is cropped and nothing is squashed.
         var stillGo = new GameObject("Still");
         stillGo.transform.SetParent(page, false);
         _still = stillGo.AddComponent<RawImage>();
         _still.raycastTarget = false;
-        float visible = StillHeight / (Column * 9f / 16f);
-        _still.uvRect = new Rect(0f, (1f - visible) * 0.5f, 1f, visible);
-        Place(_still.rectTransform, new Vector2(0f, 296f), new Vector2(Column, StillHeight));
+        _still.uvRect = new Rect(0f, 0f, 1f, 1f);
+        Place(_still.rectTransform, new Vector2(0f, StillCentreY),
+            new Vector2(StillWidth, StillHeight));
 
         var edge = Panel(page, "StillEdge", new Color(0.2f, 0.9f, 1f, 0.16f));
         edge.sprite = null;
-        Place(edge.rectTransform, new Vector2(0f, 296f - StillHeight * 0.5f),
-            new Vector2(Column, 2f));
+        Place(edge.rectTransform, new Vector2(0f, StillCentreY - StillHeight * 0.5f),
+            new Vector2(StillWidth, 2f));
 
         _title = MakeText(page, "Title", "", 46, HoloCyan, FontStyle.Bold,
-            new Vector2(0f, 120f), new Vector2(Column, 58f));
+            new Vector2(0f, -46f), new Vector2(Column, 52f));
         _title.alignment = TextAnchor.MiddleLeft;
 
         _hook = MakeText(page, "Hook", "", 27, HookGold, FontStyle.Bold,
-            new Vector2(0f, 74f), new Vector2(Column, 40f));
+            new Vector2(0f, -94f), new Vector2(Column, 38f));
         _hook.alignment = TextAnchor.UpperLeft;
         _hook.horizontalOverflow = HorizontalWrapMode.Wrap;
 
@@ -128,27 +133,27 @@ public class AdventureReader : MonoBehaviour
         // and the one thing that must never happen is a beat whose last line
         // is under the choice buttons.
         _body = MakeText(page, "Body", "", 26, new Color(1f, 1f, 1f, 0.93f), FontStyle.Normal,
-            new Vector2(0f, -70f), new Vector2(Column, 240f));
+            new Vector2(0f, -188f), new Vector2(Column, 144f));
         _body.alignment = TextAnchor.UpperLeft;
         _body.horizontalOverflow = HorizontalWrapMode.Wrap;
         _body.verticalOverflow = VerticalWrapMode.Truncate;
         _body.resizeTextForBestFit = true;
-        _body.resizeTextMinSize = 16;
-        _body.resizeTextMaxSize = 26;
+        _body.resizeTextMinSize = 15;
+        _body.resizeTextMaxSize = 24;
         _body.lineSpacing = 1.06f;
 
         _cliff = MakeText(page, "Cliff", "", 26, CliffBlue, FontStyle.Italic,
-            new Vector2(0f, -226f), new Vector2(Column, 68f));
+            new Vector2(0f, -286f), new Vector2(Column, 40f));
         _cliff.alignment = TextAnchor.UpperLeft;
         _cliff.horizontalOverflow = HorizontalWrapMode.Wrap;
 
         var row = new GameObject("Choices").AddComponent<RectTransform>();
         row.SetParent(page, false);
-        Place(row, new Vector2(0f, -370f), new Vector2(Column, 220f));
+        Place(row, new Vector2(0f, -400f), new Vector2(Column, 190f));
         _choiceRow = row;
 
         _foot = MakeText(page, "Foot", "", 20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
-            new Vector2(0f, -502f), new Vector2(Column, 26f));
+            new Vector2(0f, -506f), new Vector2(Column, 24f));
 
         Show(_story.StartNode, 1);
     }
@@ -196,7 +201,7 @@ public class AdventureReader : MonoBehaviour
             var choice = node.choices[i];
             string target = choice.to;
             _choiceButtons.Add(MakeChoice(_choiceRow, i + 1, choice.text,
-                new Vector2(0f, 52f - i * 104f), new Vector2(Column, 92f),
+                new Vector2(0f, 46f - i * 92f), new Vector2(Column, 84f),
                 () => Walk(target)));
         }
         _foot.text = "1  /  2  —  CHOOSE        ·        ESC  —  MENU";
@@ -218,10 +223,10 @@ public class AdventureReader : MonoBehaviour
         _counter.color = tint;
         _title.color = tint;
 
-        MakeChoice(_choiceRow, 1, "PLAY  AGAIN", new Vector2(-336f, 52f),
-            new Vector2(640f, 92f), () => Show(_story.StartNode, 1));
-        MakeChoice(_choiceRow, 2, "OTHER  ADVENTURES", new Vector2(336f, 52f),
-            new Vector2(640f, 92f), () => _owner.BackToAdventureSelect());
+        MakeChoice(_choiceRow, 1, "PLAY  AGAIN", new Vector2(-336f, 46f),
+            new Vector2(640f, 84f), () => Show(_story.StartNode, 1));
+        MakeChoice(_choiceRow, 2, "OTHER  ADVENTURES", new Vector2(336f, 46f),
+            new Vector2(640f, 84f), () => _owner.BackToAdventureSelect());
 
         int found = AdventureProgress.FoundCount(_story);
         _foot.text = $"REACHED  IN  {_step}  STEPS        ·        "

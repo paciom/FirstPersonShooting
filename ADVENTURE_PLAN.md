@@ -177,8 +177,19 @@ same week, so the shelf reads as a season and not as one story rewritten:
 - [ ] Video mode: 4–6 clips per beat straight off the `shots` array, VO from
       each shot's `vo` line, with the reader's graph walk kept exactly as it
       is. 180 shots for the whole file; a single run is ~50 clips.
-- [ ] Optional upgrade: `seedream-4-0-250828` on the BytePlus Ark account is
-      recognised but NOT ACTIVATED. Turning it on in the Ark console would
-      allow true reference-image conditioning, which could replace the
-      cutout-compositing stage with generated-but-faithful characters in
-      poses the reference renders cannot strike.
+- [ ] **One-pass art, blocked on one click.** The better pipeline is to hand a
+      model the robot's own reference render and get character and room back in
+      a single generation. It is written and waiting behind
+      `python Tools/adventure_art.py --ark`, which picks each beat's cast off
+      its own shot list and sends their reference renders with the prompt.
+      It cannot run yet: `seedream-4-0-250828` answers `ModelNotOpen` on this
+      BytePlus account and has to be activated once in the Ark console
+      (Model Services → Seedream 4.0). Until then the tool exits with that
+      message and touches nothing.
+
+      MiniMax cannot do it — tested four ways (keyed cutout on white, the front
+      preview render, width/height instead of aspect_ratio, optimizer on and
+      off). `subject_reference` returns a handsome robot that is not Panther
+      every single time and trades the toon look for photoreal gloom. That is
+      the second independent confirmation of the house rule, after the menu
+      cards.
