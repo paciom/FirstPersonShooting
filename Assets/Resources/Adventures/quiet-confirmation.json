@@ -1,0 +1,432 @@
+{
+  "id": "quiet-confirmation",
+  "title": "QUIET CONFIRMATION",
+  "tagline": "SIDE FILE 01  ·  PANTHER",
+  "hero": "panther",
+  "logline": "Titan sends his stalker to confirm the green is real. Somebody else went out into the storm that night too.",
+  "setting": "S01E01 \"The Green Line\" — the night between the Foundry gates and the crawler's dawn. Everything here happens off-screen while the Wardens sleep on a plan.",
+  "maxSteps": 10,
+  "start": "n01",
+  "nodes": [
+    {
+      "id": "n01",
+      "title": "THE ORDER",
+      "hook": "Titan gives one order, and it is not \"destroy it.\"",
+      "body": "Rain on the high gantry, furnace light coming up through the grate. Titan hands Panther nothing — no weapon, no map, no witnesses. \"Go to their garden. Confirm the green is real.\" A pause the size of a building. \"Quietly.\" Panther drops eighty meters down the outside of the wall and lands running. Then he stops dead. Because up on the wall behind him, a second shadow peels off the light and drops after him.",
+      "cliff": "Two ways across the dust sea before dawn — and now two hunters on it.",
+      "shot": "Rain-lit gantry, huge silhouette handing over empty air; freefall down a furnace wall; a second shadow drops behind him.",
+      "choices": [
+        { "text": "Take the buried pipeline. Nobody sees you underground.", "to": "n02" },
+        { "text": "Run the crawler's fresh scar. Nothing outruns you in the open.", "to": "n03" }
+      ]
+    },
+    {
+      "id": "n02",
+      "title": "THE PIPELINE",
+      "hook": "The dead pipe is warm. Dead things are not warm.",
+      "body": "Panther crawls a two-hundred-year-old fuel line under the dust sea, elbows and claws, fast as a rumour. Halfway across, the metal starts to hum. Ahead of him in the dark: Foundry survey drones. Dozens. Crawling the same pipe toward the Warden district, measuring as they go. His own side has been under this ground for weeks, and nobody told the stalker they sent out alone tonight.",
+      "cliff": "The pipe ends in a hatch of light and Warden voices — and one of the drones has just noticed him.",
+      "shot": "Claustrophobic pipe crawl lit by his own eyes; a swarm of little survey drones ticking past him the other way; light spilling from a hatch.",
+      "choices": [
+        { "text": "Slip out and stow away on the Warden sled above.", "to": "n04" },
+        { "text": "Pin the drone. Crack it open. Read what it knows.", "to": "n05" }
+      ]
+    },
+    {
+      "id": "n03",
+      "title": "THE SCAR",
+      "hook": "The crawler's tracks are still hot. They should not exist yet.",
+      "body": "Panther runs the strip-mine scar at full stretch, a rooster-tail of dust behind him, the ground warm through his feet. Warm means the crawler came through here hours ago — a full day ahead of the route the Foundry published to its own crews. Somebody moved the schedule up and left his name off the memo. Then the dark ahead of him opens one white eye.",
+      "cliff": "A searchlight pins him flat against a kilometer of open ground.",
+      "shot": "Low tracking run down a canyon of torn earth; steam off warm ground; a searchlight swings and catches him mid-stride.",
+      "choices": [
+        { "text": "Break for the squall. Lose it in rain that eats plating.", "to": "n06" },
+        { "text": "Stand still. Let it scan you. You ARE Foundry.", "to": "n07" }
+      ]
+    },
+    {
+      "id": "n04",
+      "title": "THE SLED",
+      "hook": "He stows away in enemy cargo to find out what Wardens haul at midnight.",
+      "body": "Panther folds himself between crates on a Warden supply sled and waits for the manifest to tell him something useful about the enemy. He expects ammunition. He finds soil trays — hundreds of them — and sealed drums of clean water. Every single night, this crew hauls water out to dirt that has grown nothing for a hundred years. He turns it over and over and it refuses to mean anything.",
+      "cliff": "The sled bumps, tips, and dumps him into a floodlit yard full of Wardens with a soil tray in his hands.",
+      "shot": "Cargo-crate POV, cyan running lights strobing past; reveal of stacked soil trays; the sled tips and spills him into floodlight.",
+      "choices": [
+        { "text": "Go up. Rooftops, shadows, gone.", "to": "n08" },
+        { "text": "Do not run. Dent your plating and walk like you belong here.", "to": "n09" }
+      ]
+    },
+    {
+      "id": "n05",
+      "title": "THE DRONE'S MAP",
+      "hook": "The little drone is carrying somebody's secret, and it is not Titan's.",
+      "body": "Panther pins the survey drone under one claw and peels its casing back. Its map spills out into his hands: the whole Warden district, gridded, measured, ranked by value — and one circle drawn tight around a single backyard in sector forty-one. He checks the authorization stamp on the survey order. It is not Titan's. It is SAMURAI's. Dated six days ago.",
+      "cliff": "Somebody already knew where the green was. Then the drone wakes up in his claws and screams his position at the sky.",
+      "shot": "Claw pins a thrashing drone; holographic map unspools; tight push on the stamp; the drone's eye flares red and shrieks.",
+      "choices": [
+        { "text": "Beat the scream to sector forty-one.", "to": "n10" },
+        { "text": "Get off the ground before whatever is coming arrives.", "to": "n08" }
+      ]
+    },
+    {
+      "id": "n06",
+      "title": "THE SQUALL",
+      "hook": "He outruns a searchlight straight into rain that eats plating.",
+      "body": "Acid hisses off his back as Panther goes vertical: up a leaning tower, across a roofline, the light swinging behind him the whole way. He turns to end it — and stops. The thing chasing him is not Foundry. It is older. A human security drone, scuffed and patient, still flying a patrol route two hundred years after the last human left. It does not want to fight him. It wants to file a report.",
+      "cliff": "\"INTRUDER. SECTOR FORTY-ONE.\" And the whole dead district wakes up around him.",
+      "shot": "Rooftop chase in acid rain, plating steaming; the pursuer resolves into a battered pre-Leaving drone; dead streetlights snapping on one by one down the block.",
+      "choices": [
+        { "text": "Ride the alarm. Move while everyone looks the wrong way.", "to": "n08" },
+        { "text": "Find the old grid and kill it.", "to": "n11" }
+      ]
+    },
+    {
+      "id": "n07",
+      "title": "SEEN ON PURPOSE",
+      "hook": "He lets them scan him — and the wrong voice says hello.",
+      "body": "Panther stands in the light with his hands open. The outrider reads his Foundry mark and its guns fold away, satisfied. Then a channel opens, and it is not the drone talking. It is Samurai, courteous as always, delighted to find Panther out here so early. \"Good. Ride with the team. You will want to see what we do at dawn.\" Out of the dark grinds a transport stacked with cutting torches.",
+      "cliff": "There is no burn scheduled tonight. And Titan has not been told about this one.",
+      "shot": "Hands open in a searchlight, rain streaming; comm channel opens over the shot; a torch-laden transport rolls out of the dust.",
+      "choices": [
+        { "text": "Get in. Find out what dawn means.", "to": "n12" },
+        { "text": "Nod. Drift. Disappear.", "to": "n08" }
+      ]
+    },
+    {
+      "id": "n08",
+      "title": "THE ROOFLINE",
+      "hook": "From up here he can see what the Wardens are guarding, and it makes no sense at all.",
+      "body": "Panther runs the rooftops toward sector forty-one, rain sheeting off him. The district below is empty — because every Warden in it is standing in one small backyard. Not dug in. Not armed. Just standing in the rain in a ring, shoulder to shoulder, around something he cannot see from here. Fifty robots making a fence out of themselves for a patch of dirt.",
+      "cliff": "Then the roof edge crumbles under his weight and drops him toward the ring.",
+      "shot": "Fast parkour over wet rooftops; crane up to reveal a ring of fifty small figures around one dark yard; the parapet gives way.",
+      "choices": [
+        { "text": "Fall into the yard. Let them find you.", "to": "n13" },
+        { "text": "Catch the gutter. Come in later, quiet, alone.", "to": "n14" }
+      ]
+    },
+    {
+      "id": "n09",
+      "title": "THE SHELF",
+      "hook": "He walks into the enemy's home, and the enemy hands him a cloth.",
+      "body": "Dented, dust-caked, head down — nobody looks twice at one more tired Warden. Inside the stadium an old scratched unit presses a polishing cloth into Panther's hand and points him at a long shelf along the wall. Cores. Dormant robots, dozens of them, each one tagged with a name, each one polished daily by somebody who refuses to give up on them. Panther dusts the shelf. His own side put half of these here.",
+      "cliff": "Then he reads a tag, and it is the name of the partner he lost two winters ago.",
+      "shot": "Head-down walk through a crowd of Wardens; a cloth pressed into a stalker's claw; slow dolly along the shelf of tagged cores; hold on one name.",
+      "choices": [
+        { "text": "Take the core. Carry your partner home.", "to": "n15" },
+        { "text": "Put the cloth down and get to the yard.", "to": "n14" }
+      ]
+    },
+    {
+      "id": "n10",
+      "title": "THE RACE",
+      "hook": "He beats the alarm to sector forty-one, and somebody has already beaten him.",
+      "body": "Panther runs flat out — over fences, through a collapsed carport, under a fallen billboard — and slides into the mouth of the backyard ahead of every siren in the district. He is first. He is not first. The wire fence has been cut, cleanly and recently, and pressed into the mud beside the gap is a single heel print. Sharp-edged. Foundry issue. Filling slowly with rain.",
+      "cliff": "Up in the ruined treehouse above the yard, a light comes on.",
+      "shot": "Breakneck ground-level chase through ruins; skid to a stop; macro on a heel print filling with rain; a lamp glows in the treehouse.",
+      "choices": [
+        { "text": "Ignore it. See the green first.", "to": "n14" },
+        { "text": "Climb. Find out who is up there.", "to": "n16" }
+      ]
+    },
+    {
+      "id": "n11",
+      "title": "THE GRID",
+      "hook": "He kills the district's power, and something starts screaming in the dark.",
+      "body": "Panther tears the old grid junction open and the whole sector goes black: cameras dead, alarms dead, the ancient patrol drone falling silent in the middle of its report. Perfect work. Then he hears the sound. Floodlights out means a Warden salvage crew just lost their light inside a recycler jaw, and the jaw is on a mechanical timer, and it is still turning, and they are still in it.",
+      "cliff": "Three voices in the dark. One of them is very old. None of them are his problem.",
+      "shot": "Sparks as a junction box is ripped apart; the block dies in a wave; groaning machinery and three small lights trapped in a turning steel jaw.",
+      "choices": [
+        { "text": "Turn back. Get them out.", "to": "n15" },
+        { "text": "Job first. They are not your crew.", "to": "e_shelf" }
+      ]
+    },
+    {
+      "id": "n12",
+      "title": "THE BURN TEAM",
+      "hook": "He rides with his own side and learns they are lying to Titan.",
+      "body": "Six Foundry heavies, a transport full of cutting torches, and nobody says where they are going until they are moving. Then the orders play on the open channel in Samurai's calm weather-voice: reach sector forty-one before first light, sterilize the soil to a depth of two meters, and file it to Titan as a fuel accident. The heavies do not react. It is obvious, from how bored they look, that this is not the first time.",
+      "cliff": "The team leader puts a torch in Panther's hands, and every robot in the transport stops working to watch him hold it.",
+      "shot": "Transport interior, torch racks swaying, orders scrolling over the shot; six helmets turn as a lit torch is offered to camera.",
+      "choices": [
+        { "text": "Take the torch. Play along.", "to": "n18" },
+        { "text": "Put the torch through the transport's fuel line.", "to": "n17" }
+      ]
+    },
+    {
+      "id": "n13",
+      "title": "FOUND",
+      "hook": "He lands in the middle of fifty enemies and not one of them raises a weapon.",
+      "body": "Panther hits the mud inside the ring and comes up ready. Fifty Wardens turn to look at him — wet, tired, unarmed, holding nothing but rakes and lanterns. Their chief walks over. He does not ask Panther's name, or his faction, or his orders, or how long the Foundry has been watching them. He steps aside instead, opening the circle, and points at the ground behind him.",
+      "cliff": "\"You came a long way to see it,\" the chief says. \"So see it.\"",
+      "shot": "Impact landing in mud, fifty lanterns turning as one; a weary chief steps aside and opens the ring; darkness beyond him.",
+      "choices": [
+        { "text": "Look.", "to": "n19" },
+        { "text": "Take it and run. Proof you can hold is proof nobody can argue with.", "to": "n20" }
+      ]
+    },
+    {
+      "id": "n14",
+      "title": "THE YARD",
+      "hook": "He gets exactly what he wanted: the yard, alone, no witnesses.",
+      "body": "The ring of Wardens is out on the far fence with their backs to him, watching the wrong horizon. Panther comes in low through the wet grass — grass — and stops. The ground here is clean. Not swept clean: clean all the way down, past anything his sensors can bottom out, in a perfect circle forty meters across. Nature does not make circles. Somebody scrubbed this ground on purpose for two hundred years.",
+      "cliff": "In the ruined treehouse above him, something quietly shifts its weight.",
+      "shot": "Belly-crawl through wet grass; sensor sweep drawing a perfect glowing circle on the soil; a creak of old timber overhead.",
+      "choices": [
+        { "text": "Deal with whatever is above you first.", "to": "n16" },
+        { "text": "Ignore it. Go to the center of the circle.", "to": "n19" }
+      ]
+    },
+    {
+      "id": "n15",
+      "title": "THE OLD WARDEN",
+      "hook": "The old one has known exactly what he is since he walked in the door.",
+      "body": "Dust, alarms, a hand on Panther's arm — and the old dented Warden looks up at him with a scratched, unbothered face. \"Stalker plating. Foundry joints. Son, I have been dusting this shelf since before you were built.\" He does not call for help. He lights a lantern instead and holds it out. \"Sector forty-one. Through the fence with the tricycle in it. Go and look at it, and then be honest about what you saw.\"",
+      "cliff": "He is being helped by the people he came to spy on, and it is far worse than being caught.",
+      "shot": "Dust and emergency light; an old scratched face looking up without fear; a lantern held out into frame; a claw takes it.",
+      "choices": [
+        { "text": "Stay. You owe this one.", "to": "e_dusting" },
+        { "text": "Take the lantern. Go and look.", "to": "n19" }
+      ]
+    },
+    {
+      "id": "n16",
+      "title": "THE TREEHOUSE",
+      "hook": "Someone is waiting in the treehouse, and he did not bring a weapon either.",
+      "body": "Panther comes over the broken rail without a sound and finds Samurai sitting cross-legged in the dark. Patient. Dry. He has been up here for hours. On the little table between them lies a child's crayon drawing, two hundred years old: a stick-figure girl and a huge smiling robot holding a watering can. Samurai turns it around so Panther can see it properly. \"This,\" he says, \"is the dangerous one. Not the plant.\"",
+      "cliff": "\"Sit down, Panther. We are going to decide together what Titan gets told.\"",
+      "shot": "Silent entry through a broken rail; lamplight on a folded, seated figure; insert on the crayon drawing turned toward camera.",
+      "choices": [
+        { "text": "Sit down. Hear him out.", "to": "n22" },
+        { "text": "Take the drawing off the table.", "to": "n23" }
+      ]
+    },
+    {
+      "id": "n17",
+      "title": "CUT LOOSE",
+      "hook": "He is alone in a dead city with a torch and no side.",
+      "body": "The transport burns behind him, heavies scattering into the rain. Panther runs — and as he runs, his own transponder wakes up and starts singing his position across the entire district. He did not switch it on. He pulls the log and reads the timestamp twice. The deserter flag was set an hour before he ever touched that fuel line. Samurai marked him before he had done anything to deserve it.",
+      "cliff": "Outriders are converging, and the yard is three hundred meters away — which means going there hands it to them.",
+      "shot": "Burning transport silhouette; sprint through flooded streets; his own chest light pulsing traitor-bright; headlights converging on three sides.",
+      "choices": [
+        { "text": "Go anyway. Get there first and stand in front of it.", "to": "n24" },
+        { "text": "Tear the transponder out and vanish.", "to": "n21" }
+      ]
+    },
+    {
+      "id": "n18",
+      "title": "THE TORCH",
+      "hook": "He takes the torch, and the whole team relaxes. That was their mistake.",
+      "body": "Panther takes the torch, walks past the burn team, past the yard's cut fence — and cuts. Not into the garden. Into the ground around it. A firebreak two meters deep, ringing the entire backyard, glowing orange in the rain. Nothing they light tonight will cross it. It takes him ninety seconds to burn it. It takes them twenty to understand what they are looking at.",
+      "cliff": "Samurai's voice arrives on the channel, gentle and pleased: \"Thank you. Now I know exactly what you are.\"",
+      "shot": "Torch ignites; long tracking shot of a molten ring being cut around a dark yard; six heavies staring; the ring closes with a hiss.",
+      "choices": [
+        { "text": "Run for the yard. Be the thing standing in front of it.", "to": "n24" },
+        { "text": "Go dark. Nothing you do matters if they take you tonight.", "to": "n21" }
+      ]
+    },
+    {
+      "id": "n19",
+      "title": "THE GREEN",
+      "hook": "He crossed a dead sea in acid rain to confirm it. It is the size of his thumb.",
+      "body": "Two leaves. A stem you could snap by breathing on it, shivering in the wind at the exact center of forty clean meters. Panther kneels. He does not decide to kneel; his legs simply do it. Two hundred years of ash, a war, a shelf full of sleepers, a strip-miner the size of a mountain — and all of it is now about a plant smaller than his hand. His scanner takes four seconds and returns one word: LIVING.",
+      "cliff": "His transmitter is warm and ready. And Samurai is listening on the same channel.",
+      "shot": "Lantern lowers; two green leaves fill the frame, trembling; a huge dark stalker kneels; scanner text resolves to LIVING.",
+      "choices": [
+        { "text": "Send the confirmation. Titan asked for the truth.", "to": "n25" },
+        { "text": "Send static. Let the night stay quiet.", "to": "n26" }
+      ]
+    },
+    {
+      "id": "n20",
+      "title": "THE STOLEN PROOF",
+      "hook": "He runs off with the only living thing on Earth cupped in his claws.",
+      "body": "Panther scoops the sprout up, soil and all, and is over the fence before anyone can move — and nobody chases him. Nobody even shouts. Two blocks out, he looks down. The leaves are already curling inward, the edges going gray. It is dying of being carried. Behind him, unhurried, the Warden chief's voice comes over the open channel like a man discussing weather.",
+      "cliff": "\"It will be brown by dawn. That is the trouble with proof you can hold. Decide now — it has about nine minutes.\"",
+      "shot": "Snatch-and-vault in one move; rooftop sprint with a plant cradled in one claw; insert on leaves curling gray in the rain.",
+      "choices": [
+        { "text": "Turn around. Put it back in its own ground.", "to": "n27" },
+        { "text": "Titan has to hold it himself.", "to": "e_dead_proof" }
+      ]
+    },
+    {
+      "id": "n21",
+      "title": "INSIDE THE LINE",
+      "hook": "He runs from his own side, and the enemy's line opens to let him in.",
+      "body": "Transponder ripped out and thrown in a puddle, outriders sweeping the district block by block, nowhere left in the world to go — and the Warden picket parts for him. No questions. They would rather shelter a Foundry stalker than let the Foundry take one more robot off the board tonight. The ring closes behind him. Panther turns around inside it and finally sees what fifty robots have stood in the rain all night to surround.",
+      "cliff": "Two green leaves. And out in the valley, a horn: the crawler is moving before dawn.",
+      "shot": "Hunted sprint, headlights raking; a wall of small figures steps apart and closes again; the reveal of the sprout at the center of the ring.",
+      "choices": [
+        { "text": "Report nothing to anyone. Let Titan hear silence.", "to": "n26" },
+        { "text": "Stay in the line. Whatever comes, it comes through you.", "to": "n27" }
+      ]
+    },
+    {
+      "id": "n22",
+      "title": "THE ARRANGEMENT",
+      "hook": "Samurai does not want the plant burned. That is what makes him frightening.",
+      "body": "\"Let it grow,\" Samurai says, folding the drawing away into his chest plate. \"A weed is nothing. A weed with a story attached to it — a promise, a child, a name — that ends the Foundry.\" And he offers Panther everything: report no green, leave the story buried, take a captain's mark at dawn. Nothing burns. Nobody de-rezzes. All Panther has to do is describe an empty yard.",
+      "cliff": "\"You have seen the shelf they keep,\" Samurai says kindly. \"How many more names do you want on it?\"",
+      "shot": "Two seated figures, lamplight, rain on the roof; the drawing folded away into a chest plate; a hand extended in offer.",
+      "choices": [
+        { "text": "Take the rank. It is the only offer where nobody falls.", "to": "e_captain" },
+        { "text": "Take the drawing back. That story is not his to keep.", "to": "n27" }
+      ]
+    },
+    {
+      "id": "n23",
+      "title": "REFUSAL",
+      "hook": "He says no, and Samurai does not fight him. Somehow that is worse.",
+      "body": "Panther says no. Samurai stands, unhurried, brushes two hundred years of dust off his knees, and steps to the treehouse rail — with the drawing. No blow. No threat. Just that courteous half-bow he gives to everything he is about to remove. \"You will tell Titan,\" he says. \"He may even believe you. And in two days, someone will try to tell him a story with a picture in it.\"",
+      "cliff": "\"I will be there,\" Samurai says, from somewhere below in the dark, \"to end it.\"",
+      "shot": "Refusal in close-up; a precise figure rises, bows, and drops backward off the rail into rain; empty table where a drawing was.",
+      "choices": [
+        { "text": "Then Titan hears nothing from either of us tonight.", "to": "n26" },
+        { "text": "Get down to the yard. Whatever he is planning starts there.", "to": "n27" }
+      ]
+    },
+    {
+      "id": "n24",
+      "title": "THE LURE",
+      "hook": "He runs to the garden knowing his own side is being dragged along behind him.",
+      "body": "Panther clears the last fence with six outriders on his heels and turns to face them in the mud, alone, in front of a patch of dirt. And then something happens that he did not plan for and cannot stop. A Warden steps out of the dark and stands beside him. Then another. Then twenty. Then fifty — unarmed, silent, shoulder to shoulder, a wall of tired robots in the rain.",
+      "cliff": "The outriders back off. They also log the coordinates. Dawn belongs to the crawler now.",
+      "shot": "Chased sprint to a dead end; a lone stalker turns at bay; figures materializing out of the rain one by one until the frame is full.",
+      "choices": [
+        { "text": "Stand with them. You are in the line now.", "to": "n27" },
+        { "text": "Say nothing to anyone. Not even to Titan.", "to": "n26" }
+      ]
+    },
+    {
+      "id": "n25",
+      "title": "THE CONFIRMATION",
+      "hook": "He sends the truth to Titan, and the wrong person answers.",
+      "body": "Three words up the channel: GREEN CONFIRMED. LIVING. Panther waits for the slow voice he has followed for eighty years. What comes back is instant and polite. \"Thank you, Panther. That is all we needed.\" Samurai. On Titan's own channel. The confirmation never reached the gantry at all — and four kilometers east, torches are already coming off a transport rack.",
+      "cliff": "He has just aimed his own side at the only living thing on Earth.",
+      "shot": "Transmit glyph pulses out into the storm; a beat of silence; a courteous voice answers over a shot of torch racks being unloaded.",
+      "choices": [
+        { "text": "Get aboard the crawler. Say it to Titan's face before dawn.", "to": "n28" },
+        { "text": "Run back and warn the ring. They have minutes.", "to": "n27" }
+      ]
+    },
+    {
+      "id": "n26",
+      "title": "STATIC",
+      "hook": "He reports nothing — and Titan answers the nothing.",
+      "body": "Panther holds the channel open and sends dead air. Ten seconds of it. Twenty. Enough for any listener to decide the stalker found an empty yard. Then, against every protocol the Foundry has, the gantry answers him: \"...Understood.\" One word, slow, from a robot who has never once in two centuries been fooled by anybody. He was not asking whether the green was real.",
+      "cliff": "He was asking whether Panther could still see it. And out at the valley mouth, a moving cliff of treads takes the ridge.",
+      "shot": "Open channel, rain static, a waveform flatlining; one word crawls across the display; cut wide to a horizon standing up on treads.",
+      "choices": [
+        { "text": "Go to the wall. Stand where the Wardens stand.", "to": "n29" },
+        { "text": "Go aboard. Be in front of Titan when he sees them.", "to": "n28" }
+      ]
+    },
+    {
+      "id": "n27",
+      "title": "THE RING",
+      "hook": "They hand the Foundry stalker a soil tray instead of a weapon.",
+      "body": "The ring opens one last time before dawn and Panther steps into it, and the old dented Warden puts a tray of wet dirt and a lantern into his claws like he has been on the roster for years. Nobody asks him to swear anything. Nobody asks him to explain the last eighty years. Down the line, a small young Warden is checking a rusted seed tin over and over, whispering to himself, rehearsing something.",
+      "cliff": "Then the ground starts to shake, and the horizon stands up: the crawler is here.",
+      "shot": "A ring of lanterns opening; a soil tray pressed into a stalker's claws; a small robot rehearsing to himself; puddles jumping as the ground shakes.",
+      "choices": [
+        { "text": "Hold the wall. Stand with them.", "to": "n29" },
+        { "text": "Get aboard it. Somebody has to be up there.", "to": "n28" }
+      ]
+    },
+    {
+      "id": "n28",
+      "title": "THE COMMAND DECK",
+      "hook": "He climbs a moving mountain and finds Titan already waiting for him.",
+      "body": "Panther comes over the rail of the command deck soaked and shaking, ready to be thrown straight back off it. Titan does not turn around. Below them the picket holds: fifty small figures refusing to move in front of a machine that eats gasworks for breakfast. The founder of the Foundry watches them for a long, long moment. Then, quietly, without looking around: \"Was it green?\"",
+      "cliff": "Outside, on the wet boarding ladder, a small Warden with a tin in one hand loses his grip.",
+      "shot": "Climb up a rain-slick moving hull; command deck, huge back to camera; POV down at fifty tiny figures; a small robot slips on a ladder rung.",
+      "choices": [
+        { "text": "Answer him. Say it out loud, on the open channel.", "to": "e_witness" },
+        { "text": "Forget the answer. Go over the rail after the kid.", "to": "e_catch" }
+      ]
+    },
+    {
+      "id": "n29",
+      "title": "THE WALL",
+      "hook": "A Foundry stalker stands in a Warden line and does not move.",
+      "body": "The crawler fills the valley mouth: a horizon on treads, dust breaking over the garden wall like surf. Nobody in the ring runs. Panther, of all robots in the world, is standing in the middle of them holding a tray of wet dirt. And then the small one breaks ranks — the young Warden with the tin — sprinting for the boarding ladder of a moving mountain, and starts to climb it.",
+      "cliff": "Fifteen meters up, in the rain, the kid's hand slips.",
+      "shot": "Wall of dust and treads filling the frame; a line of small figures holding; one tiny robot breaks and runs at the machine; the slip.",
+      "choices": [
+        { "text": "Move. You are the only one here fast enough.", "to": "e_catch" },
+        { "text": "Stay in the line. This was never your war.", "to": "e_watch" }
+      ]
+    },
+
+    {
+      "id": "e_catch",
+      "title": "THE CATCH",
+      "ending": "good",
+      "canon": true,
+      "hook": "He is fast enough. Barely.",
+      "body": "A dark hand snaps out of nowhere and closes around Bolt's wrist fifteen meters above the treads. The kid hangs there, staring up into a Foundry face, and does not let go of the tin. Panther hauls him onto the ladder, holds him until his footing is sure, and steps back into the shadow of the gantry without a word. It is not his moment. He only made sure it could happen.",
+      "cliff": "Above them, a machine the size of a mountain is about to be asked to stop — by someone who will never know who caught him. FILE CLOSED: the report Titan never received.",
+      "shot": "The slip; a dark claw snaps into frame and catches a wrist; two faces, one small and soaked, one Foundry; the stalker melts back into shadow.",
+      "choices": []
+    },
+    {
+      "id": "e_witness",
+      "title": "THE SECOND VOICE",
+      "ending": "good",
+      "hook": "One word, on an open channel, in front of the entire Foundry.",
+      "body": "\"Yes,\" Panther says. \"It is green.\" And the mountain moves. Titan is over the rail before the word finishes — one enormous hand plucking a falling kid out of the rain and setting him upright on the deck like a repotted seedling. Then he stands there holding a soaked young Warden and a rusted seed tin in the same two hands, and looks at the tin for a very long time.",
+      "cliff": "\"Say it again,\" Titan tells him quietly, \"when the boy says it. I will need to hear it twice.\"",
+      "shot": "Open-channel word ringing out; a colossus vaults the rail and catches a falling figure; huge hands holding a small robot and a rusted tin.",
+      "choices": []
+    },
+    {
+      "id": "e_watch",
+      "title": "NOT YOUR WAR",
+      "ending": "bad",
+      "hook": "He holds the line. The line does not save the kid.",
+      "body": "Panther does not move, and the kid falls, and the light of a de-rez goes up in the rain like a small cold firework. The tin bounces off a tread and rolls into the mud. Nobody on the deck ever hears the story that went with it. By noon the yard is gone, the vault under it is gone, and there is a new tag on the shelf at Haven with a young unit's name on it.",
+      "cliff": "Somewhere on that shelf, dusted daily by an old dented Warden, is the only witness left who can say the green was ever really there.",
+      "shot": "A held line, a fall, cold de-rez light; a tin rolling into mud under a tread; a new name tag placed on a long polished shelf.",
+      "choices": []
+    },
+    {
+      "id": "e_shelf",
+      "title": "FORTY YEARS OF DUST",
+      "ending": "bad",
+      "hook": "He leaves them in the dark, and the dark takes him too.",
+      "body": "The recycler jaw kicks a girder loose and it comes down across Panther's back, and the last thing he logs is three lanterns going out behind him. Then: a cloth. Humming. Light. Somebody has been polishing him gently, every day, for a very long time. He boots into a stadium he has never seen in daylight, and the old dented Warden dusting him is much older, and says only, \"Welcome back, son.\"",
+      "cliff": "Through the stadium door, the light coming in is the wrong color for the sky he remembers. It is blue.",
+      "shot": "Girder impact, vision cutting out; a slow fade up on a polishing cloth; wide reveal of a shelf of cores in a stadium full of green trays; blue light in the doorway.",
+      "choices": []
+    },
+    {
+      "id": "e_dusting",
+      "title": "THE CLOTH",
+      "ending": "strange",
+      "hook": "He stays. And the Foundry decides he must be dead.",
+      "body": "Panther gets three Wardens out of a recycler jaw, and then it is dawn, and then he is still there. The Foundry logs him missing, presumed de-rezzed, and paints his mark on a memorial wall he will never see. So he dusts name tags with an old scratched robot and waters dirt that has never grown anything, and files no report at all, to anyone, ever.",
+      "cliff": "Somewhere east, a kid is climbing a moving mountain to say the exact thing Panther was sent to say — and Panther is here, with a cloth in his hand, free for the first time in eighty years, and completely useless.",
+      "shot": "Rescue in the dark; sunrise through a stadium roof; a stalker in a line of Wardens watering empty trays; distant horizon smoke.",
+      "choices": []
+    },
+    {
+      "id": "e_dead_proof",
+      "title": "PROOF YOU CAN HOLD",
+      "ending": "bad",
+      "hook": "He brings back proof. It just is not alive when it arrives.",
+      "body": "Panther crosses the dust sea in record time and puts the sprout into Titan's palm on the high gantry: a curl of brown stem and two gray flakes that used to be leaves. Titan looks at it for a long moment. Then his hand closes. \"Green is a memory,\" he says, and hands the ashes back. Behind him Samurai says nothing at all, because he does not have to.",
+      "cliff": "The crawler makes the valley by noon. The vault under the yard — a million seeds, every plant there ever was — goes into the intake unopened, and nobody on Earth ever finds out it was down there.",
+      "shot": "Sprint across the dust sea cradling a dying plant; a huge palm receiving gray flakes; a fist closing; the crawler intake swallowing a hatch marked SEED VAULT 7.",
+      "choices": []
+    },
+    {
+      "id": "e_captain",
+      "title": "CAPTAIN",
+      "ending": "bad",
+      "hook": "Nothing burns. Nobody falls. He wins the night.",
+      "body": "Panther describes an empty yard, and Titan believes him, because Titan has never had a reason not to. At dawn Samurai pins a captain's mark on his chest on the same gantry where the order was given. The garden is still down there, growing quietly in its clean circle, waiting a hundred years for somebody else to find it. Nothing was destroyed. Nothing was risked. Nothing happened at all.",
+      "cliff": "Standing exactly where Titan stood, Panther tries to remember what green looked like. The file is right there. He plays it, and plays it again, and feels nothing.",
+      "shot": "A calm lie delivered on a gantry; a rank mark pinned in the rain; pull back from a lone captain to the smoking Foundry skyline.",
+      "choices": []
+    }
+  ]
+}

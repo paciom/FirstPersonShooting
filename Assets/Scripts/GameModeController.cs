@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
-public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, TankRaidWar, Dogfight, DogfightWar, Story }
+public enum GameMode { Menu, PlayerVsAI, AIvAI, ArenaPreview, Commander, OnlinePvP, Brawl, BrawlWar, BrawlShow, TowerDefense, ChineseQuest, ChineseRun, TankRaid, TankRaidWar, Dogfight, DogfightWar, Story, Adventure }
 
 /// <summary>
 /// Owns the game's mode flow: main menu → Player v AI / AI v AI / Arena Builder,
@@ -87,6 +87,8 @@ public class GameModeController : MonoBehaviour
     TankRaid _tankRaid;
     Dogfight _dogfight;
     GameObject _chineseDeckSelect;
+    AdventureReader _adventure;
+    GameObject _adventureSelect;
     DeRezEffect[] _deRezEffects;
 
     void Awake()
@@ -199,6 +201,12 @@ public class GameModeController : MonoBehaviour
         if (Mode == GameMode.Menu && _chineseDeckSelect != null && Input.GetKeyDown(KeyCode.Escape))
         {
             CancelChineseDeckSelect();
+            return;
+        }
+
+        if (Mode == GameMode.Menu && _adventureSelect != null && Input.GetKeyDown(KeyCode.Escape))
+        {
+            CancelAdventureSelect();
             return;
         }
 
@@ -363,6 +371,13 @@ public class GameModeController : MonoBehaviour
         {
             _story.Teardown();
             _story = null;
+        }
+        // The text adventure never touched the world, so it only has its own
+        // screen to take with it.
+        if (_adventure != null)
+        {
+            _adventure.Teardown();
+            _adventure = null;
         }
         // Same contract again: Chinese Quest borrows Brawl's world lifecycle
         // wholesale, so it hands the arena back the same way.
@@ -1036,6 +1051,65 @@ public class GameModeController : MonoBehaviour
             ShowOverlay("STORY   ·   ESC — Menu",
                         "STORY   ·   tap MENU to go back");
         LockCursor(false);
+    }
+
+    /// <summary>The adventure shelf: pick which mini side story to walk.</summary>
+    public void OpenAdventureSelect()
+    {
+        Metrics.Track("mode_select", ("mode", GameMode.Adventure.ToString()));
+        _menuCanvas.SetActive(false);
+        CloseAdventureSelect();
+        _adventureSelect = AdventureSelect.Build(this);
+    }
+
+    /// <summary>Escape/BACK from the shelf goes back a step, to the main menu.</summary>
+    public void CancelAdventureSelect()
+    {
+        Metrics.Track("select_cancel", ("screen", "adventure"));
+        CloseAdventureSelect();
+        _menuCanvas.SetActive(true);
+    }
+
+    void CloseAdventureSelect()
+    {
+        if (_adventureSelect != null)
+        {
+            Destroy(_adventureSelect);
+            _adventureSelect = null;
+        }
+    }
+
+    /// <summary>
+    /// ADVENTURE: a branching side story from the season, read one 30-second
+    /// beat at a time (Assets/Resources/Adventures/&lt;id&gt;.json). Text mode owns
+    /// the whole screen and never touches the world, so unlike every other
+    /// mode here there is nothing to hide and nothing to hand back.
+    /// </summary>
+    public void StartAdventure(string storyId)
+    {
+        Mode = GameMode.Adventure;
+        CloseAdventureSelect();
+        DestroySpectatorRig();
+        ResetMatchState();
+        RestoreAllDeRez();
+
+        _adventure = AdventureReader.Begin(this, storyId);
+
+        _menuCanvas.SetActive(false);
+        ShowOverlay("ADVENTURE   ·   1 / 2 — choose   ·   ESC — Menu",
+                    "ADVENTURE   ·   tap a choice   ·   tap MENU to go back");
+        LockCursor(false);
+    }
+
+    /// <summary>
+    /// "OTHER ADVENTURES" at an ending: leave the mode properly (which is what
+    /// files the match_end and tears the reader down) and come straight back
+    /// to the shelf instead of the main menu.
+    /// </summary>
+    public void BackToAdventureSelect()
+    {
+        EnterMenu();
+        OpenAdventureSelect();
     }
 
     /// <summary>

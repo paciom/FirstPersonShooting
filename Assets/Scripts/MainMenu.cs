@@ -26,13 +26,15 @@ public static class MainMenu
     static readonly Color GoldLow = new Color(0.97f, 0.58f, 0.11f);
 
     // -- layout, on the 1920x1080 reference canvas ------------------------
-    // Three decks side by side: 3 columns, then 3, then 2. Eight card columns
-    // across the band where there used to be seven — DOGFIGHT's two cards made
-    // WAR ROOM a six-deck, so the pitch came down from 238 to 208 and every
-    // card with it. The widths below total 1734, which centres inside 1920
-    // with a 93px margin either side.
-    const float CardW = 194f, CardH = 109f;      // near-exactly 16:9, like the art
-    const float PitchX = 208f, PitchY = 140f;
+    // Three decks side by side: 3 columns each. Nine card columns across the
+    // band where there used to be eight — ADVENTURE filled ACADEMY's last free
+    // slot and needed a third column, so the pitch came down from 208 to 182
+    // and every card with it (it was 238 when the band held seven). The widths
+    // below total 1708, which centres inside 1920 with a 106px margin either
+    // side. Card labels are best-fit from here down: at 168 wide, the longest
+    // names ("STORY:  TRAINING  DAY") no longer fit at a fixed 16.
+    const float CardW = 168f, CardH = 94f;       // near-exactly 16:9, like the art
+    const float PitchX = 182f, PitchY = 140f;
     const float HeaderY = -58f, Row0Y = -155f, Row1Y = Row0Y - PitchY;
 
     // Every row below is a fixed canvas coordinate, never an offset from an
@@ -43,7 +45,7 @@ public static class MainMenu
     const float TrayTop = 10f;
     const float HeroRow = 18f;                   // middle of the hero line-up
     const float FooterRule = -400f, FooterRow = -455f;
-    const float DeckEdge = 868f;                 // outer edge of the card decks
+    const float DeckEdge = 854f;                 // outer edge of the card decks
 
     const string DesktopHint =
         "WASD move   ·   Mouse aim   ·   LMB fire   ·   Space jump   ·   T transform   ·   Z scope   ·   F martial arts";
@@ -113,7 +115,7 @@ public static class MainMenu
         Stretch(decks);
 
         // Row one of each deck is the headline mode, row two its variants.
-        BuildDeck(decks, "ARENA  COMBAT", Combat, -868f, 3, new[]
+        BuildDeck(decks, "ARENA  COMBAT", Combat, -854f, 3, new[]
         {
             new Mode("AI  v  AI", "aivai", () => controller.OpenRobotSelect(GameMode.AIvAI)),
             new Mode("PLAYER  v  AI", "playervsai", () => controller.OpenRobotSelect(GameMode.PlayerVsAI)),
@@ -122,7 +124,7 @@ public static class MainMenu
             new Mode("BRAWL:  AI  WAR", "brawlwar", () => controller.OpenRobotSelect(GameMode.BrawlWar)),
             new Mode("MARTIAL  ARTS  SHOW", "brawlshow", () => controller.OpenRobotSelect(GameMode.BrawlShow)),
         });
-        BuildDeck(decks, "WAR  ROOM", Command, -202f, 3, new[]
+        BuildDeck(decks, "WAR  ROOM", Command, -266f, 3, new[]
         {
             new Mode("COMMANDER", "commander", controller.StartCommander),
             new Mode("COMMANDER:  AI  WAR", "commanderwar", controller.StartCommanderWar),
@@ -135,10 +137,11 @@ public static class MainMenu
         // rows by one card and drawing STORY exactly on top of BRAWL. It is the
         // better home anyway: the mode is called TRAINING DAY, and this is the
         // deck the game does its teaching from.
-        BuildDeck(decks, "ACADEMY  ·  WORKSHOP", Academy, 464f, 2, new[]
+        BuildDeck(decks, "ACADEMY  ·  WORKSHOP", Academy, 322f, 3, new[]
         {
             new Mode("CHINESE  QUEST", "chinesequest", controller.OpenChineseDeckSelect),
             new Mode("CHINESE  RUN", "chineserun", controller.OpenChineseRunDeckSelect),
+            new Mode("ADVENTURE", "adventure", controller.OpenAdventureSelect),
             new Mode("ARENA  BUILDER", "arenabuilder", controller.StartArenaPreview),
             new Mode("STORY:  TRAINING  DAY", "story", () => controller.StartStory("pilot")),
         });
@@ -422,6 +425,11 @@ public static class MainMenu
         labelRect.offsetMin = new Vector2(11f, 9f);
         labelRect.offsetMax = new Vector2(-11f, 33f);
         label.alignment = TextAnchor.MiddleLeft;
+        // Best-fit rather than a fixed 16: the card is 168 wide now, and the
+        // long names would otherwise run under the mask and lose their tails.
+        label.resizeTextForBestFit = true;
+        label.resizeTextMinSize = 11;
+        label.resizeTextMaxSize = 16;
 
         var accentIdle = new Color(accent.r, accent.g, accent.b, 0.55f);
         var rail = MakeImage(body.transform, "Accent", accentIdle);
