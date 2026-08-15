@@ -12,6 +12,7 @@ public class BrawlHud : MonoBehaviour
     static readonly Color HoloCyan = new Color(0.2f, 0.9f, 1f);
     static readonly Color HoloMagenta = new Color(1f, 0.25f, 0.9f);
     static readonly Color BarBack = new Color(0.03f, 0.07f, 0.12f, 0.92f);
+    static readonly Color Gold = new Color(1f, 0.78f, 0.32f);
     static readonly Color Ghost = new Color(1f, 0.7f, 0.25f, 0.9f);
 
     const float BarWidth = 640f;
@@ -27,6 +28,7 @@ public class BrawlHud : MonoBehaviour
     Text _announcement;
     float _announceUntil;
     GameObject _endPanel;
+    Texture2D _endCard;
     Text _cyanMove, _magentaMove;
     float _cyanMoveUntil, _magentaMoveUntil;
 
@@ -397,10 +399,18 @@ public class BrawlHud : MonoBehaviour
         _announceUntil = Time.time + seconds;
     }
 
-    public void ShowEndPanel(string result, System.Action onRematch,
-        System.Action onRobots, System.Action onMenu)
+    /// <summary>
+    /// The result screen. <paramref name="card"/> is the shareable K.O.
+    /// picture — shown here at a quarter size so the win lands as a THING
+    /// before anyone reads a button, and handed to the share sheet whole.
+    /// Null when the card could not be rendered; the panel then looks exactly
+    /// as it did before the card existed, minus the share button.
+    /// </summary>
+    public void ShowEndPanel(string result, Texture2D card, System.Action onShare,
+        System.Action onRematch, System.Action onRobots, System.Action onMenu)
     {
         HideEndPanel();
+        _endCard = card;
         _endPanel = new GameObject("EndPanel");
         _endPanel.transform.SetParent(_canvas.transform, false);
         var stretch = _endPanel.AddComponent<RectTransform>();
@@ -413,15 +423,55 @@ public class BrawlHud : MonoBehaviour
         dim.rectTransform.anchorMax = Vector2.one;
         dim.rectTransform.offsetMin = dim.rectTransform.offsetMax = Vector2.zero;
 
+        // Everything shifts up when there is a card to make room for; without
+        // one the old three-button stack keeps its old positions exactly.
+        float titleY = card != null ? 320f : 170f;
+
         var title = MakeText(_endPanel.transform, "Result", result, 96, HoloCyan, FontStyle.Bold);
         var titleRect = title.rectTransform;
         titleRect.anchorMin = titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.anchoredPosition = new Vector2(0, 170);
+        titleRect.anchoredPosition = new Vector2(0, titleY);
         titleRect.sizeDelta = new Vector2(1400, 120);
 
-        MakeButton(_endPanel.transform, "REMATCH", -10, onRematch);
-        MakeButton(_endPanel.transform, "CHANGE  ROBOTS", -120, onRobots);
-        MakeButton(_endPanel.transform, "MAIN  MENU", -230, onMenu);
+        if (card == null)
+        {
+            MakeButton(_endPanel.transform, "REMATCH", -10, onRematch);
+            MakeButton(_endPanel.transform, "CHANGE  ROBOTS", -120, onRobots);
+            MakeButton(_endPanel.transform, "MAIN  MENU", -230, onMenu);
+            return;
+        }
+
+        BuildCardPreview(card, 118f);
+
+        // SHARE leads, and it is the only gold button on the screen. A kid who
+        // just won is never more likely to send it than in this second.
+        MakeButton(_endPanel.transform, "SHARE  THIS  WIN", -70, onShare, accent: true);
+        MakeButton(_endPanel.transform, "REMATCH", -162, onRematch);
+        MakeButton(_endPanel.transform, "CHANGE  ROBOTS", -254, onRobots);
+        MakeButton(_endPanel.transform, "MAIN  MENU", -346, onMenu);
+    }
+
+    /// <summary>The card itself, in a lit frame, at 40% of its real size.</summary>
+    void BuildCardPreview(Texture2D card, float y)
+    {
+        const float Scale = 0.4f;
+        var size = new Vector2(ShareCard.Width * Scale, ShareCard.Height * Scale);
+
+        var glow = MakeImage(_endPanel.transform, "CardGlow", new Color(0.25f, 0.84f, 1f, 0.22f));
+        glow.sprite = MenuArt.GlowRect(24f);
+        glow.type = Image.Type.Sliced;
+        var glowRect = glow.rectTransform;
+        glowRect.anchorMin = glowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        glowRect.anchoredPosition = new Vector2(0f, y);
+        glowRect.sizeDelta = size + new Vector2(48f, 48f);
+
+        var raw = new GameObject("Card").AddComponent<RawImage>();
+        raw.transform.SetParent(_endPanel.transform, false);
+        raw.texture = card;
+        var rect = raw.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0f, y);
+        rect.sizeDelta = size;
     }
 
     public void HideEndPanel()
@@ -430,6 +480,24 @@ public class BrawlHud : MonoBehaviour
         {
             Destroy(_endPanel);
             _endPanel = null;
+        }
+        // The card is a Texture2D this component allocated, so nothing frees it
+        // with the hierarchy — the same rule BrawlPortraits documents for its
+        // RenderTextures. A rematch loop would otherwise leak one 1200x630
+        // picture per bout.
+        if (_endCard != null)
+        {
+            Destroy(_endCard);
+            _endCard = null;
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (_endCard != null)
+        {
+            Destroy(_endCard);
+            _endCard = null;
         }
     }
 
@@ -527,9 +595,13 @@ public class BrawlHud : MonoBehaviour
         return text;
     }
 
-    static void MakeButton(Transform parent, string label, float y, System.Action onClick)
+    static void MakeButton(Transform parent, string label, float y, System.Action onClick,
+        bool accent = false)
     {
-        var image = MakeImage(parent, $"Button_{label}", new Color(0.06f, 0.14f, 0.22f, 0.95f));
+        var rail = accent ? Gold : HoloCyan;
+        var image = MakeImage(parent, $"Button_{label}", accent
+            ? new Color(0.20f, 0.13f, 0.03f, 0.95f)
+            : new Color(0.06f, 0.14f, 0.22f, 0.95f));
         var rect = image.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0, y);
@@ -538,18 +610,21 @@ public class BrawlHud : MonoBehaviour
         var button = image.gameObject.AddComponent<Button>();
         button.targetGraphic = image;
         var colors = button.colors;
-        colors.highlightedColor = new Color(0.10f, 0.30f, 0.42f, 1f);
-        colors.pressedColor = HoloCyan * 0.6f;
+        colors.highlightedColor = accent
+            ? new Color(0.42f, 0.28f, 0.06f, 1f)
+            : new Color(0.10f, 0.30f, 0.42f, 1f);
+        colors.pressedColor = rail * 0.6f;
         button.colors = colors;
         button.onClick.AddListener(() => onClick());
 
         var underline = MakeImage(image.transform, "Underline",
-            new Color(HoloCyan.r, HoloCyan.g, HoloCyan.b, 0.8f));
+            new Color(rail.r, rail.g, rail.b, 0.8f));
         underline.rectTransform.anchorMin = new Vector2(0, 0);
         underline.rectTransform.anchorMax = new Vector2(1, 0);
         underline.rectTransform.offsetMin = new Vector2(8, 0);
         underline.rectTransform.offsetMax = new Vector2(-8, 3);
 
-        MakeText(image.transform, "Label", label, 30, Color.white, FontStyle.Bold);
+        MakeText(image.transform, "Label", label, 30,
+            accent ? new Color(1f, 0.95f, 0.84f) : Color.white, FontStyle.Bold);
     }
 }

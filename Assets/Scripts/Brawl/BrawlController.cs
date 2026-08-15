@@ -170,9 +170,24 @@ public class BrawlController : MonoBehaviour
         // watching a bout, you can read the fight move by move.
         Cyan.OnMoveStarted += name => hud.ShowMove(true, name);
         Magenta.OnMoveStarted += name => hud.ShowMove(false, name);
+        // The referee needs more than the score to build a K.O. card and a
+        // challenge link: the roster NAMES (not the indexes, which reorder
+        // between fleet passes and would resolve a shared link to the wrong
+        // robot), the stage, and the level the CPU was set to.
+        var bout = new BrawlMatch.Bout
+        {
+            cyanRobot = DisplayName(roster, _cyanRobot, "CYAN"),
+            magentaRobot = DisplayName(roster, _magentaRobot, "MAGENTA"),
+            stage = def.name,
+            difficulty = _difficulty,
+            playerControls = _playerControls,
+            cyanFace = cyanFace,
+            magentaFace = magentaFace,
+        };
         gameObject.AddComponent<BrawlMatch>().Bind(Cyan, Magenta, hud,
             _playerControls ? "PLAYER  WINS" : cyanName.ToUpperInvariant() + "  WINS",
-            _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS");
+            _playerControls ? "CPU  WINS" : magentaName.ToUpperInvariant() + "  WINS",
+            bout);
 
         // Crystal corners bite: a shove that slams the lane end sparks and
         // stretches the stagger.

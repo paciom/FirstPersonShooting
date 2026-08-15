@@ -76,7 +76,10 @@ public class BrawlPortraits : MonoBehaviour
         var data = camGo.AddComponent<UniversalAdditionalCameraData>();
         data.renderPostProcessing = false;
 
-        var texture = new RenderTexture(128, 128, 16);
+        // 256, not 128: this texture is no longer only an 84px corner badge —
+        // the K.O. card blows the winner's face up to 268px, and the upscale
+        // from 128 was the one soft thing on a picture kids pass around.
+        var texture = new RenderTexture(256, 256, 16);
         cam.targetTexture = texture;
         _textures.Add(texture);
         return texture;

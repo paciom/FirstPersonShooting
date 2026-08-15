@@ -12,10 +12,36 @@ public class BrawlMatch : MonoBehaviour
 
     const int PipsToWin = 2;
 
+    /// <summary>
+    /// Who is fighting, where, and under whose hands — everything the K.O.
+    /// card and the challenge link need that the score alone cannot say.
+    /// Set by BrawlController, which is the only thing that knows it.
+    /// </summary>
+    public struct Bout
+    {
+        public string cyanRobot, magentaRobot;   // roster display names
+        public string stage;                     // BrawlArenas name, "" for RANDOM
+        public int difficulty;                   // BrawlDifficulty level
+        public bool playerControls;              // false is the AI exhibition
+        public Texture cyanFace, magentaFace;    // the live corner portraits
+    }
+
     BrawlFighter _cyan, _magenta;
     BrawlHud _hud;
+    Bout _bout;
     string _cyanWinLabel = "PLAYER  WINS";
     string _magentaWinLabel = "CPU  WINS";
+
+    // The move each fighter last STARTED, and the last one that actually
+    // connected — the second is the finisher, because a K.O. blow lands one
+    // call before OnKnockedOut fires. A round that ends on a mine, on fire or
+    // on the clock leaves it empty on purpose: the card would rather say
+    // "K.O." than name a kick that was not the cause.
+    string _cyanMove = "", _magentaMove = "";
+    string _connected = "";
+    float _connectedAt = -99f;
+    string _deciderFinisher = "";
+    bool _deciderWasKo;
 
     Stage _stage = Stage.Intro;
     float _stageTime;
@@ -28,22 +54,32 @@ public class BrawlMatch : MonoBehaviour
     float _lastContact;
 
     public void Bind(BrawlFighter cyan, BrawlFighter magenta, BrawlHud hud,
-        string cyanWinLabel, string magentaWinLabel)
+        string cyanWinLabel, string magentaWinLabel, Bout bout)
     {
         _cyan = cyan;
         _magenta = magenta;
         _hud = hud;
+        _bout = bout;
         _cyanWinLabel = cyanWinLabel;
         _magentaWinLabel = magentaWinLabel;
         _cyan.OnKnockedOut += OnKnockedOut;
         _magenta.OnKnockedOut += OnKnockedOut;
-        // Any contact resets the referee's patience.
-        System.Action<BrawlFighter, int, bool> landed = (v, d, k) => _lastContact = Time.time;
+        // Any contact resets the referee's patience. The victim is the
+        // argument, so the ATTACKER is the other corner — which is whose move
+        // name the K.O. card is after.
+        System.Action<BrawlFighter, int, bool> landed = (victim, d, k) =>
+        {
+            _lastContact = Time.time;
+            _connected = victim == _cyan ? _magentaMove : _cyanMove;
+            _connectedAt = Time.time;
+        };
         System.Action<BrawlFighter, BrawlMoveSet.Move> blocked = (v, m) => _lastContact = Time.time;
         _cyan.OnHitLanded += landed;
         _magenta.OnHitLanded += landed;
         _cyan.OnHitBlocked += blocked;
         _magenta.OnHitBlocked += blocked;
+        _cyan.OnMoveStarted += name => _cyanMove = name;
+        _magenta.OnMoveStarted += name => _magentaMove = name;
         BeginRound();
     }
 
@@ -59,6 +95,8 @@ public class BrawlMatch : MonoBehaviour
         _stage = Stage.Intro;
         _stageTime = 0f;
         _lastContact = Time.time;
+        _cyanMove = _magentaMove = _connected = "";
+        _connectedAt = -99f;
         _hud.SetHealth(1f, 1f);
         _hud.SetTimer(BrawlMoveSet.RoundSeconds);
         _hud.SetPips(_cyanPips, _magentaPips);
@@ -78,6 +116,13 @@ public class BrawlMatch : MonoBehaviour
         _stage = Stage.RoundEnd;
         _stageTime = 0f;
         SetLocked(true);
+
+        // Remembered per round, and read at FinishMatch: the card is about how
+        // the LAST round ended, not the loudest one. Half a second of grace —
+        // a hit that landed longer ago than that did not cause this fall, and
+        // naming it would put a lie on a picture kids pass around.
+        _deciderWasKo = _fallen >= 0;
+        _deciderFinisher = _deciderWasKo && Time.time - _connectedAt <= 0.5f ? _connected : "";
 
         BrawlFighter winner = null;
         if (_fallen == 0) { _magentaPips++; winner = _magenta; }
@@ -240,7 +285,61 @@ public class BrawlMatch : MonoBehaviour
     {
         _stage = Stage.MatchEnd;
         BrawlAudio.PlayFlat(BrawlAudio.Id.Victory);
-        _hud.ShowEndPanel(result,
+
+        // A double K.O. has both corners on two pips; cyan takes the card, and
+        // the 2-2 on it tells the truth about that.
+        bool cyanWon = _cyanPips >= _magentaPips;
+
+        var card = new ShareCard.Result
+        {
+            winner = cyanWon ? _bout.cyanRobot : _bout.magentaRobot,
+            loser = cyanWon ? _bout.magentaRobot : _bout.cyanRobot,
+            winnerFace = cyanWon ? _bout.cyanFace : _bout.magentaFace,
+            stage = _bout.stage,
+            finisher = _deciderFinisher,
+            knockout = _deciderWasKo,
+            score = cyanWon ? $"{_cyanPips}-{_magentaPips}" : $"{_magentaPips}-{_cyanPips}",
+            pilot = AccountClient.DisplayName,
+            // P1 is the human corner in Brawl proper; in the exhibition nobody
+            // is playing, so nobody won "as" anything.
+            playerWon = _bout.playerControls && cyanWon,
+            playerFought = _bout.playerControls,
+        };
+
+        // The challenge always seats the receiver in the SENDER's corner: the
+        // point is "here is my fight, do better", not "here is a fight".
+        var challenge = new ChallengeLink.Challenge
+        {
+            mode = _bout.playerControls ? ChallengeLink.ModeBrawl : ChallengeLink.ModeBrawlWar,
+            cyan = _bout.cyanRobot,
+            magenta = _bout.magentaRobot,
+            stage = _bout.stage,
+            difficulty = _bout.difficulty,
+            from = AccountClient.DisplayName,
+            score = card.score,
+            cyanWon = cyanWon,
+        };
+
+        Texture2D picture = ShareCard.Render(card);
+        string headline = ShareCard.Headline(card);
+        string url = ChallengeLink.Url(challenge);
+
+        Metrics.Track("brawl_result",
+            ("winner", card.winner ?? ""),
+            ("loser", card.loser ?? ""),
+            ("score", card.score),
+            ("ko", _deciderWasKo ? "1" : "0"),
+            ("player", _bout.playerControls ? "1" : "0"));
+
+        _hud.ShowEndPanel(result, picture,
+            onShare: () =>
+            {
+                Metrics.Track("challenge_share",
+                    ("mode", challenge.mode),
+                    ("won", card.playerWon ? "1" : "0"),
+                    ("signed_in", string.IsNullOrEmpty(challenge.from) ? "0" : "1"));
+                ShareBridge.OpenSheet(headline, challenge.Boast(), url, picture);
+            },
             onRematch: () =>
             {
                 _cyanPips = _magentaPips = 0;

@@ -158,6 +158,65 @@ public class GameModeController : MonoBehaviour
         // playing its stop-motion transformation as it morphs.
         TransformCast.Ensure();
         EnterMenu();
+        // Last, so a challenge lands on a menu that is fully built: it is the
+        // screen the player comes back to when the bout ends, and Escape out
+        // of a challenge must not find a half-built title.
+        LaunchPendingChallenge();
+    }
+
+    /// <summary>
+    /// Someone opened this page with a friend's challenge on it
+    /// (<see cref="ChallengeLink"/>): skip the title screen, the robot select
+    /// and the stage select, and put them in the fight. Zero clicks between a
+    /// shared link and the game is the whole point — a kid who has to navigate
+    /// three menus to reach the fight they were sent has already left.
+    ///
+    /// Everything the link asks for is applied through the same remembered
+    /// picks the menus write, so REMATCH and CHANGE ROBOTS behave afterwards
+    /// exactly as they would have if the player had chosen it all by hand.
+    /// </summary>
+    void LaunchPendingChallenge()
+    {
+        if (!ChallengeLink.HasPending)
+            return;
+
+        var challenge = ChallengeLink.Consume();
+        bool war = challenge.mode == ChallengeLink.ModeBrawlWar;
+        GameMode mode = war ? GameMode.BrawlWar : GameMode.Brawl;
+
+        Metrics.Track("challenge_open",
+            ("mode", challenge.mode),
+            ("cyan", challenge.cyan ?? ""),
+            ("magenta", challenge.magenta ?? ""),
+            ("from", string.IsNullOrEmpty(challenge.from) ? "0" : "1"));
+
+        // An unknown robot or stage — a link from a build with a bigger fleet —
+        // falls back rather than refusing: a slightly different fight beats a
+        // dead link every time.
+        _cyanRobot = ChallengeLink.RobotIndex(_roster, challenge.cyan, _cyanRobot);
+        _magentaRobot = ChallengeLink.RobotIndex(_roster, challenge.magenta, _magentaRobot);
+        _pendingMode = mode;
+        BrawlArenas.SetSelected(mode, ChallengeLink.StageSelection(challenge.stage));
+        if (challenge.difficulty > 0)
+            BrawlDifficulty.Set(mode, challenge.difficulty);
+
+        _challengeGreeting = challenge.Boast();
+        if (war) StartBrawlWar(); else StartBrawl();
+    }
+
+    /// <summary>
+    /// "ANDY WON 2-1 AS TITAN" — held from the link that launched the fight so
+    /// the first thing on screen names who is being answered. Cleared once
+    /// announced; a rematch is the player's own bout, not the sender's.
+    /// </summary>
+    string _challengeGreeting;
+
+    /// <summary>Taken by BrawlMatch on round one, once.</summary>
+    public string TakeChallengeGreeting()
+    {
+        string greeting = _challengeGreeting;
+        _challengeGreeting = null;
+        return greeting;
     }
 
     void Update()
@@ -1133,7 +1192,14 @@ public class GameModeController : MonoBehaviour
             BrawlDifficulty.For(Mode), BrawlArenas.SelectedFor(Mode));
 
         _menuCanvas.SetActive(false);
-        if (playerControls)
+        // A bout entered from a friend's link says whose fight it is answering,
+        // on both control schemes — the hint bar is the one line that stays on
+        // screen for the whole match, so it is where the greeting belongs.
+        string greeting = TakeChallengeGreeting();
+        if (!string.IsNullOrEmpty(greeting))
+            ShowOverlay($"{greeting}  —  BEAT  IT!   ·   ? — Help   ·   ESC — Menu",
+                        $"{greeting}  —  BEAT  IT!   ·   tap ? for help");
+        else if (playerControls)
             ShowOverlay("WASD — Move   ·   J — Punch   ·   K — Kick   ·   C — Block   ·   " +
                         "L — Blast   ·   ? — Help   ·   ESC — Menu",
                         "BRAWL   ·   tap ? for help   ·   tap MENU to go back");
