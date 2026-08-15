@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815214802-lbgfx",
+  "shot": {
+    "t": 7,
+    "cam": "TRACKING LOW ANGLE",
+    "action": "Panther runs the strip-mine scar at full stretch, a rooster-tail of dust and rain thrown up behind him, walls of torn earth blurring past on both sides.",
+    "vo": "He runs the scar at full stretch.",
+    "sfx": "hammering footfalls, wind"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s2.png"
+}

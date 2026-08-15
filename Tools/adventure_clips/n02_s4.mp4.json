@@ -1,0 +1,13 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815213940-zwjpj",
+  "shot": {
+    "t": 7,
+    "cam": "LOW ANGLE",
+    "action": "Panther presses flat as dozens of little Foundry survey drones tick past his amber visor the other way, measuring the pipe as they crawl toward the Warden district.",
+    "vo": "Foundry survey drones. Dozens. His own side has been under this ground for weeks.",
+    "sfx": "clicking legs, measuring pings",
+    "key": true
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s4.png"
+}

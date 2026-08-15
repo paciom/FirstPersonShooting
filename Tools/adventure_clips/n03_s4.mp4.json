@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815215014-jch5k",
+  "shot": {
+    "t": 6,
+    "cam": "OVER-SHOULDER",
+    "action": "A route map glows on his forearm plate as he runs. He drags the schedule bar across it \u2014 the crawler's real position sits a full day ahead of the published line.",
+    "vo": "A full day ahead of the route the Foundry gave its own crews.",
+    "sfx": "holo chirp, rain on plating"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s4.png"
+}

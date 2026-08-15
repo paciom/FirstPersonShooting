@@ -194,9 +194,27 @@ same week, so the shelf reads as a season and not as one story rewritten:
       enough, no arena rebuild).
 - [ ] Menu art: `Assets/Resources/Menu/adventure.png` via `Tools/menuart.py`
       (the card works without it, like STORY's does today).
-- [ ] Video mode: 4–6 clips per beat straight off the `shots` array, VO from
-      each shot's `vo` line, with the reader's graph walk kept exactly as it
-      is. 180 shots for the whole file; a single run is ~50 clips.
+- [x] **Video: the first three beats are cut.** `Tools/adventure_video.py n01`
+      builds a beat's 30 seconds from its own storyboard — one still per shot
+      (gpt-image-1, cast references attached), each pinned as the FIRST FRAME
+      of a Seedance 2.5 image-to-video job, then ffmpeg trims and joins them.
+      Output in `Renders/adventure/<beat>.mp4`. Done: `n01` and both of its
+      choices, `n02` and `n03`.
+
+      Three things that bit, all fixed in the tool:
+
+      - Seedance **rejects `ratio` when a first frame is pinned** — the output
+        ratio follows the frame. Send the frame, not the ratio.
+      - It only makes certain clip lengths, so a 7-second shot comes back as a
+        6-second clip and the beat finishes early. The cut now retimes each
+        clip to the length the storyboard asked for (a freeze for holds), so
+        thirty seconds stays thirty seconds.
+      - A shot's line often refers to somebody it never names ("the empty
+        hand" is Titan's), so the frame came back with two Panthers in it.
+        `SHOT_CAST` names who is actually in frame for those shots.
+
+      Still to do: voice-over (each shot already carries its `vo` line and
+      Azure TTS is wired for the movie mode), and the other 33 beats.
 - [ ] **One-pass art — written, waiting on a key.** The better pipeline is one
       generation per beat with the robots' own reference renders conditioning
       it: character and room together, no compositing, and the characters can

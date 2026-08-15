@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815213728-gcq4p",
+  "shot": {
+    "t": 6,
+    "cam": "CLOSE",
+    "action": "The metal begins to hum against his visor. He freezes mid-crawl. Far ahead in the dark, small sensor eyes wink on, one after another after another.",
+    "vo": "Halfway across, the metal starts to hum.",
+    "sfx": "rising metallic hum"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s3.png"
+}

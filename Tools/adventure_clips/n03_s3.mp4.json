@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815214803-mbtv7",
+  "shot": {
+    "t": 5,
+    "cam": "CLOSE",
+    "action": "His feet punch warm ground. Steam ghosts up between every stride. The amber visor slit narrows to a line.",
+    "vo": "Warm means the crawler came through hours ago.",
+    "sfx": "steam, servo tick"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s3.png"
+}

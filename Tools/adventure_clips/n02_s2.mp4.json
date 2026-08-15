@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815213727-kxwbb",
+  "shot": {
+    "t": 6,
+    "cam": "TRACKING POV",
+    "action": "Panther hauls himself along the pipe on elbows and claws, cyan strip lights the only glow, the walls scraping both shoulders as he moves.",
+    "vo": "Elbows and claws, fast as a rumour.",
+    "sfx": "plating scrape, fast breathing vents"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s2.png"
+}

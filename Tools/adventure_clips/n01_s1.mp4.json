@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815212651-mrq7n",
+  "shot": {
+    "t": 5,
+    "cam": "LOW ANGLE",
+    "action": "Furnace light rakes up through the grating of a high gantry in hard rain. TITAN stands with his back to the glare and holds out one huge empty hand.",
+    "vo": "Titan gives one order, and it is not destroy it.",
+    "sfx": "rain on iron, furnace roar below"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s1.png"
+}

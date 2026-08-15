@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260815213947-sqqxq",
+  "shot": {
+    "t": 6,
+    "cam": "WIDE HOLD",
+    "action": "Ahead the pipe ends in a hatch of cyan light and Warden voices. Behind him one drone stops dead, turns, and puts its eye on him.",
+    "vo": "Nobody told the stalker they sent out alone. And one of them has just noticed him.",
+    "sfx": "voices above, one sharp click"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s5.png"
+}
