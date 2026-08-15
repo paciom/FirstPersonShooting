@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>{{{ PRODUCT_NAME }}} — play free in your browser</title>
+    <meta name="description" content="Nine robot heroes, sixteen battle modes, one browser tab. Free, no download, no account.">
+
+    <!--
+      A shared link that unfurls as a picture in a chat gets tapped; a bare URL
+      gets scrolled past. Crawlers never see the #c= fragment, so this preview
+      is deliberately generic — the specific challenge is rendered client-side
+      on the loading screen below, where the person who tapped can read it.
+
+      Both assets are absolute URLs on the marketing site, which is already
+      deployed and cached: the player itself ships no images at all, so the
+      loading screen can paint before a single byte of the game is requested.
+    -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Jet Armor Heroes">
+    <meta property="og:title" content="Jet Armor Heroes — free robot battles in your browser">
+    <meta property="og:description" content="Nine heroes. Robot, vehicle and jet. Sixteen battle modes. Nothing to install.">
+    <meta property="og:image" content="https://www.jah.cc/assets/og.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="theme-color" content="#04121a">
+    <link rel="icon" href="https://www.jah.cc/assets/favicon.png" type="image/png">
+    <link rel="apple-touch-icon" href="https://www.jah.cc/assets/apple-touch-icon.png">
+
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #04121a; overflow: hidden; }
+      body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+      /* Full window, not Unity's default 960x600 box. A link a kid opens on a
+         Chromebook or a tablet has to fill the screen or it reads as broken. */
+      #unity-container { position: fixed; inset: 0; }
+      #unity-canvas { width: 100%; height: 100%; display: block; background: #04121a; }
+
+      #boot {
+        position: fixed; inset: 0; z-index: 10;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 24px; box-sizing: border-box; text-align: center;
+        background:
+          radial-gradient(1200px 620px at 50% 8%, #123047 0%, #071a26 46%, #04121a 100%);
+        transition: opacity 0.45s ease;
+      }
+      #boot.gone { opacity: 0; pointer-events: none; }
+
+      .jet { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 0.55em;
+             text-indent: 0.55em; opacity: 0.82; }
+      .title {
+        margin: 6px 0 2px; font-size: clamp(30px, 7vw, 66px); font-weight: 900;
+        letter-spacing: 0.06em;
+        background: linear-gradient(#fff7d2, #f79419);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .tag { color: rgba(255,255,255,0.5); font-size: clamp(11px, 2.4vw, 15px);
+             letter-spacing: 0.24em; margin-bottom: 26px; }
+
+      /* The challenge banner: hidden unless this page was opened from a link. */
+      #challenge { display: none; max-width: 560px; margin: 0 0 26px;
+                   border: 1px solid rgba(64,214,255,0.35); border-radius: 12px;
+                   background: rgba(8,30,44,0.72); padding: 16px 20px; }
+      #challenge .who { color: #40d6ff; font-weight: 800; font-size: clamp(15px, 3.6vw, 21px);
+                        letter-spacing: 0.05em; }
+      #challenge .fight { color: #fff; font-size: clamp(13px, 3vw, 17px); margin-top: 6px; }
+      #challenge .dare { color: rgba(255,255,255,0.55); font-size: 13px; margin-top: 8px;
+                         letter-spacing: 0.14em; }
+
+      #track { width: min(520px, 82vw); height: 8px; border-radius: 6px;
+               background: rgba(255,255,255,0.10); overflow: hidden; }
+      #fill { width: 0%; height: 100%; border-radius: 6px;
+              background: linear-gradient(90deg, #0f9dc7, #40d6ff);
+              transition: width 0.25s ease; }
+      #pct { color: rgba(255,255,255,0.62); font-size: 13px; letter-spacing: 0.18em;
+             margin-top: 12px; font-variant-numeric: tabular-nums; }
+      /* The honest note. It only appears once the wait is long enough to need
+         explaining, and what it says is true: dataCaching is on, so a second
+         visit boots from IndexedDB rather than the network. */
+      #patience { color: rgba(255,255,255,0.34); font-size: 12.5px; margin-top: 16px;
+                  max-width: 460px; line-height: 1.6; opacity: 0; transition: opacity .6s; }
+      #patience.show { opacity: 1; }
+
+      #unity-warning { position: fixed; left: 50%; top: 8px; transform: translate(-50%);
+                       z-index: 20; color: #111; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+    </div>
+
+    <div id="boot">
+      <div class="jet">JET</div>
+      <div class="title">ARMOR HEROES</div>
+      <div class="tag">ROBOT · VEHICLE · JET</div>
+
+      <div id="challenge">
+        <div class="who" id="ch-who"></div>
+        <div class="fight" id="ch-fight"></div>
+        <div class="dare">YOUR TURN</div>
+      </div>
+
+      <div id="track"><div id="fill"></div></div>
+      <div id="pct">LOADING 0%</div>
+      <div id="patience"></div>
+    </div>
+
+    <div id="unity-warning"></div>
+
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+
+      // ---- the challenge banner -------------------------------------------
+      //
+      // Decoded here, in plain JS, before a byte of the player has arrived.
+      // The point of a challenge link is that the wait has a payoff visible
+      // from the first paint: a kid who can see whose fight they were sent
+      // waits out the download; a kid staring at a bar does not.
+      //
+      // This mirrors ChallengeLink.cs. It is deliberately forgiving — an
+      // unreadable code just means no banner, never a broken page.
+      (function () {
+        try {
+          var m = /[#?&]c=([A-Za-z0-9\-_]+)/.exec(window.location.hash + window.location.search);
+          if (!m) return;
+          var b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          var bin = atob(b64), bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          var text = new TextDecoder("utf-8").decode(bytes);
+
+          var f = {};
+          text.split("|").forEach(function (pair) {
+            var eq = pair.indexOf("=");
+            if (eq > 0) f[pair.substring(0, eq)] = pair.substring(eq + 1);
+          });
+          if (!f.m) return;
+
+          var pilot = (f.w || "A pilot").toUpperCase();
+          var champ = ((f.x === "b" ? f.b : f.a) || "").toUpperCase();
+          var who = champ && f.r ? pilot + " WON " + f.r.replace("-", " – ") + " AS " + champ
+                  : champ ? pilot + " WON AS " + champ
+                  : pilot + " SENT YOU A FIGHT";
+
+          var fight = "";
+          if (f.a && f.b) fight = f.a.toUpperCase() + "  vs  " + f.b.toUpperCase();
+          if (f.s) fight += (fight ? "   ·   " : "") + f.s.toUpperCase();
+
+          document.getElementById("ch-who").textContent = who;
+          document.getElementById("ch-fight").textContent = fight;
+          document.getElementById("challenge").style.display = "block";
+          document.title = who + " — beat it on Jet Armor Heroes";
+        } catch (e) { /* no banner, still a game */ }
+      })();
+
+      // ---- the wait --------------------------------------------------------
+      var started = Date.now();
+      var patience = document.getElementById("patience");
+      var noteTimer = setTimeout(function () {
+        patience.textContent =
+          "First visit downloads the whole game once — nine robots, sixteen modes. " +
+          "After this it starts straight away, even offline-ish on a slow day.";
+        patience.className = "show";
+      }, 12000);
+
+      function unityShowBanner(msg, type) {
+        var warningBanner = document.querySelector("#unity-warning");
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function () {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      // WebGLBuilder.StampBuildFolder rewrites the line below to the hashed
+      // payload folder after every build. Keep it EXACTLY as written — the
+      // rename is matched on this literal, and a build whose index.html points
+      // at a folder that no longer exists is a blank page, not a stale one.
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+        memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "{{{ COMPANY_NAME }}}",
+        productName: "{{{ PRODUCT_NAME }}}",
+        productVersion: "{{{ PRODUCT_VERSION }}}",
+        showBanner: unityShowBanner,
+      };
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = function () {
+        createUnityInstance(canvas, config, function (progress) {
+          var pct = Math.round(progress * 100);
+          document.getElementById("fill").style.width = pct + "%";
+          document.getElementById("pct").textContent = "LOADING " + pct + "%";
+        }).then(function (unityInstance) {
+          clearTimeout(noteTimer);
+          window.unityInstance = unityInstance;
+          document.getElementById("boot").className = "gone";
+          setTimeout(function () {
+            var boot = document.getElementById("boot");
+            if (boot && boot.parentNode) boot.parentNode.removeChild(boot);
+          }, 600);
+          canvas.focus();
+        }).catch(function (message) {
+          clearTimeout(noteTimer);
+          patience.className = "show";
+          patience.textContent = "The game could not start: " + message;
+        });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

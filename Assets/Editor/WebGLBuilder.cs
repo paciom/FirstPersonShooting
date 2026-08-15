@@ -185,8 +185,22 @@ public static class WebGLBuilder
         }
     }
 
+    const string Template = "JetArmorHeroes";
+
     static void ApplyWebGLSettings()
     {
+        // The page a shared link actually lands on. Unity's default template
+        // opens the game in a fixed 960x600 box with a grey progress bar and
+        // no link preview — three things a challenge link cannot afford.
+        // Assets/WebGLTemplates/JetArmorHeroes fills the window, paints its own
+        // loading screen before a byte of the player is fetched, and decodes
+        // the challenge in the URL so the wait shows whose fight this is.
+        if (Directory.Exists(Path.Combine(Application.dataPath, "WebGLTemplates", Template)))
+            PlayerSettings.WebGL.template = "PROJECT:" + Template;
+        else
+            Debug.LogWarning($"[WebGLBuilder] Assets/WebGLTemplates/{Template} is missing — " +
+                             "building with Unity's default page instead.");
+
         // Gzip, not Brotli, while the player is still ~350 MB: brotli.exe is
         // single-threaded and spent ~50 min on the data file alone, which is most
         // of the build. Gzip costs roughly 15% more bytes and turns an iteration
@@ -208,6 +222,7 @@ public static class WebGLBuilder
         PlayerSettings.runInBackground = true;
 
         Debug.Log($"[WebGLBuilder] WebGL settings: {PlayerSettings.WebGL.compressionFormat}, " +
-                  "fallback off, wasm, data caching on, run in background.");
+                  $"fallback off, wasm, data caching on, run in background, " +
+                  $"template {PlayerSettings.WebGL.template}.");
     }
 }
