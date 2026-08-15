@@ -4,15 +4,16 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// TEXT MODE for the mini adventures: one node on screen at a time — hook,
-/// beat, cliffhanger — and two ways out of it. The whole mode is this screen;
-/// the 3D world is switched off behind an opaque backdrop, because the point
-/// of text mode is that it can be read.
+/// TEXT MODE for the mini adventures: one beat on screen at a time — its
+/// still, hook, scene and cliffhanger — and two ways out of it. The whole mode
+/// is this screen; the 3D world is switched off behind an opaque backdrop,
+/// because the point of text mode is that it can be read.
 ///
-/// The same graph will drive VIDEO mode later: a node's shot line is the clip
-/// brief, so video mode replaces this screen's paragraph with a 30-second
-/// player and keeps everything else — the graph walk, the step cap, the ending
-/// bookkeeping — exactly as it is here.
+/// The same graph will drive VIDEO mode later, and the file is already written
+/// for it: every node carries a 4-6 shot storyboard timed to thirty seconds,
+/// and the still shown here is that beat's key shot. Video mode swaps this
+/// screen's paragraph for a player and keeps everything else — the graph walk,
+/// the step cap, the ending bookkeeping — exactly as it is here.
 /// </summary>
 public class AdventureReader : MonoBehaviour
 {
@@ -24,6 +25,7 @@ public class AdventureReader : MonoBehaviour
     static readonly Color Muted = new Color(1f, 1f, 1f, 0.55f);
 
     const float Column = 1320f;
+    const float StillHeight = 300f;
 
     GameModeController _owner;
     AdventureStory _story;
@@ -32,6 +34,7 @@ public class AdventureReader : MonoBehaviour
 
     CanvasGroup _fade;
     Text _crumb, _counter, _title, _hook, _body, _cliff, _foot;
+    RawImage _still;
     Transform _choiceRow;
     readonly List<Button> _choiceButtons = new List<Button>();
 
@@ -96,33 +99,56 @@ public class AdventureReader : MonoBehaviour
         rule.sprite = null;
         Place(rule.rectTransform, new Vector2(0f, 438f), new Vector2(Column, 1f));
 
-        _title = MakeText(page, "Title", "", 52, HoloCyan, FontStyle.Bold,
-            new Vector2(0f, 382f), new Vector2(Column, 64f));
+        // The beat's still. It is a 16:9 frame shown in a letterbox strip, so
+        // the uvRect crops the top and bottom rather than squashing the art —
+        // the paintings are composed for the middle band.
+        var stillGo = new GameObject("Still");
+        stillGo.transform.SetParent(page, false);
+        _still = stillGo.AddComponent<RawImage>();
+        _still.raycastTarget = false;
+        float visible = StillHeight / (Column * 9f / 16f);
+        _still.uvRect = new Rect(0f, (1f - visible) * 0.5f, 1f, visible);
+        Place(_still.rectTransform, new Vector2(0f, 296f), new Vector2(Column, StillHeight));
+
+        var edge = Panel(page, "StillEdge", new Color(0.2f, 0.9f, 1f, 0.16f));
+        edge.sprite = null;
+        Place(edge.rectTransform, new Vector2(0f, 296f - StillHeight * 0.5f),
+            new Vector2(Column, 2f));
+
+        _title = MakeText(page, "Title", "", 46, HoloCyan, FontStyle.Bold,
+            new Vector2(0f, 120f), new Vector2(Column, 58f));
         _title.alignment = TextAnchor.MiddleLeft;
 
-        _hook = MakeText(page, "Hook", "", 30, HookGold, FontStyle.Bold,
-            new Vector2(0f, 306f), new Vector2(Column, 74f));
+        _hook = MakeText(page, "Hook", "", 27, HookGold, FontStyle.Bold,
+            new Vector2(0f, 74f), new Vector2(Column, 40f));
         _hook.alignment = TextAnchor.UpperLeft;
         _hook.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-        _body = MakeText(page, "Body", "", 30, new Color(1f, 1f, 1f, 0.93f), FontStyle.Normal,
-            new Vector2(0f, 158f), new Vector2(Column, 216f));
+        // Best-fit rather than a fixed size: bodies run from 150 to 200 words
+        // and the one thing that must never happen is a beat whose last line
+        // is under the choice buttons.
+        _body = MakeText(page, "Body", "", 26, new Color(1f, 1f, 1f, 0.93f), FontStyle.Normal,
+            new Vector2(0f, -70f), new Vector2(Column, 240f));
         _body.alignment = TextAnchor.UpperLeft;
         _body.horizontalOverflow = HorizontalWrapMode.Wrap;
-        _body.lineSpacing = 1.08f;
+        _body.verticalOverflow = VerticalWrapMode.Truncate;
+        _body.resizeTextForBestFit = true;
+        _body.resizeTextMinSize = 16;
+        _body.resizeTextMaxSize = 26;
+        _body.lineSpacing = 1.06f;
 
-        _cliff = MakeText(page, "Cliff", "", 29, CliffBlue, FontStyle.Italic,
-            new Vector2(0f, 4f), new Vector2(Column, 84f));
+        _cliff = MakeText(page, "Cliff", "", 26, CliffBlue, FontStyle.Italic,
+            new Vector2(0f, -226f), new Vector2(Column, 68f));
         _cliff.alignment = TextAnchor.UpperLeft;
         _cliff.horizontalOverflow = HorizontalWrapMode.Wrap;
 
         var row = new GameObject("Choices").AddComponent<RectTransform>();
         row.SetParent(page, false);
-        Place(row, new Vector2(0f, -200f), new Vector2(Column, 260f));
+        Place(row, new Vector2(0f, -370f), new Vector2(Column, 220f));
         _choiceRow = row;
 
-        _foot = MakeText(page, "Foot", "", 21, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
-            new Vector2(0f, -430f), new Vector2(Column, 28f));
+        _foot = MakeText(page, "Foot", "", 20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
+            new Vector2(0f, -502f), new Vector2(Column, 26f));
 
         Show(_story.StartNode, 1);
     }
@@ -136,6 +162,12 @@ public class AdventureReader : MonoBehaviour
         // straight from an ending to the first beat without passing through a
         // choice, and would otherwise carry the ending's colour with it.
         _title.color = HoloCyan;
+        // A beat with no painting yet simply reads as text: the mode shipped
+        // before the art did, and must survive an adventure that has none.
+        var still = Resources.Load<Texture2D>($"Adventures/{_story.id}/{node.id}");
+        _still.texture = still;
+        _still.color = still != null ? Color.white : new Color(1f, 1f, 1f, 0f);
+
         _title.text = node.title;
         _hook.text = node.hook;
         _body.text = node.body;
@@ -164,7 +196,7 @@ public class AdventureReader : MonoBehaviour
             var choice = node.choices[i];
             string target = choice.to;
             _choiceButtons.Add(MakeChoice(_choiceRow, i + 1, choice.text,
-                new Vector2(0f, 62f - i * 118f), new Vector2(Column, 104f),
+                new Vector2(0f, 52f - i * 104f), new Vector2(Column, 92f),
                 () => Walk(target)));
         }
         _foot.text = "1  /  2  —  CHOOSE        ·        ESC  —  MENU";
@@ -186,10 +218,10 @@ public class AdventureReader : MonoBehaviour
         _counter.color = tint;
         _title.color = tint;
 
-        MakeChoice(_choiceRow, 1, "PLAY  AGAIN", new Vector2(-336f, 62f),
-            new Vector2(640f, 104f), () => Show(_story.StartNode, 1));
-        MakeChoice(_choiceRow, 2, "OTHER  ADVENTURES", new Vector2(336f, 62f),
-            new Vector2(640f, 104f), () => _owner.BackToAdventureSelect());
+        MakeChoice(_choiceRow, 1, "PLAY  AGAIN", new Vector2(-336f, 52f),
+            new Vector2(640f, 92f), () => Show(_story.StartNode, 1));
+        MakeChoice(_choiceRow, 2, "OTHER  ADVENTURES", new Vector2(336f, 52f),
+            new Vector2(640f, 92f), () => _owner.BackToAdventureSelect());
 
         int found = AdventureProgress.FoundCount(_story);
         _foot.text = $"REACHED  IN  {_step}  STEPS        ·        "

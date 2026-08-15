@@ -14,7 +14,9 @@ Exit code is non-zero if any check fails, so this can gate a commit.
 """
 
 import argparse
+import base64
 import html
+import io as _io
 import json
 import os
 import sys
@@ -23,8 +25,62 @@ from collections import defaultdict, deque
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADVENTURES = os.path.join(ROOT, "Assets", "Resources", "Adventures")
 
-REQUIRED_TEXT = ("title", "hook", "body", "cliff", "shot")
+REQUIRED_TEXT = ("title", "hook", "body", "cliff")
 ENDING_KINDS = ("good", "bad", "strange")
+
+# A beat is thirty seconds of screen. Everything below exists so that a beat
+# that says it is thirty seconds actually is one.
+BEAT_SECONDS = 30
+SHOT_RANGE = (4, 6)
+WORDS_PER_SECOND = 2.6          # narration pace; 60 words is ~23s of the 30
+VO_WORD_CAP = 60
+CAMERAS = {"WIDE", "ESTABLISH", "LOW", "HIGH", "ANGLE", "CLOSE", "EXTREME",
+           "MACRO", "INSERT", "OVER-SHOULDER", "TRACKING", "VERTICAL",
+           "WHIP-PAN", "CRANE", "UP", "DOWN", "TOP-DOWN", "POV", "TWO-SHOT",
+           "HOLD"}
+
+
+def check_shots(node, errors):
+    """The shot list is what makes a node a 30-second video rather than a
+    paragraph: without these checks a beat quietly drifts to 12 seconds of
+    picture with 40 seconds of narration over it."""
+    nid = node["id"]
+    shots = node.get("shots")
+    if not shots:
+        errors.append("%s: no shots — a beat needs a shot list to be filmable" % nid)
+        return
+    if not SHOT_RANGE[0] <= len(shots) <= SHOT_RANGE[1]:
+        errors.append("%s: %d shots, expected %d-%d"
+                      % (nid, len(shots), SHOT_RANGE[0], SHOT_RANGE[1]))
+    total = sum(s.get("t", 0) for s in shots)
+    if total != BEAT_SECONDS:
+        errors.append("%s: shots total %ds, must be exactly %d"
+                      % (nid, total, BEAT_SECONDS))
+    keys = [s for s in shots if s.get("key")]
+    if len(keys) != 1:
+        errors.append("%s: %d shots marked key, need exactly 1 (it is the still)"
+                      % (nid, len(keys)))
+    words = sum(len(s.get("vo", "").split()) for s in shots)
+    if words > VO_WORD_CAP:
+        errors.append("%s: %d words of voice-over, over the cap of %d "
+                      "(~%.0fs of speech in %ds of picture)"
+                      % (nid, words, VO_WORD_CAP, words / WORDS_PER_SECOND, total))
+    for i, shot in enumerate(shots, start=1):
+        where = "%s shot %d" % (nid, i)
+        if not shot.get("action", "").strip():
+            errors.append(where + ": no action")
+        if not shot.get("cam", "").strip():
+            errors.append(where + ": no camera")
+        else:
+            for word in shot["cam"].replace(",", " ").split():
+                if word.upper() not in CAMERAS:
+                    errors.append("%s: unknown camera term '%s'" % (where, word))
+        # A line must fit the shot it is spoken over, with a little slack for
+        # a hold at the end of the shot.
+        spoken = len(shot.get("vo", "").split()) / WORDS_PER_SECOND
+        if spoken > shot.get("t", 0) + 1.0:
+            errors.append("%s: %.0fs of voice-over in a %ds shot"
+                          % (where, spoken, shot.get("t", 0)))
 
 
 def load(story_id):
@@ -53,6 +109,7 @@ def validate(story):
         for field in REQUIRED_TEXT:
             if not node.get(field, "").strip():
                 errors.append("%s: empty %s" % (nid, field))
+        check_shots(node, errors)
         choices = node.get("choices", [])
         ending = node.get("ending", "")
         if ending:
@@ -139,6 +196,9 @@ def validate(story):
         "merges": sum(1 for n in story["nodes"] if len(parents[n["id"]]) > 1),
         "words": sum(len((n["hook"] + " " + n["body"] + " " + n["cliff"]).split())
                      for n in story["nodes"]),
+        "shots": sum(len(n.get("shots", [])) for n in story["nodes"]),
+        "seconds": sum(sum(s.get("t", 0) for s in n.get("shots", []))
+                       for n in story["nodes"]),
     }
     return errors, stats
 
@@ -192,6 +252,9 @@ def render_markdown(story, stats):
             add("")
             add(node["body"])
             add("")
+            add("![%s](../Assets/Resources/Adventures/%s/%s.png)"
+                % (node["title"], story["id"], node["id"]))
+            add("")
             add("*%s*" % node["cliff"])
             add("")
             for choice in node.get("choices", []):
@@ -199,7 +262,13 @@ def render_markdown(story, stats):
                                               ids[choice["to"]]["title"]))
             if node.get("choices"):
                 add("")
-            add("> SHOT: %s" % node["shot"])
+            add("| # | s | camera | action | voice-over |")
+            add("|---|---|---|---|---|")
+            for i, shot in enumerate(node.get("shots", []), start=1):
+                add("| %d%s | %d | %s | %s | %s |"
+                    % (i, " ★" if shot.get("key") else "", shot["t"], shot["cam"],
+                       shot["action"].replace("|", "/"),
+                       (shot.get("vo") or "—").replace("|", "/")))
             add("")
     return "\n".join(out)
 
@@ -379,14 +448,42 @@ figcaption{color:var(--muted);font-size:15px;margin-top:12px;max-width:44em}
 .picks .n1{font-family:var(--data);font-size:12px;color:var(--warden)}
 .picks .to{font-family:var(--display);text-transform:uppercase;letter-spacing:.1em;
            font-size:11px;color:var(--faint);white-space:nowrap}
-.shot{font-family:var(--data);font-size:12px;line-height:1.55;color:var(--faint);
-      margin:18px 0 0;padding-top:12px;border-top:1px dashed var(--line)}
+.still{display:block;width:100%;height:auto;border-radius:6px;margin:14px 0 18px;
+        border:1px solid var(--line)}
+.strip{width:100%;border-collapse:collapse;margin:18px 0 0;
+        font-family:var(--data);font-size:12.5px}
+.strip td{border-top:1px solid var(--line);padding:7px 8px;vertical-align:top;
+          color:var(--muted)}
+.strip .n{width:38px;color:var(--faint)}
+.strip .s{width:36px;color:var(--warden);font-variant-numeric:tabular-nums}
+.strip .c{width:132px;color:var(--faint);letter-spacing:.07em}
+.strip tr.key td{color:var(--ink)}
+.vo{display:block;margin-top:4px;color:var(--foundry);font-family:var(--body);
+    font-size:15px;font-style:italic}
 @media (max-width:720px){
   .step{grid-template-columns:1fr;gap:12px}
   .step h2{position:static}
   .picks li{flex-direction:column;gap:2px}
 }
 """
+
+
+def still_uri(story_id, node_id):
+    """The beat's still, inlined. The review page has to survive being mailed
+    around as one file, and an artifact host blocks every external request, so
+    there is nowhere for a linked image to live."""
+    path = os.path.join(ADVENTURES, story_id, node_id + ".png")
+    if not os.path.exists(path):
+        return None
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    image = Image.open(path).convert("RGB")
+    image.thumbnail((640, 640))
+    buffer = _io.BytesIO()
+    image.save(buffer, "JPEG", quality=78, optimize=True)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
 
 
 def render_html(story, stats):
@@ -407,7 +504,8 @@ def render_html(story, stats):
                          ("%d / %d" % (stats["shortest"], stats["longest"]),
                           "shortest / longest run"),
                          (stats["merges"], "beats more than one path reaches"),
-                         (stats["words"], "words in text mode")):
+                         ("%d / %d min" % (stats["shots"], stats["seconds"] // 60),
+                          "shots storyboarded / total runtime")):
         out.append('<div class="stat"><b>%s</b><span>%s</span></div>' % (value, esc(label)))
     out.append("</div>")
 
@@ -436,8 +534,13 @@ def render_html(story, stats):
             trail = "  ←  " + ", ".join(ids[p]["title"] for p in came) if came else "  ·  OPENS THE FILE"
             canon = "  ·  MATCHES THE EPISODE" if node.get("canon") else ""
             out.append('<p class="meta">%s%s%s</p>' % (esc(node["id"].upper()), esc(trail), canon))
+            uri = still_uri(story["id"], node["id"])
+            if uri:
+                out.append('<img class="still" src="%s" alt="%s" loading="lazy">'
+                           % (uri, esc(node["title"])))
             out.append('<p class="hook">%s</p>' % esc(node["hook"]))
-            out.append('<p class="body">%s</p>' % esc(node["body"]))
+            for para in node["body"].split("\n\n"):
+                out.append('<p class="body">%s</p>' % esc(para.strip()))
             out.append('<p class="cliff">%s</p>' % esc(node["cliff"]))
             if node.get("choices"):
                 out.append('<ul class="picks">')
@@ -446,7 +549,16 @@ def render_html(story, stats):
                                '<span class="to">&rarr; %s</span></li>'
                                % (i, esc(choice["text"]), esc(ids[choice["to"]]["title"])))
                 out.append("</ul>")
-            out.append('<p class="shot">SHOT &nbsp;·&nbsp; %s</p>' % esc(node["shot"]))
+            out.append('<table class="strip"><tbody>')
+            for i, shot in enumerate(node.get("shots", []), start=1):
+                out.append('<tr%s><td class="n">%d%s</td><td class="s">%ds</td>'
+                           '<td class="c">%s</td><td class="a">%s%s</td></tr>'
+                           % (' class="key"' if shot.get("key") else "", i,
+                              " &#9733;" if shot.get("key") else "", shot["t"],
+                              esc(shot["cam"]), esc(shot["action"]),
+                              ('<span class="vo">&ldquo;%s&rdquo;</span>' % esc(shot["vo"]))
+                              if shot.get("vo") else ""))
+            out.append("</tbody></table>")
             out.append("</article>")
         out.append("</div></section>")
 
