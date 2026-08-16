@@ -31,9 +31,9 @@ ENDING_KINDS = ("good", "bad", "strange")
 # A beat is thirty seconds of screen. Everything below exists so that a beat
 # that says it is thirty seconds actually is one.
 BEAT_SECONDS = 30
-SHOT_RANGE = (4, 6)
+SHOT_RANGE = (4, 12)
 WORDS_PER_SECOND = 2.6          # narration pace; 60 words is ~23s of the 30
-VO_WORD_CAP = 60
+VO_WORD_CAP = 75
 CAMERAS = {"WIDE", "ESTABLISH", "LOW", "HIGH", "ANGLE", "CLOSE", "EXTREME",
            "MACRO", "INSERT", "OVER-SHOULDER", "TRACKING", "VERTICAL",
            "WHIP-PAN", "CRANE", "UP", "DOWN", "TOP-DOWN", "POV", "TWO-SHOT",

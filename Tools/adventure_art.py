@@ -38,10 +38,13 @@ ENDPOINT = "https://api.minimax.io/v1/image_generation"
 # ---------------------------------------------------------------- the DNA
 
 STYLE = (
-    "low-poly cel-shaded 3D game environment art, flat matte colour blocks, "
-    "simple chunky geometry, hard-edged shadows, stylized animated series look, "
-    "saturated but dark night palette, cyan and ember accents, light rain, "
-    "NOT photorealistic, no film grain, no lens flare"
+    "rendered in stylized 3D CGI like a modern animated feature: smooth shaded "
+    "surfaces with soft gradients, glossy specular highlights, real depth and "
+    "perspective, soft contact shadows and ambient occlusion, volumetric light "
+    "through rain, shallow depth of field, clean low-poly toy-robot models with "
+    "matte plastic-and-metal materials and glowing emissive panels, dark rainy "
+    "night palette with cyan and ember accents. NOT a 2D illustration, NOT "
+    "cel-shaded, NO flat colour fills, NO black outlines, NO comic book look"
 )
 EMPTY = ("COMPLETELY EMPTY of robots, mecha, characters, people, animals and "
          "vehicles. Nothing alive anywhere in the frame.")

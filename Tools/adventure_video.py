@@ -68,9 +68,11 @@ MOVES = {
     "TOP-DOWN": "[Static overhead shot] the camera looks straight down and does not move",
     "HOLD": "[Static shot] the camera is locked off and does not move, pan or zoom",
 }
-STILL_STYLE = ("Stylized low-poly cel-shaded 3D animation, flat saturated "
-               "colours, clean chunky shapes, glowing cyan energy panels, "
-               "dark rainy night palette")
+STILL_STYLE = ("Stylized 3D CGI animation like a modern animated feature: "
+               "smooth shaded surfaces, glossy specular highlights, soft "
+               "shadows, real depth of field, volumetric rain, clean low-poly "
+               "toy-robot models with glowing emissive panels. NOT 2D, NOT "
+               "cel-shaded, no flat fills, no outlines")
 
 # A shot's line often refers to somebody it never names — "the empty hand" is
 # Titan's — so the frame comes back with the wrong robot in it, or the same
@@ -109,7 +111,9 @@ def shot_prompt(node, shot):
             "Keep the exact character designs, colours, materials and lighting "
             "of the first frame — same robots, same plating, same glowing "
             f"panels. {STILL_STYLE}. Continuous natural motion, no cuts, no "
-            "text, no captions, no interface, no watermark.")
+            "text, no captions, no interface, no watermark. "
+            f"Sound: {shot.get('sfx', 'rain and machinery')}. No speech, no "
+            "music, no narration — ambient sound effects only.")
 
 
 def ensure_still(node, index, shot, key_index, force=False):
@@ -171,7 +175,7 @@ def generate_clip(node, index, shot, first_frame, key, force=False):
     # frames are already 16:9.
     payload = {"model": MODEL, "content": content,
                "duration": nearest_allowed(shot["t"]), "resolution": "720p",
-               "generate_audio": False, "watermark": False}
+               "generate_audio": True, "watermark": False}
     task = ark(CREATE_URL, key, payload).get("id")
     if not task:
         raise RuntimeError("no task id")
@@ -224,8 +228,10 @@ def cut(node):
             video = f"{scale},fps=24"
         subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                         "-i", source, "-vf", video, "-t", str(shot["t"]),
-                        "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                        trimmed], check=True)
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                        "-af", "aresample=async=1:first_pts=0",
+                        "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+                        "-shortest", trimmed], check=True)
         parts.append(trimmed)
     with open(listing, "w", encoding="utf-8") as handle:
         for part in parts:
@@ -233,7 +239,7 @@ def cut(node):
     out = os.path.join(OUT_DIR, node["id"] + ".mp4")
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
                     "-f", "concat", "-safe", "0", "-i", listing,
-                    "-c", "copy", out], check=True)
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", out], check=True)
     return out, "ok"
 
 
