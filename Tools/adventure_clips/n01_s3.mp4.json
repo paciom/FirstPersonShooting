@@ -1,12 +1,12 @@
 {
   "model": "dreamina-seedance-2-5-260628",
-  "task_id": "cgt-20260815212655-bfm6m",
+  "task_id": "cgt-20260816100856-nlrsn",
   "shot": {
     "t": 4,
-    "cam": "MACRO INSERT",
-    "action": "Rain beads and runs off iron knuckles as the huge hand slowly closes on nothing.",
-    "vo": "Quietly.",
-    "sfx": "a single deep clank"
+    "cam": "CLOSE TWO-SHOT",
+    "action": "Titan's enormous hand opens flat in front of PANTHER's visor and stays there. It is completely empty. No weapon, no map, nothing.",
+    "vo": "Titan gives one order, and it is not destroy it.",
+    "sfx": "rain on an open palm"
   },
   "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s3.png"
 }

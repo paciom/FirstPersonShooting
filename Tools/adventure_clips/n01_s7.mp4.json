@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816101323-4jmbf",
+  "shot": {
+    "t": 4,
+    "cam": "VERTICAL TRACKING",
+    "action": "He vaults the rail into eighty meters of nothing, kicks twice off the wet brick to kill his speed, and drops past furnace vents that light him orange on the way down.",
+    "vo": "",
+    "sfx": "wind roar, two boot impacts"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s7.png"
+}

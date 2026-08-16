@@ -22,9 +22,9 @@ letting a broken graph reach a player:
 | **10 beats maximum** on the longest route (`maxSteps`) | A run is 5 minutes of video, tops |
 | The graph is a **DAG, not a tree** — paths rejoin | 36 beats cover a hundred routes; a 10-deep tree would need 1,023 |
 | Every beat carries a **hook, a surprise, and a cliffhanger** | The three fields are required and checked non-empty |
-| A beat's prose runs **150–200 words** | Shorter than that and a beat reads as a summary, not a scene |
-| A beat is a **4–6 shot storyboard summing to exactly 30s** | A beat that claims thirty seconds has to actually be thirty seconds |
-| Voice-over is capped at **60 words a beat**, and each line must fit its own shot | ~22s of speech inside 30s of picture; the images carry the rest |
+| A beat's prose runs **280–380 words** | A beat is a MINI STORY — opening image, escalating middle, a turn, a landing. At 190 words it reads as a summary of a scene rather than the scene |
+| A beat is a **9–10 shot storyboard summing to exactly 30s** | 4–6 shots read as slow and empty on screen; cutting on 3s and 4s is what gives a beat weight. At a 3s floor, 11 shots cannot fit in 30s and 10 forces every shot to 3s — so 9–10 is the ceiling at this length |
+| Voice-over is capped at **75 words a beat**, and each line must fit its own shot | ~22s of speech inside 30s of picture; the images carry the rest |
 | Exactly one shot per beat is marked `key` | That is the frame that becomes the beat's still image |
 | Endings have no choices; branching beats always do | The reader switches screens off this |
 | No unreachable beats, no cycles, no dead links | A dead link would strand a player mid-story |
@@ -212,6 +212,12 @@ same week, so the shelf reads as a season and not as one story rewritten:
       - A shot's line often refers to somebody it never names ("the empty
         hand" is Titan's), so the frame came back with two Panthers in it.
         `SHOT_CAST` names who is actually in frame for those shots.
+
+      **Sound:** clips are generated with `generate_audio` ON and the shot's
+      own `sfx` line as the sound brief, restricted to ambient effects so a
+      narration track can be laid over later without fighting generated music.
+      The first pass shipped silent because the flag was off AND ffmpeg was
+      passed `-an` — check both if a cut comes back quiet.
 
       Still to do: voice-over (each shot already carries its `vo` line and
       Azure TTS is wired for the movie mode), and the other 33 beats.

@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816103052-jxjhl",
+  "shot": {
+    "t": 4,
+    "cam": "TWO-SHOT",
+    "action": "Panther presses flat into the pipe floor as the swarm streams over and around him, mapping its way toward the Warden district.",
+    "vo": "His own side has been under this ground for weeks.",
+    "sfx": "swarm passing overhead"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s7.png"
+}

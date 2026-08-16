@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816104435-zr2bn",
+  "shot": {
+    "t": 4,
+    "cam": "CLOSE",
+    "action": "Still running, he checks a glowing cyan route glyph projected on his forearm, and the line on it does not match the ground under his feet.",
+    "vo": "Somebody moved the schedule up and left his name off it.",
+    "sfx": "holo chirp, running"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s6.png"
+}

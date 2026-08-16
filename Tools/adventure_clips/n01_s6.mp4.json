@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816101239-p9sql",
+  "shot": {
+    "t": 4,
+    "cam": "TRACKING",
+    "action": "Panther turns and sprints the length of the gantry, cyan strips streaking, the jet panels across his back flexing open a hand's width and snapping shut cold.",
+    "vo": "A jet can be heard for ten kilometres.",
+    "sfx": "running feet on grating, panels snap"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s6.png"
+}

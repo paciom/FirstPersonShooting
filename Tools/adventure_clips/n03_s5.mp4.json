@@ -1,13 +1,12 @@
 {
   "model": "dreamina-seedance-2-5-260628",
-  "task_id": "cgt-20260815215019-ttnqv",
+  "task_id": "cgt-20260816104326-mxvnt",
   "shot": {
-    "t": 7,
+    "t": 3,
     "cam": "WIDE",
-    "action": "The dark ahead opens one white eye. The searchlight swings, catches him mid-stride and pins him flat against a kilometer of open ground. He does not move.",
-    "vo": "Somebody left his name off the memo. Then the dark opens one white eye.",
-    "sfx": "lamp strike, low engine idle",
-    "key": true
+    "action": "Pull back to scale: he is one small orange spark running the floor of a kilometre-wide gouge cut through a dead gray city.",
+    "vo": "",
+    "sfx": "wind, distant thunder"
   },
   "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s5.png"
 }

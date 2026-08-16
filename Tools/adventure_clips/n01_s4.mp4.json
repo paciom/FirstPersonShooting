@@ -1,12 +1,12 @@
 {
   "model": "dreamina-seedance-2-5-260628",
-  "task_id": "cgt-20260815212911-swpst",
+  "task_id": "cgt-20260816101108-wdbzs",
   "shot": {
-    "t": 8,
-    "cam": "VERTICAL TRACKING",
-    "action": "Panther goes over the rail and falls eighty meters down the outside of the foundry wall, cyan strips flaring, kicking off the brick twice, and hits the dust running. His jet panels flex open and stay cold \u2014 a jet would be heard for ten kilometres.",
-    "vo": "So he goes over the wall on foot.",
-    "sfx": "wind, plating scrape, impact"
+    "t": 3,
+    "cam": "EXTREME CLOSE",
+    "action": "Panther's single amber visor slit narrows, furnace light sliding across the dark navy helmet as he reads the empty hand.",
+    "vo": "Go to their garden. Confirm the green is real.",
+    "sfx": "optic focus click"
   },
   "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s4.png"
 }

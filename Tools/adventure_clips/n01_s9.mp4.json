@@ -1,0 +1,13 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816101536-clkdt",
+  "shot": {
+    "t": 3,
+    "cam": "WIDE HOLD",
+    "action": "Out on the open flats he stops dead. Far behind him, high on the lit foundry wall, a second thin shadow peels off the light and drops after him.",
+    "vo": "Two ways across the dust sea. And now two hunters.",
+    "sfx": "rain, then nothing at all",
+    "key": true
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s9.png"
+}

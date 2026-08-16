@@ -1,12 +1,12 @@
 {
   "model": "dreamina-seedance-2-5-260628",
-  "task_id": "cgt-20260815212651-mrq7n",
+  "task_id": "cgt-20260816100856-mmlwp",
   "shot": {
-    "t": 5,
-    "cam": "LOW ANGLE",
-    "action": "Furnace light rakes up through the grating of a high gantry in hard rain. TITAN stands with his back to the glare and holds out one huge empty hand.",
-    "vo": "Titan gives one order, and it is not destroy it.",
-    "sfx": "rain on iron, furnace roar below"
+    "t": 3,
+    "cam": "ESTABLISH",
+    "action": "Rain hammers a canyon of blast furnaces. Molten orange light pulses up through a hundred meters of steel gantry grating. Chimneys throw smoke sideways in the wind.",
+    "vo": "The Foundry never sleeps.",
+    "sfx": "furnace roar, hard rain on steel"
   },
   "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n01_s1.png"
 }

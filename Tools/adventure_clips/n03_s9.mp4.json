@@ -1,0 +1,13 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816104650-8g9hg",
+  "shot": {
+    "t": 3,
+    "cam": "LOW ANGLE HOLD",
+    "action": "The beam catches him mid-stride and pins him, lit white against a kilometre of open ground. He stops. He does not move at all.",
+    "vo": "Nowhere to be, and nothing to hide behind.",
+    "sfx": "hum, rain, held breath",
+    "key": true
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s9.png"
+}

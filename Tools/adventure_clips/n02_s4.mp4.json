@@ -1,13 +1,12 @@
 {
   "model": "dreamina-seedance-2-5-260628",
-  "task_id": "cgt-20260815213940-zwjpj",
+  "task_id": "cgt-20260816102836-qqzfm",
   "shot": {
-    "t": 7,
-    "cam": "LOW ANGLE",
-    "action": "Panther presses flat as dozens of little Foundry survey drones tick past his amber visor the other way, measuring the pipe as they crawl toward the Warden district.",
-    "vo": "Foundry survey drones. Dozens. His own side has been under this ground for weeks.",
-    "sfx": "clicking legs, measuring pings",
-    "key": true
+    "t": 3,
+    "cam": "CLOSE",
+    "action": "He stops mid-push. The pipe wall is humming against his visor. He lays one claw flat on the metal to feel it.",
+    "vo": "The dead pipe is warm. Dead things are not warm.",
+    "sfx": "low hum rising"
   },
   "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s4.png"
 }

@@ -1,0 +1,12 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816104529-5jnk7",
+  "shot": {
+    "t": 4,
+    "cam": "WIDE",
+    "action": "A hard white searchlight snaps on and sweeps the scar floor in a long arc, throwing his shadow twenty meters up the canyon wall.",
+    "vo": "Then the dark ahead opens one white eye.",
+    "sfx": "lamp strike, hum"
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n03_s8.png"
+}

@@ -1,0 +1,13 @@
+{
+  "model": "dreamina-seedance-2-5-260628",
+  "task_id": "cgt-20260816103102-vxxhc",
+  "shot": {
+    "t": 3,
+    "cam": "CLOSE HOLD",
+    "action": "Behind him one drone stops dead. Its red eye rotates, finds him, and holds.",
+    "vo": "And one of them has just noticed him.",
+    "sfx": "servo stop, rising tone",
+    "key": true
+  },
+  "first_frame": "D:\\Claude\\FirstPersongShooting\\Tools\\adventure_shotframes\\n02_s9.png"
+}
