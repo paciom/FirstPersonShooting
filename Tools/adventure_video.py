@@ -78,9 +78,12 @@ STILL_STYLE = ("Stylized 3D CGI animation like a modern animated feature: "
 # Titan's — so the frame comes back with the wrong robot in it, or the same
 # robot twice. These say who is actually in the frame.
 SHOT_CAST = {
-    ("n01", 2): "Titan and Panther",
-    ("n01", 3): "Titan",
-    ("n02", 1): "Panther",
+    # Indices follow the 9-shot boards. n01 s5 is a macro of TITAN's fist with
+    # nobody named in the line; n02 s6 and n03 s1 are inserts of Panther's own
+    # claw and visor. Everything else the line names, or the hero fallback
+    # covers.
+    ("n01", 5): "Titan",
+    ("n02", 6): "Panther",
     ("n03", 1): "Panther",
 }
 
