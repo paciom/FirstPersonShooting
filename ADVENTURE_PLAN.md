@@ -22,7 +22,7 @@ letting a broken graph reach a player:
 | **10 beats maximum** on the longest route (`maxSteps`) | A run is 5 minutes of video, tops |
 | The graph is a **DAG, not a tree** — paths rejoin | 36 beats cover a hundred routes; a 10-deep tree would need 1,023 |
 | Every beat carries a **hook, a surprise, and a cliffhanger** | The three fields are required and checked non-empty |
-| A beat's prose runs **280–380 words** | A beat is a MINI STORY — opening image, escalating middle, a turn, a landing. At 190 words it reads as a summary of a scene rather than the scene |
+| A beat's prose runs **650–850 words** (validator floor 600) | A beat is a MINI STORY — opening image, escalating middle, a turn, a landing. This was called too short at 190 words, again at 330, and again at 380. What reads as complete to someone who already knows the story reads as a fragment to the player meeting it for the first time. The reliable way to earn the length is to walk the beat's own 9–10 shot storyboard and give every shot its moment (~70 words each) |
 | A beat is a **9–10 shot storyboard summing to exactly 30s** | 4–6 shots read as slow and empty on screen; cutting on 3s and 4s is what gives a beat weight. At a 3s floor, 11 shots cannot fit in 30s and 10 forces every shot to 3s — so 9–10 is the ceiling at this length |
 | Voice-over is capped at **75 words a beat**, and each line must fit its own shot | ~22s of speech inside 30s of picture; the images carry the rest |
 | Exactly one shot per beat is marked `key` | That is the frame that becomes the beat's still image |
@@ -82,7 +82,7 @@ graph shape is what makes it affordable, not the clip price.
 | Piece | Where |
 |---|---|
 | Story format + loader + endings-found progress | `Assets/Scripts/Adventure/AdventureStory.cs` |
-| The reader screen (hook / beat / cliffhanger / 2 choices) | `Assets/Scripts/Adventure/AdventureReader.cs` |
+| The reader screen — scrolling column, choices pinned | `Assets/Scripts/Adventure/AdventureReader.cs` |
 | The shelf of mini adventures | `Assets/Scripts/Adventure/AdventureSelect.cs` |
 | Mode wiring (`GameMode.Adventure`, menu card) | `GameModeController.cs`, `MainMenu.cs` |
 | Validator + readable script renderer | `Tools/adventure_doc.py` |

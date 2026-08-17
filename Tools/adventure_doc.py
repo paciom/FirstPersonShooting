@@ -32,8 +32,13 @@ ENDING_KINDS = ("good", "bad", "strange")
 # that says it is thirty seconds actually is one.
 BEAT_SECONDS = 30
 SHOT_RANGE = (4, 12)
-WORDS_PER_SECOND = 2.6          # narration pace; 60 words is ~23s of the 30
+WORDS_PER_SECOND = 2.6          # narration pace; 75 words is ~29s of the 30
 VO_WORD_CAP = 75
+# A beat is a mini STORY, not a scene summary. This floor exists because the
+# prose was called too short three separate times — at 190 words, then at 330.
+# What reads as complete to someone who already knows the story reads as a
+# fragment to the player meeting it for the first time.
+BODY_WORDS = (600, 950)
 CAMERAS = {"WIDE", "ESTABLISH", "LOW", "HIGH", "ANGLE", "CLOSE", "EXTREME",
            "MACRO", "INSERT", "OVER-SHOULDER", "TRACKING", "VERTICAL",
            "WHIP-PAN", "CRANE", "UP", "DOWN", "TOP-DOWN", "POV", "TWO-SHOT",
@@ -110,6 +115,10 @@ def validate(story):
             if not node.get(field, "").strip():
                 errors.append("%s: empty %s" % (nid, field))
         check_shots(node, errors)
+        words = len(node.get("body", "").split())
+        if not BODY_WORDS[0] <= words <= BODY_WORDS[1]:
+            errors.append("%s: body is %d words, wanted %d-%d"
+                          % (nid, words, BODY_WORDS[0], BODY_WORDS[1]))
         choices = node.get("choices", [])
         ending = node.get("ending", "")
         if ending:

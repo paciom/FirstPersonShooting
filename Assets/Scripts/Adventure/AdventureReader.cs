@@ -29,9 +29,10 @@ public class AdventureReader : MonoBehaviour
     // sliced the top and bottom off every frame — and the characters stand at
     // the bottom of the frame, so it cut them off at the waist. 16:9, uncropped,
     // and the text lays out underneath it.
-    const float StillWidth = 780f;
-    const float StillHeight = StillWidth * 9f / 16f;   // 461
-    const float StillCentreY = 214f;
+    const float StillWidth = 700f;
+    const float StillHeight = StillWidth * 9f / 16f;   // 394
+    const float ReadTop = 424f;        // under the header rule
+    const float ReadHeight = 700f;     // down to just above the choices
 
     GameModeController _owner;
     AdventureStory _story;
@@ -41,6 +42,8 @@ public class AdventureReader : MonoBehaviour
     CanvasGroup _fade;
     Text _crumb, _counter, _title, _hook, _body, _cliff, _foot;
     RawImage _still;
+    ScrollRect _scroll;
+    RectTransform _content;
     Transform _choiceRow;
     readonly List<Button> _choiceButtons = new List<Button>();
 
@@ -105,55 +108,72 @@ public class AdventureReader : MonoBehaviour
         rule.sprite = null;
         Place(rule.rectTransform, new Vector2(0f, 438f), new Vector2(Column, 1f));
 
-        // The beat's still, whole: the rect is exactly 16:9 and the uvRect is
-        // the full texture, so nothing is cropped and nothing is squashed.
+        // Everything above the choices scrolls. A beat is 650-850 words now —
+        // three times what a fixed box could hold at a readable size — so the
+        // still, the title, the hook, the scene and the cliffhanger all live
+        // inside one scrolling column, and only the two choices stay pinned.
+        var viewGo = new GameObject("Viewport");
+        viewGo.transform.SetParent(page, false);
+        var viewImage = viewGo.AddComponent<Image>();
+        viewImage.color = new Color(0f, 0f, 0f, 0.001f);   // a mask needs a graphic
+        viewGo.AddComponent<Mask>().showMaskGraphic = false;
+        var viewRect = viewGo.GetComponent<RectTransform>();
+        Place(viewRect, new Vector2(0f, ReadTop - ReadHeight * 0.5f),
+            new Vector2(Column + 40f, ReadHeight));
+
+        var contentGo = new GameObject("Content");
+        contentGo.transform.SetParent(viewGo.transform, false);
+        _content = contentGo.AddComponent<RectTransform>();
+        _content.anchorMin = new Vector2(0.5f, 1f);
+        _content.anchorMax = new Vector2(0.5f, 1f);
+        _content.pivot = new Vector2(0.5f, 1f);
+        _content.anchoredPosition = Vector2.zero;
+        _content.sizeDelta = new Vector2(Column, ReadHeight);
+
+        _scroll = viewGo.AddComponent<ScrollRect>();
+        _scroll.content = _content;
+        _scroll.viewport = viewRect;
+        _scroll.horizontal = false;
+        _scroll.movementType = ScrollRect.MovementType.Clamped;
+        _scroll.scrollSensitivity = 42f;
+
         var stillGo = new GameObject("Still");
-        stillGo.transform.SetParent(page, false);
+        stillGo.transform.SetParent(_content, false);
         _still = stillGo.AddComponent<RawImage>();
         _still.raycastTarget = false;
         _still.uvRect = new Rect(0f, 0f, 1f, 1f);
-        Place(_still.rectTransform, new Vector2(0f, StillCentreY),
-            new Vector2(StillWidth, StillHeight));
+        Top(_still.rectTransform, new Vector2(StillWidth, StillHeight));
 
-        var edge = Panel(page, "StillEdge", new Color(0.2f, 0.9f, 1f, 0.16f));
-        edge.sprite = null;
-        Place(edge.rectTransform, new Vector2(0f, StillCentreY - StillHeight * 0.5f),
-            new Vector2(StillWidth, 2f));
+        _title = MakeText(_content, "Title", "", 46, HoloCyan, FontStyle.Bold,
+            Vector2.zero, new Vector2(Column, 52f));
+        _title.alignment = TextAnchor.UpperLeft;
 
-        _title = MakeText(page, "Title", "", 46, HoloCyan, FontStyle.Bold,
-            new Vector2(0f, -46f), new Vector2(Column, 52f));
-        _title.alignment = TextAnchor.MiddleLeft;
-
-        _hook = MakeText(page, "Hook", "", 27, HookGold, FontStyle.Bold,
-            new Vector2(0f, -94f), new Vector2(Column, 38f));
+        _hook = MakeText(_content, "Hook", "", 27, HookGold, FontStyle.Bold,
+            Vector2.zero, new Vector2(Column, 38f));
         _hook.alignment = TextAnchor.UpperLeft;
         _hook.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-        // Best-fit rather than a fixed size: bodies run from 150 to 200 words
-        // and the one thing that must never happen is a beat whose last line
-        // is under the choice buttons.
-        _body = MakeText(page, "Body", "", 26, new Color(1f, 1f, 1f, 0.93f), FontStyle.Normal,
-            new Vector2(0f, -188f), new Vector2(Column, 144f));
+        // Fixed size, not best-fit: the column scrolls now, so text never has
+        // to shrink to fit, and a beat is read at one comfortable size whatever
+        // its length.
+        _body = MakeText(_content, "Body", "", 24, new Color(1f, 1f, 1f, 0.93f),
+            FontStyle.Normal, Vector2.zero, new Vector2(Column, 100f));
         _body.alignment = TextAnchor.UpperLeft;
         _body.horizontalOverflow = HorizontalWrapMode.Wrap;
-        _body.verticalOverflow = VerticalWrapMode.Truncate;
-        _body.resizeTextForBestFit = true;
-        _body.resizeTextMinSize = 15;
-        _body.resizeTextMaxSize = 24;
-        _body.lineSpacing = 1.06f;
+        _body.lineSpacing = 1.16f;
 
-        _cliff = MakeText(page, "Cliff", "", 26, CliffBlue, FontStyle.Italic,
-            new Vector2(0f, -286f), new Vector2(Column, 40f));
+        _cliff = MakeText(_content, "Cliff", "", 26, CliffBlue, FontStyle.Italic,
+            Vector2.zero, new Vector2(Column, 40f));
         _cliff.alignment = TextAnchor.UpperLeft;
         _cliff.horizontalOverflow = HorizontalWrapMode.Wrap;
 
         var row = new GameObject("Choices").AddComponent<RectTransform>();
         row.SetParent(page, false);
-        Place(row, new Vector2(0f, -400f), new Vector2(Column, 190f));
+        Place(row, new Vector2(0f, -410f), new Vector2(Column, 190f));
         _choiceRow = row;
 
         _foot = MakeText(page, "Foot", "", 20, new Color(1f, 1f, 1f, 0.4f), FontStyle.Normal,
-            new Vector2(0f, -506f), new Vector2(Column, 24f));
+            new Vector2(0f, -516f), new Vector2(Column, 24f));
 
         Show(_story.StartNode, 1);
     }
@@ -187,8 +207,46 @@ public class AdventureReader : MonoBehaviour
         else
             ShowChoices(node);
 
+        Layout();
         StopAllCoroutines();
         StartCoroutine(FadeIn());
+    }
+
+    /// <summary>
+    /// Stack the column and size it to its contents. Done in code rather than
+    /// with a VerticalLayoutGroup because the still is a fixed 16:9 block among
+    /// three variable-height paragraphs, and the content height has to be exact
+    /// or the scroll either clips the last line or scrolls into empty space.
+    /// </summary>
+    void Layout()
+    {
+        float cursor = 0f;
+
+        if (_still.texture != null)
+        {
+            Top(_still.rectTransform, new Vector2(StillWidth, StillHeight));
+            _still.rectTransform.anchoredPosition = new Vector2(0f, -cursor);
+            cursor += StillHeight + 26f;
+        }
+
+        cursor = Stack(_title, cursor, 8f);
+        cursor = Stack(_hook, cursor, 20f);
+        cursor = Stack(_body, cursor, 22f);
+        cursor = Stack(_cliff, cursor, 8f);
+
+        _content.sizeDelta = new Vector2(Column, Mathf.Max(cursor, ReadHeight));
+        // Every beat starts at its own first line, never wherever the previous
+        // one was scrolled to.
+        if (_scroll != null)
+            _scroll.verticalNormalizedPosition = 1f;
+    }
+
+    float Stack(Text text, float cursor, float gap)
+    {
+        var rect = text.rectTransform;
+        Top(rect, new Vector2(Column, text.preferredHeight));
+        rect.anchoredPosition = new Vector2(0f, -cursor);
+        return cursor + text.preferredHeight + gap;
     }
 
     void ShowChoices(AdventureNode node)
@@ -204,7 +262,7 @@ public class AdventureReader : MonoBehaviour
                 new Vector2(0f, 46f - i * 92f), new Vector2(Column, 84f),
                 () => Walk(target)));
         }
-        _foot.text = "1  /  2  —  CHOOSE        ·        ESC  —  MENU";
+        _foot.text = "SCROLL  TO  READ        ·        1  /  2  —  CHOOSE        ·        ESC  —  MENU";
     }
 
     void ShowEnding(AdventureNode node)
@@ -333,6 +391,15 @@ public class AdventureReader : MonoBehaviour
         image.sprite = MainMenu.RoundedTile();
         image.type = Image.Type.Sliced;
         return image;
+    }
+
+    /// <summary>Anchor a child to the top of the scrolling column, so stacking
+    /// it is a matter of one downward cursor.</summary>
+    static void Top(RectTransform rect, Vector2 size)
+    {
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = size;
     }
 
     static void Place(RectTransform rect, Vector2 position, Vector2 size)
