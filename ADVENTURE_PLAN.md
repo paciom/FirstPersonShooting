@@ -219,6 +219,16 @@ same week, so the shelf reads as a season and not as one story rewritten:
       The first pass shipped silent because the flag was off AND ffmpeg was
       passed `-an` — check both if a cut comes back quiet.
 
+      **Fast cut:** `Tools/adventure_fastcut.py n01` re-edits a beat from the
+      clips it already has. Nine clips at 4.06s is 36 seconds of material for a
+      30-second beat, so the ordinary one-slice-per-clip cut lands on ~3.3s a
+      shot and reads slow. The fast cut takes two slices out of most clips at
+      different in-points, punches in 10-20% on the second slice so a re-use
+      reads as a new angle, and pushes the action beats to 1.15-1.2x: seventeen
+      cuts in thirty seconds, 1.76s average, no new generation and no new spend.
+      It also lays ONE continuous audio bed under the whole thing — taking each
+      slice's own audio makes the rain restart seventeen times.
+
       Still to do: voice-over (each shot already carries its `vo` line and
       Azure TTS is wired for the movie mode), and the other 33 beats.
 - [ ] **One-pass art — written, waiting on a key.** The better pipeline is one
