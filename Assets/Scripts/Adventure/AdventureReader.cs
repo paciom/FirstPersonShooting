@@ -114,9 +114,20 @@ public class AdventureReader : MonoBehaviour
         // inside one scrolling column, and only the two choices stay pinned.
         var viewGo = new GameObject("Viewport");
         viewGo.transform.SetParent(page, false);
+        // RectMask2D, NOT Mask. Mask clips through the stencil buffer and
+        // discards any pixel whose graphic alpha is under ~0.001, so the
+        // near-invisible Image this used to carry masked the ENTIRE column
+        // away: image, title, hook, scene and cliffhanger all gone, while the
+        // header, choices and footer — siblings outside the mask — still drew.
+        // That is exactly what shipped to play.jah.cc. RectMask2D clips by
+        // rectangle, needs no graphic and no stencil, and cannot fail this way.
+        viewGo.AddComponent<RectMask2D>();
+        // A fully transparent graphic still has to be here, but only so the
+        // raycaster has something to hit: without it the mouse wheel never
+        // reaches the ScrollRect. Alpha 0 is fine for raycasting.
         var viewImage = viewGo.AddComponent<Image>();
-        viewImage.color = new Color(0f, 0f, 0f, 0.001f);   // a mask needs a graphic
-        viewGo.AddComponent<Mask>().showMaskGraphic = false;
+        viewImage.color = new Color(0f, 0f, 0f, 0f);
+        viewImage.raycastTarget = true;
         var viewRect = viewGo.GetComponent<RectTransform>();
         Place(viewRect, new Vector2(0f, ReadTop - ReadHeight * 0.5f),
             new Vector2(Column + 40f, ReadHeight));
