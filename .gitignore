@@ -131,3 +131,5 @@ Tools/onepass.log
 Tools/video_*.log
 Tools/adventure_clips/*_cut.mp4
 Tools/adventure_clips/*_list.txt
+Tools/deploy.log
+Tools/webgl_build.log
