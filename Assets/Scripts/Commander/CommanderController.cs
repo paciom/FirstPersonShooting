@@ -42,6 +42,9 @@ public class CommanderController : MonoBehaviour
     /// <summary>True when a human holds the cyan seat; false is the AI-war spectator mode.</summary>
     [SerializeField] bool _playerCommands = true;
 
+    /// <summary>Audio needs to know whether losing cyan means the PLAYER lost.</summary>
+    public bool PlayerCommands => _playerCommands;
+
     /// <summary>The MAP CODE this session's battlefield is rolled from.</summary>
     [SerializeField] int _seed;
 

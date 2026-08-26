@@ -186,6 +186,7 @@ public class TDWaves : MonoBehaviour
         _bossSpawned = false;
         TDDirector.Instance?.OnWaveStarted();
         VfxUtil.Explosion(TDMap.PortalSite + Vector3.up * 2.5f, new Color(1f, 0.3f, 0.9f), 1.4f);
+        GameAudio.PlayFlat(GameAudio.Id.WaveStart);
     }
 
     void FinishWave()
@@ -195,6 +196,7 @@ public class TDWaves : MonoBehaviour
             _leaksThisWave);
         // The clear bonus: the wave's worth, paid on a swept field.
         TDEconomy.Grant(60 + 10 * _wave);
+        GameAudio.PlayFlat(GameAudio.Id.WaveClear);
         if (_wave >= TotalWaves)
         {
             TDMatch.Instance?.Victory();

@@ -34,6 +34,15 @@ public class EnergyShield : MonoBehaviour
     /// <summary>Root of whoever landed the most recent hit (for score attribution).</summary>
     public Transform LastAttacker { get; private set; }
 
+    /// <summary>
+    /// The one shield the local player is riding right now — robot, tank
+    /// hull, or jet. Modes set it when the player's pawn spawns; the menu
+    /// clears it. This is what lets ONE seam sound "I was hit" / "I went
+    /// down" / "I scored" for every mode built on EnergyShield, instead of
+    /// per-bullet audio scattered through fifty weapons.
+    /// </summary>
+    public static EnergyShield PlayerShield;
+
     /// <summary>(damage, worldHitPoint)</summary>
     public event Action<float, Vector3> OnDamaged;
     public event Action OnDeRezzed;
@@ -138,10 +147,21 @@ public class EnergyShield : MonoBehaviour
         _lastHitTime = Time.time;
         OnDamaged?.Invoke(damage, hitPoint);
 
+        // Major-event audio rides the damage model itself, so every mode —
+        // arena, tanks, jets, and whatever comes next — sounds right with no
+        // per-mode wiring. GameAudio throttles, so a shotgun spread is one thud.
+        if (this == PlayerShield)
+            GameAudio.PlayFlat(GameAudio.Id.PlayerHit, 0.9f);
+
         if (Current <= 0f)
         {
             IsDown = true;
             DropOvershield();
+            if (this == PlayerShield)
+                GameAudio.PlayFlat(GameAudio.Id.PlayerDown);
+            else if (PlayerShield != null && attacker != null
+                     && attacker.root == PlayerShield.transform.root)
+                GameAudio.Play(GameAudio.Id.EnemyDown, hitPoint);
             OnDeRezzed?.Invoke();
         }
     }
@@ -181,6 +201,8 @@ public class EnergyShield : MonoBehaviour
         DropOvershield();
         Current = maxShield;
         IsDown = false;
+        if (this == PlayerShield)
+            GameAudio.PlayFlat(GameAudio.Id.Respawn, 0.7f);
         OnRematerialized?.Invoke();
     }
 
@@ -208,6 +230,9 @@ public class EnergyShield : MonoBehaviour
         Current = 0f;
         IsDown = true;
         DropOvershield();
+        // Online duels are 1v1: the remote mirror going down IS your score.
+        if (PlayerShield != null && this != PlayerShield)
+            GameAudio.Play(GameAudio.Id.EnemyDown, transform.position);
         OnDeRezzed?.Invoke();
     }
 

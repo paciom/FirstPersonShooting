@@ -193,6 +193,8 @@ public class TDPlacer : MonoBehaviour
         {
             var building = Building.Construct(_pending.building, 0, center);
             building.gameObject.AddComponent<TDTower>().Configure(_pending);
+            // Materialize swell — one click, one sound, the placement felt.
+            GameAudio.PlayFlat(GameAudio.Id.Respawn, 0.6f);
             Cancel();
         }
     }

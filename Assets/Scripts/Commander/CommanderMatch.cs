@@ -61,6 +61,9 @@ public class CommanderMatch : MonoBehaviour
             CommanderController.Instance.Placer.Cancel();
 
         ShowBanner(winner);
+        bool playerLost = winner != 0 && CommanderController.Instance != null
+            && CommanderController.Instance.PlayerCommands;
+        GameAudio.PlayFlat(playerLost ? GameAudio.Id.Defeat : GameAudio.Id.Victory);
 
         // The cascade: everything the loser still has folds into light, one
         // beat apart, buildings then robots — a wave of surrender rolling

@@ -439,6 +439,12 @@ public class CommanderUnit : MonoBehaviour
     {
         if (_dying || _shield == null || _shield.IsDown)
             return;
+        // The RTS "forces under attack" horn — GameAudio's long Warning gap
+        // means a whole squad soaking fire is one horn, not a klaxon choir.
+        // Only when a human holds the seat: a spectator has nobody to warn.
+        if (TeamId == 0 && CommanderController.Instance != null
+            && CommanderController.Instance.PlayerCommands)
+            GameAudio.PlayFlat(GameAudio.Id.Warning, 0.5f);
         if (_order == OrderKind.Attack && _target != null && _target.IsAlive)
             return;   // already in a fight — finish it
         if (_order != OrderKind.Idle && _order != OrderKind.AttackMove)

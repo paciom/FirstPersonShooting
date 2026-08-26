@@ -421,6 +421,9 @@ public class Dogfight : MonoBehaviour
     void OpenFight()
     {
         _hud.Flash("FIGHT", new Color(1f, 0.75f, 0.2f));
+        GameAudio.PlayFlat(GameAudio.Id.MatchStart);
+        if (_playerControls && _cyanTeam.Count > 0 && _cyanTeam[0].pawn != null)
+            EnergyShield.PlayerShield = _cyanTeam[0].pawn.Shield;
         _hud.SetReticleVisible(_playerControls);
         _hud.SetPilotRowVisible(_playerControls);
 
@@ -753,6 +756,9 @@ public class Dogfight : MonoBehaviour
             int scorer = cyanSide ? 1 : 0;
             _hud.Flash($"{MatchAnnouncer.TeamName(scorer)} SCORES",
                 MatchAnnouncer.TeamColor(scorer));
+            // A jet going down is the mode's headline event — few enough of
+            // them that every one deserves its boom.
+            GameAudio.Play(GameAudio.Id.Explosion, pawn.transform.position, 0.9f);
         }
 
         if (_director.Subject == pawn)
@@ -898,6 +904,8 @@ public class Dogfight : MonoBehaviour
         _hud.ShowOver($"{MatchAnnouncer.TeamName(winner)} WINS",
             $"{_cyanScore}  —  {_magentaScore}\nESC or MENU to fly again", accent);
         _hud.SetCaption("");
+        bool playerLost = _playerControls && winner != 0;
+        GameAudio.PlayFlat(playerLost ? GameAudio.Id.Defeat : GameAudio.Id.Victory);
     }
 
     // ------------------------------------------------------------------ readout
@@ -954,6 +962,9 @@ public class Dogfight : MonoBehaviour
             if ((missile.transform.position - hero.transform.position).sqrMagnitude < 55f * 55f)
             {
                 _hud.WarnIncoming();
+                // The audio half of the threat receiver — GameAudio's long
+                // Warning gap turns a pursuing missile into a periodic tone.
+                GameAudio.PlayFlat(GameAudio.Id.Warning, 0.6f);
                 return;
             }
         }

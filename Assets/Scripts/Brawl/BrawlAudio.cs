@@ -176,7 +176,7 @@ public static class BrawlAudio
     /// of noise at the moment of contact. `brightness` feeds the upper
     /// partials — grazes are bright and thin, KOs dark and long.
     /// </summary>
-    static AudioClip Clang(string name, float baseHz, float seconds, float brightness, int seed)
+    internal static AudioClip Clang(string name, float baseHz, float seconds, float brightness, int seed)
     {
         float[] ratios = { 1f, 2.76f, 5.40f, 8.93f, 13.34f };
         var random = new System.Random(seed);
@@ -207,7 +207,7 @@ public static class BrawlAudio
     /// bright to dark as it decays. Blocks, blaster fire, blaster impact —
     /// all static and air, no hum to read as a beep.
     /// </summary>
-    static AudioClip NoiseBurst(string name, float seconds, float cutoffStart,
+    internal static AudioClip NoiseBurst(string name, float seconds, float cutoffStart,
         float cutoffEnd, float punch)
     {
         float[] lowpass = new float[1];
@@ -238,7 +238,7 @@ public static class BrawlAudio
     /// A drum, not a bell: low body whose pitch falls out of the attack,
     /// noise slap on top, no sustained tone to read as a beep.
     /// </summary>
-    static AudioClip Boom(float hz, float seconds)
+    internal static AudioClip Boom(float hz, float seconds)
     {
         return Bake("boom", seconds, (t, noise) =>
         {
@@ -251,7 +251,7 @@ public static class BrawlAudio
     }
 
     /// <summary>Rising air — a filtered-noise swell, tone-free.</summary>
-    static AudioClip Swell(float seconds)
+    internal static AudioClip Swell(float seconds)
     {
         float[] lowpass = new float[1];
         return Bake("swell", seconds, (t, noise) =>
@@ -287,7 +287,7 @@ public static class BrawlAudio
         return clip;
     }
 
-    static AudioClip Layer(params AudioClip[] parts)
+    internal static AudioClip Layer(params AudioClip[] parts)
     {
         int count = 0;
         foreach (var part in parts)
@@ -320,7 +320,7 @@ public static class BrawlAudio
         return clip;
     }
 
-    static AudioClip Delay(AudioClip part, float seconds)
+    internal static AudioClip Delay(AudioClip part, float seconds)
     {
         int offset = Mathf.CeilToInt(Rate * seconds);
         var data = new float[part.samples + offset];

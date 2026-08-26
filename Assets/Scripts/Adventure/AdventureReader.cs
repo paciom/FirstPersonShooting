@@ -286,6 +286,9 @@ public class AdventureReader : MonoBehaviour
         var tint = node.ending == "good" ? new Color(0.42f, 0.94f, 0.55f)
                  : node.ending == "bad" ? new Color(1f, 0.46f, 0.46f)
                  : new Color(0.78f, 0.56f, 1f);
+        GameAudio.PlayFlat(node.ending == "good" ? GameAudio.Id.Victory
+            : node.ending == "bad" ? GameAudio.Id.Defeat
+            : GameAudio.Id.WaveClear, 0.8f);
         _counter.text = node.canon
             ? $"ENDING  ·  {node.ending.ToUpperInvariant()}  ·  THIS  IS  HOW  THE  SHOW  TELLS  IT"
             : $"ENDING  ·  {node.ending.ToUpperInvariant()}";

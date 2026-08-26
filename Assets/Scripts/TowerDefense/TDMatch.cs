@@ -52,6 +52,7 @@ public class TDMatch : MonoBehaviour
         // The wound made visible: a red flare at the Core, scaled to the bite.
         VfxUtil.Explosion(TDMap.CoreSite + Vector3.up * 3f,
             new Color(1f, 0.25f, 0.2f), amount > 1 ? 2.2f : 1.3f);
+        GameAudio.PlayFlat(GameAudio.Id.Warning);
 
         if (_coreEnergy <= 0)
             Defeat();
@@ -65,6 +66,7 @@ public class TDMatch : MonoBehaviour
         _over = true;
         ShowBanner("THE  CORE  STANDS", new Color(0.2f, 0.9f, 1f),
             "every wave repelled   ·   back to the menu in a moment");
+        GameAudio.PlayFlat(GameAudio.Id.Victory);
         StartCoroutine(CelebrateThenLeave());
     }
 
@@ -87,6 +89,7 @@ public class TDMatch : MonoBehaviour
 
         ShowBanner("THE  CORE  IS  LOST", new Color(1f, 0.35f, 0.3f),
             "the raiders drained it dry   ·   back to the menu in a moment");
+        GameAudio.PlayFlat(GameAudio.Id.Defeat);
         StartCoroutine(LeaveAfterDelay());
     }
 

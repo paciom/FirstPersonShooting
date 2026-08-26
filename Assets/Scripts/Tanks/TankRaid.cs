@@ -215,6 +215,8 @@ public class TankRaid : MonoBehaviour
         _hero.OnWrecked += HeroWrecked;
         if (!_playerDrives)
             _hero.gameObject.AddComponent<TankPilot>();
+        else
+            EnergyShield.PlayerShield = _hero.Shield;
 
         _cameraRig = BuildCameraRig();
         _camera = _cameraRig.GetComponent<Camera>();
@@ -548,6 +550,7 @@ public class TankRaid : MonoBehaviour
         brain.engageRange = 34f;
 
         _hud.Flash($"{reward.title} AHEAD", new Color(1f, 0.55f, 0.25f), 2.2f);
+        GameAudio.PlayFlat(GameAudio.Id.Warning);
     }
 
     /// <summary>
@@ -561,6 +564,8 @@ public class TankRaid : MonoBehaviour
         var outpost = pawn.GetComponent<TankOutpost>();
         pawn.Wreck();
         _director.Shake(1.4f);
+        GameAudio.Play(GameAudio.Id.Explosion, where);
+        GameAudio.PlayFlat(GameAudio.Id.WaveClear, 0.8f);
 
         if (outpost == null)
             return;
@@ -790,6 +795,7 @@ public class TankRaid : MonoBehaviour
 
         BankBest();
         _hud.ShowOver(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks, _outpostsTaken, _best);
+        GameAudio.PlayFlat(GameAudio.Id.Defeat);
     }
 
     void BankBest()

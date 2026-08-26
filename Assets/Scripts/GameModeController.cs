@@ -17,7 +17,15 @@ public class GameModeController : MonoBehaviour
     public GameMode Mode
     {
         get => _mode;
-        private set { MetricsModeSwap(_mode, value); _mode = value; }
+        private set
+        {
+            MetricsModeSwap(_mode, value);
+            _mode = value;
+            // Same one-seam trick as analytics: every mode gets its music.
+            GameMusic.ModeSwap(value);
+            if (value == GameMode.Menu)
+                EnergyShield.PlayerShield = null;
+        }
     }
     GameMode _mode = GameMode.Menu;
     float _matchT0;
@@ -847,6 +855,7 @@ public class GameModeController : MonoBehaviour
         {
             _player.SetActive(true);
             _playerBrain.enabled = true;
+            EnergyShield.PlayerShield = _player.GetComponent<EnergyShield>();
         }
         SetBotsActive(true);
         _treasureSpawner?.BeginMatch();
@@ -890,6 +899,7 @@ public class GameModeController : MonoBehaviour
         {
             _player.SetActive(true);
             _playerBrain.enabled = true;
+            EnergyShield.PlayerShield = _player.GetComponent<EnergyShield>();
 
             if (!isHost)
             {

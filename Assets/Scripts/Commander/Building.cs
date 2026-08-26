@@ -276,6 +276,8 @@ public class Building : MonoBehaviour
 
         VfxUtil.Explosion(transform.position + Vector3.up * (Definition?.height ?? 3f) * 0.5f,
             MatchAnnouncer.TeamColor(_teamId), 1.8f);
+        GameAudio.Play(GameAudio.Id.Explosion,
+            transform.position + Vector3.up * (Definition?.height ?? 3f) * 0.5f);
 
         for (float t = 0f; t < 1f; t += Time.deltaTime / 0.45f)
         {
