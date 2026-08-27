@@ -790,7 +790,7 @@ public class BrawlFighter : MonoBehaviour
         if (part.Vital)
         {
             _moveHasHit = true;
-            target.TakeHit(_move, this, contact);
+            target.TakeHit(_move, this, contact, current - start);
         }
         else if (!_grazedThisMove)
         {
@@ -821,14 +821,54 @@ public class BrawlFighter : MonoBehaviour
     }
 
     /// <summary>
+    /// Rotate a shove off the line between the fighters, by how the strike
+    /// was moving and where on the body it landed.
+    ///
+    /// Only the SIDEWAYS part of either is used: the push keeps its whole
+    /// root-to-root component, so this can never soften a hit or shove a
+    /// robot back into the fist that threw it — it can only turn it. Both
+    /// terms are summed and then capped, so a hook that also catches a
+    /// shoulder doesn't spin anyone off their feet.
+    /// </summary>
+    Vector3 Steer(Vector3 away, Vector3 impact, Vector3? along)
+    {
+        Vector3 lateral = Vector3.zero;
+
+        if (along.HasValue)
+        {
+            Vector3 travel = along.Value;
+            travel.y = 0f;
+            if (travel.sqrMagnitude > 1e-6f)
+            {
+                travel.Normalize();
+                lateral += (travel - Vector3.Project(travel, away))
+                           * BrawlMoveSet.ContactSteer;
+            }
+        }
+
+        Vector3 offCentre = impact - transform.position;
+        offCentre.y = 0f;
+        lateral += (offCentre - Vector3.Project(offCentre, away))
+                   * BrawlMoveSet.OffCentreSteer;
+
+        lateral = Vector3.ClampMagnitude(lateral, BrawlMoveSet.MaxSteer);
+        return (away + lateral).normalized;
+    }
+
+    /// <summary>
     /// Take a hit. <paramref name="at"/> is where the strike actually
     /// touched — the sweep in <see cref="TryHit"/> measures it, so sparks
     /// and the clang land on the head that was punched instead of a
     /// nominal chest height. Callers with no contact of their own (a
     /// bolt, a tumbling crate) leave it null and get the old centre.
+    ///
+    /// <paramref name="along"/> is the strike's own travel this frame. It
+    /// steers the shove: a straight still drives the target straight back,
+    /// a hook throws it off the line. Null keeps the pure root-to-root
+    /// push.
     /// </summary>
     public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker,
-        Vector3? at = null)
+        Vector3? at = null, Vector3? along = null)
     {
         if (Phase == State.Knockdown || Phase == State.KO || Phase == State.Celebrating)
             return;
@@ -838,6 +878,7 @@ public class BrawlFighter : MonoBehaviour
         away = away.sqrMagnitude > 1e-4f ? away.normalized : attacker.FacingDir;
 
         Vector3 impact = at ?? transform.position - away * 0.35f + Vector3.up * 1.2f;
+        away = Steer(away, impact, along);
 
         // A standing guard eats the hit: no damage (kid rules — no chip),
         // a shove instead of a stagger.

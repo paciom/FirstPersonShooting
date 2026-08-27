@@ -119,6 +119,27 @@ public static class BrawlMoveSet
     /// </summary>
     public const float StrikeRadius = 0.18f;
 
+    /// <summary>
+    /// How far a strike's own travel steers the shove it delivers. The
+    /// push always keeps its full root-to-root component and only gains a
+    /// sideways one, so a straight lands exactly as it always did and a
+    /// hook throws the target off the line. Per unit of purely sideways
+    /// swing: 0.55 is about 29 degrees.
+    /// </summary>
+    public const float ContactSteer = 0.55f;
+
+    /// <summary>
+    /// The same, per METRE that contact sits off the target's centre line
+    /// — catching a shoulder turns a robot, catching the sternum doesn't.
+    /// </summary>
+    public const float OffCentreSteer = 0.60f;
+
+    /// <summary>
+    /// Ceiling on the two combined, so no swing ever shoves a robot more
+    /// than ~37 degrees off the line between the fighters.
+    /// </summary>
+    public const float MaxSteer = 0.75f;
+
     public enum Limb { RightHand, LeftHand, RightForeArm, RightFoot, LeftFoot, RightKnee }
 
     /// <summary>
