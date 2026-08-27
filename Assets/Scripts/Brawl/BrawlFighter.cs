@@ -790,7 +790,7 @@ public class BrawlFighter : MonoBehaviour
         if (part.Vital)
         {
             _moveHasHit = true;
-            target.TakeHit(_move, this);
+            target.TakeHit(_move, this, contact);
         }
         else if (!_grazedThisMove)
         {
@@ -820,7 +820,15 @@ public class BrawlFighter : MonoBehaviour
         _effectorPrevValid = true;
     }
 
-    public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker)
+    /// <summary>
+    /// Take a hit. <paramref name="at"/> is where the strike actually
+    /// touched — the sweep in <see cref="TryHit"/> measures it, so sparks
+    /// and the clang land on the head that was punched instead of a
+    /// nominal chest height. Callers with no contact of their own (a
+    /// bolt, a tumbling crate) leave it null and get the old centre.
+    /// </summary>
+    public void TakeHit(BrawlMoveSet.Data hit, BrawlFighter attacker,
+        Vector3? at = null)
     {
         if (Phase == State.Knockdown || Phase == State.KO || Phase == State.Celebrating)
             return;
@@ -829,7 +837,7 @@ public class BrawlFighter : MonoBehaviour
         away.y = 0f;
         away = away.sqrMagnitude > 1e-4f ? away.normalized : attacker.FacingDir;
 
-        Vector3 chest = transform.position - away * 0.35f + Vector3.up * 1.2f;
+        Vector3 impact = at ?? transform.position - away * 0.35f + Vector3.up * 1.2f;
 
         // A standing guard eats the hit: no damage (kid rules — no chip),
         // a shove instead of a stagger.
@@ -838,15 +846,15 @@ public class BrawlFighter : MonoBehaviour
             _knockback = away * 2.5f;
             _stunTime = BrawlMoveSet.HitStun * 0.6f;
             Phase = State.HitStun;   // brief guard-shove; block anim persists via bool
-            VfxUtil.SpawnBurst(chest, _tint, 6, 3f, 0.10f);
-            BrawlAudio.Play(BrawlAudio.Id.Block, chest, 0.8f);
+            VfxUtil.SpawnBurst(impact, _tint, 6, 3f, 0.10f);
+            BrawlAudio.Play(BrawlAudio.Id.Block, impact, 0.8f);
             attacker.OnHitBlocked?.Invoke(this, hit.move);
             return;
         }
 
         Health = Mathf.Max(0f, Health - hit.damage);
         SetBlock(false);
-        VfxUtil.ImpactBurst(chest, new Color(1f, 0.9f, 0.6f));
+        VfxUtil.ImpactBurst(impact, new Color(1f, 0.9f, 0.6f));
 
         // Dealing charges the meter fast, absorbing trickles it up — the
         // robot getting beaten is quietly loading a comeback.
@@ -857,7 +865,7 @@ public class BrawlFighter : MonoBehaviour
                          || hit.move == BrawlMoveSet.Move.Blast
                          || Health <= 0f;
         // Metal on metal: the heavy clang for anything that floors a robot.
-        BrawlAudio.Play(knockdown ? BrawlAudio.Id.HitHeavy : BrawlAudio.Id.Hit, chest);
+        BrawlAudio.Play(knockdown ? BrawlAudio.Id.HitHeavy : BrawlAudio.Id.Hit, impact);
         attacker.OnHitLanded?.Invoke(this, hit.damage, knockdown);
 
         if (Health <= 0f)
