@@ -62,8 +62,15 @@ public static class ShareBridge
     /// Put the share sheet up: the card, the link, and the buttons that need
     /// a real browser gesture. <paramref name="card"/> may be null — the
     /// sheet degrades to a link-only panel rather than refusing to open.
+    ///
+    /// Returns what the player needs TOLD, or null when the platform showed
+    /// them something itself. Off the web there is no sheet to raise, so the
+    /// share happens silently — clipboard, a file on disk — and a caller that
+    /// drops this string leaves the button looking broken. Web returns null
+    /// on success (the sheet is its own receipt) and a string when raising it
+    /// failed, which is the one case a browser also has nothing to show.
     /// </summary>
-    public static void OpenSheet(string headline, string boast, string url, Texture2D card,
+    public static string OpenSheet(string headline, string boast, string url, Texture2D card,
         string filename = "jet-armor-heroes-win.png")
     {
         byte[] png = null;
@@ -77,8 +84,16 @@ public static class ShareBridge
         string image = png != null
             ? "data:image/png;base64," + System.Convert.ToBase64String(png)
             : "";
-        try { ShareOpenSheet(headline ?? "", boast ?? "", url ?? "", image, filename); }
-        catch (System.Exception e) { Debug.LogWarning($"[Share] sheet failed: {e.Message}"); }
+        try
+        {
+            ShareOpenSheet(headline ?? "", boast ?? "", url ?? "", image, filename);
+            return null;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[Share] sheet failed: {e.Message}");
+            return "Could not open the share sheet.";
+        }
 #else
         // Editor and desktop: the two halves of the sheet that CAN happen off
         // the web. Both are how this path gets tested without a deploy.
@@ -90,7 +105,7 @@ public static class ShareBridge
                 string path = Path.Combine(Application.persistentDataPath, filename);
                 File.WriteAllBytes(path, png);
                 Debug.Log($"[Share] {headline} — link on the clipboard, card written to {path}");
-                return;
+                return "Link copied to your clipboard.\nCard saved to " + path;
             }
             catch (System.Exception e)
             {
@@ -98,6 +113,7 @@ public static class ShareBridge
             }
         }
         Debug.Log($"[Share] {headline} — link on the clipboard: {url}");
+        return "Link copied to your clipboard.";
 #endif
     }
 }

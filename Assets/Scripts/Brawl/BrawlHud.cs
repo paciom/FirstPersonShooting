@@ -29,6 +29,7 @@ public class BrawlHud : MonoBehaviour
     float _announceUntil;
     GameObject _endPanel;
     Texture2D _endCard;
+    Text _shareNote;
     Text _cyanMove, _magentaMove;
     float _cyanMoveUntil, _magentaMoveUntil;
 
@@ -451,6 +452,35 @@ public class BrawlHud : MonoBehaviour
         MakeButton(_endPanel.transform, "MAIN  MENU", -346, onMenu);
     }
 
+    /// <summary>
+    /// What the share actually did, under the button stack.
+    ///
+    /// Off the web there is no sheet to raise: the link goes to the clipboard
+    /// and the card goes to disk, both of them invisible, and the button reads
+    /// as dead. This is the receipt. Null means the platform showed the player
+    /// something itself and there is nothing to add.
+    /// </summary>
+    public void ShareNote(string message)
+    {
+        if (_endPanel == null || string.IsNullOrEmpty(message))
+            return;
+        if (_shareNote == null)
+        {
+            _shareNote = MakeText(_endPanel.transform, "ShareNote", message, 21,
+                new Color(1f, 0.86f, 0.52f), FontStyle.Normal);
+            var rect = _shareNote.rectTransform;
+            // Anchored to the SCREEN BOTTOM, not the centre like the buttons.
+            // The stack ends 388 units below centre, and a 21:9 display only
+            // has ~466 to give — a centre-anchored line low enough to clear
+            // the buttons falls off the bottom of exactly the wide monitors
+            // this is most likely to be played on.
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 46f);
+            rect.sizeDelta = new Vector2(1400, 56);
+        }
+        _shareNote.text = message;
+    }
+
     /// <summary>The card itself, in a lit frame, at 40% of its real size.</summary>
     void BuildCardPreview(Texture2D card, float y)
     {
@@ -480,6 +510,7 @@ public class BrawlHud : MonoBehaviour
         {
             Destroy(_endPanel);
             _endPanel = null;
+            _shareNote = null;
         }
         // The card is a Texture2D this component allocated, so nothing frees it
         // with the hierarchy — the same rule BrawlPortraits documents for its

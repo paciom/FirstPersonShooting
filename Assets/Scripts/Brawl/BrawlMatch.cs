@@ -338,7 +338,8 @@ public class BrawlMatch : MonoBehaviour
                     ("mode", challenge.mode),
                     ("won", card.playerWon ? "1" : "0"),
                     ("signed_in", string.IsNullOrEmpty(challenge.from) ? "0" : "1"));
-                ShareBridge.OpenSheet(headline, challenge.Boast(), url, picture);
+                _hud.ShareNote(
+                    ShareBridge.OpenSheet(headline, challenge.Boast(), url, picture));
             },
             onRematch: () =>
             {
