@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// Background music for every mode, synthesized at runtime — no assets, no
@@ -117,6 +118,12 @@ public static class GameMusic
 /// <summary>
 /// The hidden runtime half: two AudioSources crossfading between looped
 /// tracks, a duck envelope, and the pattern synthesizer that bakes them.
+///
+/// Audition controls: "." and "," cycle forward/back through every clip in
+/// Resources/Music (candidate tracks included), with an AUTO slot that hands
+/// control back to the per-mode music. Whenever a track starts, a toast at
+/// the top of the screen names the file for a few seconds — that is how the
+/// candidates get chosen: play the game, tap ".", read what's playing.
 /// </summary>
 public class GameMusicPlayer : MonoBehaviour
 {
@@ -131,6 +138,16 @@ public class GameMusicPlayer : MonoBehaviour
     float _duckMul = 1f;
     readonly Dictionary<GameMusic.Track, AudioClip> _baked =
         new Dictionary<GameMusic.Track, AudioClip>();
+
+    // The audition ring: every clip under Resources/Music, "," / "." cycle.
+    // -1 = AUTO (the mode picks). A hand-picked clip survives mode changes,
+    // so one track can be judged across the whole game.
+    AudioClip[] _library;
+    int _manualIndex = -1;
+
+    Canvas _toast;
+    Text _toastText;
+    float _toastUntil;
 
     void Awake()
     {
@@ -150,22 +167,115 @@ public class GameMusicPlayer : MonoBehaviour
         if (track == _track)
             return;
         _track = track;
+        // A hand-picked audition track outranks the mode's own music.
+        if (_manualIndex >= 0)
+            return;
+        PlayAuto();
+    }
 
-        if (track == GameMusic.Track.None)
+    void PlayAuto()
+    {
+        if (_track == GameMusic.Track.None)
         {
             for (int i = 0; i < 2; i++)
                 _targets[i] = 0f;
             return;
         }
 
-        var clip = GetClip(track);
+        var clip = GetClip(_track);
         if (clip == null)
+            return;
+        StartClip(clip);
+        Announce(clip.name.StartsWith("music_")
+            ? clip.name.Substring(6) + "   ·   built-in synth"
+            : clip.name + ".ogg");
+    }
+
+    void StartClip(AudioClip clip)
+    {
+        if (_active >= 0 && _sources[_active].clip == clip
+            && _sources[_active].isPlaying && _targets[_active] > 0f)
             return;
         _active = _active == 0 ? 1 : 0;
         _sources[_active].clip = clip;
         _sources[_active].Play();
         _targets[_active] = 1f;
         _targets[1 - _active] = 0f;
+    }
+
+    void Cycle(int direction)
+    {
+        if (_library == null)
+        {
+            _library = Resources.LoadAll<AudioClip>("Music");
+            System.Array.Sort(_library,
+                (a, b) => string.CompareOrdinal(a.name, b.name));
+        }
+        if (_library.Length == 0)
+        {
+            Announce("no files in Resources/Music");
+            return;
+        }
+
+        _manualIndex += direction;
+        if (_manualIndex >= _library.Length)
+            _manualIndex = -1;                     // past the end: back to AUTO
+        else if (_manualIndex < -1)
+            _manualIndex = _library.Length - 1;
+
+        if (_manualIndex < 0)
+        {
+            Announce("AUTO   ·   per-mode music");
+            // Force the mode's track back on even though _track is unchanged.
+            PlayAuto();
+        }
+        else
+        {
+            var clip = _library[_manualIndex];
+            StartClip(clip);
+            Announce($"{clip.name}.ogg   ·   {_manualIndex + 1} / {_library.Length}");
+        }
+    }
+
+    void Announce(string message)
+    {
+        EnsureToast();
+        _toastText.text = "MUSIC   ·   " + message;
+        _toast.enabled = true;
+        _toastUntil = Time.unscaledTime + 3.5f;
+    }
+
+    void EnsureToast()
+    {
+        if (_toast != null)
+            return;
+        var canvasGo = new GameObject("MusicToast");
+        canvasGo.transform.SetParent(transform, false);
+        _toast = canvasGo.AddComponent<Canvas>();
+        _toast.renderMode = RenderMode.ScreenSpaceOverlay;
+        // Above every mode's HUD: a toast that hides under the score bar
+        // answers the exact question it exists for with silence.
+        _toast.sortingOrder = 60;
+        var scaler = canvasGo.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+
+        var textGo = new GameObject("Name");
+        textGo.transform.SetParent(canvasGo.transform, false);
+        _toastText = textGo.AddComponent<Text>();
+        _toastText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        _toastText.fontSize = 30;
+        _toastText.alignment = TextAnchor.UpperCenter;
+        _toastText.color = new Color(1f, 1f, 1f, 0.95f);
+        _toastText.raycastTarget = false;
+        var outline = textGo.AddComponent<Outline>();
+        outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+        var rect = _toastText.rectTransform;
+        rect.anchorMin = new Vector2(0.5f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, -64f);
+        rect.sizeDelta = new Vector2(1500f, 70f);
     }
 
     public void DuckFor(float seconds)
@@ -175,6 +285,13 @@ public class GameMusicPlayer : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.Period))
+            Cycle(1);
+        else if (Input.GetKeyDown(KeyCode.Comma))
+            Cycle(-1);
+        if (_toast != null && _toast.enabled && Time.unscaledTime > _toastUntil)
+            _toast.enabled = false;
+
         _duckT -= Time.unscaledDeltaTime;
         float duckGoal = _duckT > 0f ? 0.3f : 1f;
         _duckMul = Mathf.MoveTowards(_duckMul, duckGoal,
