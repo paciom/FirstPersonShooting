@@ -44,6 +44,23 @@ public static class GameMusic
     }
     static float _volume = -1f;
 
+    /// <summary>Music kill-switch (menu button and the PAUSED screen).</summary>
+    public static bool Muted
+    {
+        get
+        {
+            if (_muted < 0)
+                _muted = PlayerPrefs.GetInt("jah.musicmute", 0);
+            return _muted == 1;
+        }
+        set
+        {
+            _muted = value ? 1 : 0;
+            PlayerPrefs.SetInt("jah.musicmute", _muted);
+        }
+    }
+    static int _muted = -1;
+
     /// <summary>Called from GameModeController's Mode setter. Never throws.</summary>
     public static void ModeSwap(GameMode to)
     {
@@ -173,6 +190,11 @@ public class GameMusicPlayer : MonoBehaviour
         PlayAuto();
     }
 
+    /// <summary>
+    /// Every game gets a track drawn at random from Resources/Music, and the
+    /// NEXT game (any mode change — matches always pass through the menu)
+    /// rolls a fresh one. The pattern synth is only the no-files fallback.
+    /// </summary>
     void PlayAuto()
     {
         if (_track == GameMusic.Track.None)
@@ -182,13 +204,37 @@ public class GameMusicPlayer : MonoBehaviour
             return;
         }
 
-        var clip = GetClip(_track);
-        if (clip == null)
+        var files = Library();
+        if (files.Length > 0)
+        {
+            var current = _active >= 0 ? _sources[_active].clip : null;
+            var clip = files[Random.Range(0, files.Length)];
+            // Same roll as last game: step once so a "new" game sounds new.
+            if (clip == current && files.Length > 1)
+                clip = files[(System.Array.IndexOf(files, clip) + 1) % files.Length];
+            StartClip(clip);
+            Announce(clip.name + ".ogg");
             return;
-        StartClip(clip);
-        Announce(clip.name.StartsWith("music_")
-            ? clip.name.Substring(6) + "   ·   built-in synth"
-            : clip.name + ".ogg");
+        }
+
+        var baked = GetClip(_track);
+        if (baked == null)
+            return;
+        StartClip(baked);
+        Announce(baked.name.StartsWith("music_")
+            ? baked.name.Substring(6) + "   ·   built-in synth"
+            : baked.name + ".ogg");
+    }
+
+    AudioClip[] Library()
+    {
+        if (_library == null)
+        {
+            _library = Resources.LoadAll<AudioClip>("Music");
+            System.Array.Sort(_library,
+                (a, b) => string.CompareOrdinal(a.name, b.name));
+        }
+        return _library;
     }
 
     void StartClip(AudioClip clip)
@@ -205,13 +251,7 @@ public class GameMusicPlayer : MonoBehaviour
 
     void Cycle(int direction)
     {
-        if (_library == null)
-        {
-            _library = Resources.LoadAll<AudioClip>("Music");
-            System.Array.Sort(_library,
-                (a, b) => string.CompareOrdinal(a.name, b.name));
-        }
-        if (_library.Length == 0)
+        if (Library().Length == 0)
         {
             Announce("no files in Resources/Music");
             return;
@@ -225,8 +265,8 @@ public class GameMusicPlayer : MonoBehaviour
 
         if (_manualIndex < 0)
         {
-            Announce("AUTO   ·   per-mode music");
-            // Force the mode's track back on even though _track is unchanged.
+            Announce("AUTO   ·   random per game");
+            // Force a fresh roll even though _track is unchanged.
             PlayAuto();
         }
         else
@@ -297,9 +337,10 @@ public class GameMusicPlayer : MonoBehaviour
         _duckMul = Mathf.MoveTowards(_duckMul, duckGoal,
             Time.unscaledDeltaTime * 2.5f);
 
+        float mute = GameMusic.Muted ? 0f : 1f;
         for (int i = 0; i < 2; i++)
         {
-            float goal = _targets[i] * GameMusic.Volume * _duckMul;
+            float goal = _targets[i] * GameMusic.Volume * _duckMul * mute;
             var source = _sources[i];
             source.volume = Mathf.MoveTowards(source.volume, goal,
                 Time.unscaledDeltaTime * FadeSpeed);

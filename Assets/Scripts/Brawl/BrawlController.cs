@@ -221,13 +221,18 @@ public class BrawlController : MonoBehaviour
 
     void HitStop(float seconds)
     {
+        if (GamePause.Paused)
+            return;
         Time.timeScale = 0.06f;
         _hitStopUntil = Time.realtimeSinceStartup + seconds;
     }
 
     void Update()
     {
-        if (Time.timeScale < 1f && Time.realtimeSinceStartup >= _hitStopUntil)
+        // Not while paused: this restore runs on a realtime clock, and
+        // "restoring" a deliberate pause would silently unfreeze the game.
+        if (!GamePause.Paused
+            && Time.timeScale < 1f && Time.realtimeSinceStartup >= _hitStopUntil)
             Time.timeScale = 1f;
     }
 

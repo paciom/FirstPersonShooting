@@ -298,8 +298,9 @@ public class GameModeController : MonoBehaviour
 
         // Re-lock the cursor with a click after alt-tab/focus loss unlocks it.
         // Never while the on-screen controls are up — they need a free cursor.
+        // Never while paused — that click is aimed at the PAUSED screen.
         if ((Mode == GameMode.PlayerVsAI || Mode == GameMode.ArenaPreview || Mode == GameMode.OnlinePvP)
-            && !TouchControls.Active
+            && !TouchControls.Active && !GamePause.Paused
             && Cursor.lockState != CursorLockMode.Locked && Input.GetMouseButtonDown(0))
         {
             Cursor.lockState = CursorLockMode.Locked;
