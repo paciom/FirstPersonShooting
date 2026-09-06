@@ -1,0 +1,9 @@
+{
+  "model": "music-3.0",
+  "prompt": "Anthemic electro-rock battle music at 130 BPM. Distorted electric guitar riffs locked with heavy electronic drums, aggressive synth bass, heroic melodic hooks trading between guitar and lead synth. Minor-key intensity with uplifting turns, stadium energy - armored heroes charging into battle. Relentless pace, loopable, no quiet sections, no fade-out.",
+  "lyrics": null,
+  "instrumental": true,
+  "extra": {
+    "status": 2
+  }
+}

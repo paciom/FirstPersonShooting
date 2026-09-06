@@ -1,0 +1,9 @@
+{
+  "model": "music-3.0",
+  "prompt": "Epic hybrid orchestral-electronic battle music at 128 BPM. Pounding cinematic drums and taiko hits, staccato string ostinato, heroic brass stabs, gritty synth bass and electronic pulses underneath. Dark heroic minor key, futuristic robot-war energy, triumphant not grim. Steady relentless drive, loopable structure, consistent intensity, no slow breakdown, no fade-out.",
+  "lyrics": null,
+  "instrumental": true,
+  "extra": {
+    "status": 2
+  }
+}
