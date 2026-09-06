@@ -27,18 +27,41 @@ public class CommanderMatch : MonoBehaviour
         Building.OnBuildingLost -= HandleBuildingLost;
     }
 
+    /// <summary>Enemy structures the player's side has brought down; the
+    /// leaderboard's measure of a Commander match beyond the win itself.</summary>
+    int _enemyBuildingsDown;
+
     void HandleBuildingLost(Building lost)
     {
         if (_over || lost == null)
             return;
 
         int team = lost.TeamId;
+        if (team != 0)
+            _enemyBuildingsDown++;
         bool hqDown = lost.Definition != null && lost.Definition.isHeadquarters;
         if (!hqDown && CountAlive(team) > 0)
             return;
 
         _over = true;
         StartCoroutine(EndMatch(loser: team));
+    }
+
+    /// <summary>
+    /// A Commander match has no running score, so the leaderboard number is
+    /// built from the end state: the win, the enemy buildings brought down,
+    /// and what the player still has standing. Maps are rolled from a seed,
+    /// so this goes to the mode's overall board only.
+    /// </summary>
+    void PostScore(bool playerWon)
+    {
+        int units = 0;
+        foreach (var unit in CommanderUnit.All)
+            if (unit != null && unit.TeamId == 0 && unit.IsAlive)
+                units++;
+        int score = (playerWon ? 1000 : 0) + _enemyBuildingsDown * 100
+            + CountAlive(0) * 50 + units * 10;
+        LeaderboardClient.Submit(GameMode.Commander, LeaderboardClient.AllArenas, score);
     }
 
     static int CountAlive(int teamId)
@@ -64,6 +87,8 @@ public class CommanderMatch : MonoBehaviour
         bool playerLost = winner != 0 && CommanderController.Instance != null
             && CommanderController.Instance.PlayerCommands;
         GameAudio.PlayFlat(playerLost ? GameAudio.Id.Defeat : GameAudio.Id.Victory);
+        if (CommanderController.Instance != null && CommanderController.Instance.PlayerCommands)
+            PostScore(winner == 0);
 
         // The cascade: everything the loser still has folds into light, one
         // beat apart, buildings then robots — a wave of surrender rolling

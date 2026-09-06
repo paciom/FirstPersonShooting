@@ -67,7 +67,19 @@ public class TDMatch : MonoBehaviour
         ShowBanner("THE  CORE  STANDS", new Color(0.2f, 0.9f, 1f),
             "every wave repelled   ·   back to the menu in a moment");
         GameAudio.PlayFlat(GameAudio.Id.Victory);
+        PostScore(wavesCleared: TDWaves.TotalWaves);
         StartCoroutine(CelebrateThenLeave());
+    }
+
+    /// <summary>
+    /// Waves fully repelled, with the Core's remaining energy as the
+    /// tie-break. Maps are rolled from a code, so this lands on the mode's
+    /// overall board only.
+    /// </summary>
+    void PostScore(int wavesCleared)
+    {
+        int score = Mathf.Max(0, wavesCleared) * 100 + Mathf.Max(0, _coreEnergy) * 10;
+        LeaderboardClient.Submit(GameMode.TowerDefense, LeaderboardClient.AllArenas, score);
     }
 
     void Defeat()
@@ -90,6 +102,8 @@ public class TDMatch : MonoBehaviour
         ShowBanner("THE  CORE  IS  LOST", new Color(1f, 0.35f, 0.3f),
             "the raiders drained it dry   ·   back to the menu in a moment");
         GameAudio.PlayFlat(GameAudio.Id.Defeat);
+        // The wave in progress was not cleared; only the ones before it count.
+        PostScore(wavesCleared: TDWaves.Instance != null ? TDWaves.Instance.Wave - 1 : 0);
         StartCoroutine(LeaveAfterDelay());
     }
 

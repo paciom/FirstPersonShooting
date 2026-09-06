@@ -324,6 +324,10 @@ public class BrawlMatch : MonoBehaviour
         string headline = ShareCard.Headline(card);
         string url = ChallengeLink.Url(challenge);
 
+        // Career wins on this stage (and overall). A loss posts nothing.
+        if (_bout.playerControls)
+            LeaderboardClient.Submit(GameMode.Brawl, _bout.stage, cyanWon ? 1 : 0);
+
         Metrics.Track("brawl_result",
             ("winner", card.winner ?? ""),
             ("loser", card.loser ?? ""),

@@ -148,7 +148,41 @@ public static class MainMenu
 
         BuildFooter(canvasGo.transform, controller);
         BuildAccountBadge(controller, canvasGo);
+        BuildLeaderboardBadge(controller, canvasGo);
         return canvasGo;
+    }
+
+    /// <summary>
+    /// The TOP PILOTS badge, sitting just left of the account badge in the
+    /// top-right corner. The decks are full (six slots each), and the boards
+    /// are not a mode anyway -- they are where every mode's scores end up.
+    /// </summary>
+    static void BuildLeaderboardBadge(GameModeController controller, GameObject canvasGo)
+    {
+        var box = MakeImage(canvasGo.transform, "LeaderboardBadge",
+            new Color(0.03f, 0.08f, 0.13f, 0.82f));
+        box.sprite = MenuArt.RoundedRect(10f);
+        box.type = Image.Type.Sliced;
+        box.raycastTarget = true;           // this is the button
+        var rect = box.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.anchoredPosition = new Vector2(-24f - 300f - 12f, -24f);
+        rect.sizeDelta = new Vector2(230f, 46f);
+
+        var underline = MakeImage(box.transform, "Underline", new Color(1f, 0.82f, 0.3f, 0.5f));
+        Band(underline.rectTransform, top: false, height: 2f, inset: 8f);
+
+        MakeText(box.transform, "Label", "TOP  PILOTS", 17,
+            new Color(1f, 0.92f, 0.6f, 0.85f), FontStyle.Bold, Vector2.zero, new Vector2(210f, 30f));
+
+        var button = box.gameObject.AddComponent<Button>();
+        button.targetGraphic = box;
+        var colors = button.colors;
+        colors.highlightedColor = new Color(0.10f, 0.30f, 0.42f, 1f);
+        colors.pressedColor = new Color(0.2f, 0.9f, 1f, 0.6f);
+        button.colors = colors;
+        button.onClick.AddListener(() => LeaderboardMenu.Open(controller, canvasGo));
     }
 
     /// <summary>

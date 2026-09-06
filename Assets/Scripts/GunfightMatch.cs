@@ -162,6 +162,7 @@ public class GunfightMatch : MonoBehaviour
     {
         _round = 0;
         _wins[0] = _wins[1] = 0;
+        EnergyShield.PlayerTakedowns = 0;
         DeRezEffect.Elimination = true;
         _canvasGo.SetActive(true);
         BeginRound();
@@ -300,9 +301,25 @@ public class GunfightMatch : MonoBehaviour
             // player who actually LOST gets the losing drum.
             bool playerLost = EnergyShield.PlayerShield != null && leader != 0;
             GameAudio.PlayFlat(playerLost ? GameAudio.Id.Defeat : GameAudio.Id.Victory);
+            PostScore(leader == 0);
             return;
         }
         BeginRound();
+    }
+
+    /// <summary>
+    /// The leaderboard entry for a HUMAN gunfight: the win, the rounds the
+    /// player's team took, and the robots the player personally de-rezzed.
+    /// AI v AI and the training range have nobody to credit.
+    /// </summary>
+    void PostScore(bool playerWon)
+    {
+        var gmc = GameModeController.Instance;
+        if (gmc == null || gmc.Mode != GameMode.PlayerVsAI || GameModeController.TrainingMatch)
+            return;
+        int score = (playerWon ? 1000 : 0) + _wins[0] * 300 + EnergyShield.PlayerTakedowns * 100;
+        string arena = ArenaLibrary.Get(ArenaRuntime.CurrentIndex).DisplayName;
+        LeaderboardClient.Submit(GameMode.PlayerVsAI, arena, score);
     }
 
     void TickMatchEnd()

@@ -94,6 +94,10 @@ public class AccountClient : MonoBehaviour
         }
     }
 
+    /// <summary>The saved session token ("" when signed out) for sibling
+    /// clients that call other bearer-authenticated endpoints.</summary>
+    public static string SessionToken => PlayerPrefs.GetString(TokenPref, "");
+
     /// <summary>The name to show for this player anywhere a name is shown.</summary>
     public static string DisplayName =>
         Instance != null && Instance.SignedIn ? Instance.Username : "GUEST";

@@ -794,8 +794,23 @@ public class TankRaid : MonoBehaviour
         TankPickup.DespawnAll();
 
         BankBest();
+        PostScore();
         _hud.ShowOver(Mathf.RoundToInt(Mathf.Max(0f, _furthest)), _wrecks, _outpostsTaken, _best);
         GameAudio.PlayFlat(GameAudio.Id.Defeat);
+    }
+
+    /// <summary>
+    /// Furthest metres driven, the same number the over panel banks. Only a
+    /// human's run counts, and only once: EndRun clears _running, so an
+    /// abandoned run posts from Teardown and a finished one does not.
+    /// </summary>
+    void PostScore()
+    {
+        if (!_playerDrives)
+            return;
+        int reached = Mathf.RoundToInt(Mathf.Max(0f, _furthest));
+        if (reached > 0)
+            LeaderboardClient.Submit(GameMode.TankRaid, LeaderboardClient.AllArenas, reached);
     }
 
     void BankBest()
@@ -828,6 +843,8 @@ public class TankRaid : MonoBehaviour
     {
         StopAllCoroutines();
         BankBest();
+        if (_running)
+            PostScore();
 
         // Pawns and pickups first: both live outside the stage root (pawns at
         // the scene root by the shootable rule, pickups under the stage but

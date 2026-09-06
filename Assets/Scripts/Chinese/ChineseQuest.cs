@@ -654,6 +654,7 @@ public class ChineseQuest : MonoBehaviour
         FaceTheCentre();
         _hud.ShowResults(_score, _right, _asked, _bestStreak);
         BrawlAudio.PlayFlat(BrawlAudio.Id.Gong, 0.8f);
+        LeaderboardClient.Submit(GameMode.ChineseQuest, _quiz.Deck.title, _score);
     }
 
     /// <summary>The results panel's PLAY AGAIN: same deck, clean slate.</summary>

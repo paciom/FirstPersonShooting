@@ -13,6 +13,8 @@
 //   POST /api/login     {id, password}   id = name OR email -> {ok, token, ...}
 //   POST /api/logout    Authorization: Bearer <token>       -> {ok}
 //   GET  /api/me        Authorization: Bearer <token>       -> {ok, userId, ...}
+// plus the leaderboard routes (/api/score, /api/leaderboard, /api/boards),
+// which live in leaderboard.js and ride the same store and session tokens.
 //
 // Every reply is a FLAT object — the Unity client parses with JsonUtility,
 // which cannot see nested objects, so keep it one level deep.
@@ -30,6 +32,7 @@
 const crypto = require("crypto");
 const { promisify } = require("util");
 const { createStore } = require("./store");
+const leaderboard = require("./leaderboard");
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -52,6 +55,8 @@ let store = null;
 
 async function init() {
   store = await createStore();
+  // Leaderboards share the table and the session lookup.
+  await leaderboard.init({ store, resolveToken });
 }
 
 // ---------------------------------------------------------------- passwords
@@ -322,6 +327,9 @@ async function handle(req, res) {
 
   const url = req.url.split("?")[0];
   try {
+    if (await leaderboard.handle(req, res, url,
+        { bearerToken, readJsonBody, writeJson, fail }))
+      return;
     if (url === "/api/register" && req.method === "POST")
       return await handleRegister(req, res, ip);
     if (url === "/api/login" && req.method === "POST")

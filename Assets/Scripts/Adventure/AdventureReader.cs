@@ -282,6 +282,10 @@ public class AdventureReader : MonoBehaviour
         AdventureProgress.Record(_story.id, node.id);
         Metrics.Track("adventure_end", ("story", _story.id), ("ending", node.id),
             ("steps", _step), ("kind", node.ending));
+        // Endings found in this story: the number only ever climbs, which is
+        // exactly what a personal-best board wants.
+        LeaderboardClient.Submit(GameMode.Adventure, _story.title,
+            AdventureProgress.FoundCount(_story));
 
         var tint = node.ending == "good" ? new Color(0.42f, 0.94f, 0.55f)
                  : node.ending == "bad" ? new Color(1f, 0.46f, 0.46f)

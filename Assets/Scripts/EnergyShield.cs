@@ -43,6 +43,13 @@ public class EnergyShield : MonoBehaviour
     /// </summary>
     public static EnergyShield PlayerShield;
 
+    /// <summary>
+    /// Enemies the player has personally de-rezzed since a mode last zeroed
+    /// it. Counted at the one place every hit lands, so it is right for any
+    /// weapon in any mode; GunfightMatch folds it into the leaderboard score.
+    /// </summary>
+    public static int PlayerTakedowns;
+
     /// <summary>(damage, worldHitPoint)</summary>
     public event Action<float, Vector3> OnDamaged;
     public event Action OnDeRezzed;
@@ -161,7 +168,11 @@ public class EnergyShield : MonoBehaviour
                 GameAudio.PlayFlat(GameAudio.Id.PlayerDown);
             else if (PlayerShield != null && attacker != null
                      && attacker.root == PlayerShield.transform.root)
+            {
                 GameAudio.Play(GameAudio.Id.EnemyDown, hitPoint);
+                if (teamId != PlayerShield.teamId)
+                    PlayerTakedowns++;
+            }
             OnDeRezzed?.Invoke();
         }
     }

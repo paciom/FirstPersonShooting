@@ -44,6 +44,26 @@ Storage (`store.js`) picks a backend from the environment:
 The table (`PhotonAccounts` unless `TABLES_TABLE_NAME` says otherwise) is
 created on boot if missing.
 
+## Leaderboards
+
+`leaderboard.js` keeps one board per (mode, arena) plus an overall board per
+mode, each holding every signed-in player's personal best. Guests play fine;
+only signed-in players can post, because a row needs a name to show.
+
+- `POST /api/score` (bearer) `{mode, arena, score}` -> `{ok, improved, best,
+  rank}`. `mode` must be one of the keys in `MODES`; `arena` is the client's
+  display name, slugged server-side (unknown arenas are fine, adding one needs
+  no server change); `score` is an integer within the mode's plausibility cap
+  and is REFUSED above it, never clamped.
+- `GET /api/leaderboard?mode=..&arena=..&top=10` (bearer optional) -> the top
+  rows, plus `myRank`/`myScore` for the caller. Omit `arena` for the overall
+  board.
+- `GET /api/boards` -> the mode table (direction, unit, cap).
+
+Sort order lives in the row key (`<score, inverted for higher-is-better>_<time>_<userId>`)
+because Table Storage returns a partition in row-key order and has no ORDER BY.
+Each player owns exactly one row per board: a new best deletes the old row.
+
 ## Run locally
 
 ```bash

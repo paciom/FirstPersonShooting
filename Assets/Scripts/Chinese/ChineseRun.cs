@@ -623,6 +623,9 @@ public class ChineseRun : MonoBehaviour
     void BankBest()
     {
         int reached = Mathf.RoundToInt(Mathf.Max(0f, _furthest));
+        // The deck's board keeps its own best; a short run is a cheap no-op.
+        if (reached > 0)
+            LeaderboardClient.Submit(GameMode.ChineseRun, _quiz.Deck.title, reached);
         if (reached <= _best)
             return;
         _best = reached;

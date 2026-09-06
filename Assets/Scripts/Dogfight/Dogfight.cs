@@ -906,6 +906,11 @@ public class Dogfight : MonoBehaviour
         _hud.SetCaption("");
         bool playerLost = _playerControls && winner != 0;
         GameAudio.PlayFlat(playerLost ? GameAudio.Id.Defeat : GameAudio.Id.Victory);
+        // The win plus the squadron's kills, on this sky's board. The AI war
+        // has no pilot to credit.
+        if (_playerControls)
+            LeaderboardClient.Submit(GameMode.Dogfight, DogfightMapPick.NameOf(DogfightSky.Map),
+                (winner == 0 ? 1000 : 0) + _cyanScore * 100);
     }
 
     // ------------------------------------------------------------------ readout

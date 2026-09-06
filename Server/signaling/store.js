@@ -14,6 +14,10 @@
 // Uniqueness (usernames, emails) is enforced through insert-if-absent on
 // index entities: insert() returns false when the row already exists, and
 // the caller treats that as "taken".
+//
+// list(pk, limit) is the one range read: a partition's rows in row-key order.
+// It exists for the leaderboards (leaderboard.js), which bake the sort order
+// into the row key because Table Storage cannot ORDER BY anything else.
 
 const fs = require("fs");
 const path = require("path");
@@ -80,6 +84,28 @@ class TableStore {
     } catch (err) {
       if (err.statusCode !== 404) throw err;
     }
+  }
+
+  /**
+   * The first `limit` rows of one partition in ROW-KEY order. Table Storage
+   * has no ORDER BY, but it always returns a partition sorted by row key, so
+   * a caller that encodes its sort order into the row key gets a sorted
+   * read for free (the leaderboard does exactly that).
+   */
+  async list(pk, limit) {
+    const rows = [];
+    const filter = `PartitionKey eq '${pk.replace(/'/g, "''")}'`;
+    const iter = this.client.listEntities({
+      queryOptions: { filter },
+    }).byPage({ maxPageSize: Math.min(limit, 1000) });
+    for await (const page of iter) {
+      for (const entity of page) {
+        const { partitionKey, rowKey, etag, timestamp, ...props } = entity;
+        rows.push({ rowKey, ...props });
+        if (rows.length >= limit) return rows;
+      }
+    }
+    return rows;
   }
 }
 
@@ -149,6 +175,16 @@ class FileStore {
   async remove(pk, rk) {
     this.rows.delete(this._key(pk, rk));
     this._save();
+  }
+
+  async list(pk, limit) {
+    const prefix = pk + "\n";
+    const rows = [];
+    for (const [key, props] of this.rows)
+      if (key.startsWith(prefix))
+        rows.push({ rowKey: key.slice(prefix.length), ...props });
+    rows.sort((a, b) => (a.rowKey < b.rowKey ? -1 : a.rowKey > b.rowKey ? 1 : 0));
+    return rows.slice(0, limit);
   }
 }
 
