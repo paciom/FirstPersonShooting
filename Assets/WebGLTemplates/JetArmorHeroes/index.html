@@ -47,11 +47,12 @@
       }
       #boot.gone { opacity: 0; pointer-events: none; }
 
-      .jet { color: #fff; font-size: 20px; font-weight: 800; letter-spacing: 0.55em;
-             text-indent: 0.55em; opacity: 0.82; }
+      /* One lockup, two lines: JET ARMOR / HEROES. Kept as a single gradient
+         block so the sheen runs across both lines instead of restarting. */
       .title {
-        margin: 6px 0 2px; font-size: clamp(30px, 7vw, 66px); font-weight: 900;
-        letter-spacing: 0.06em;
+        display: flex; flex-direction: column;
+        margin: 0 0 2px; font-size: clamp(32px, 8.5vw, 80px); font-weight: 900;
+        letter-spacing: 0.06em; line-height: 1.02;
         background: linear-gradient(#fff7d2, #f79419);
         -webkit-background-clip: text; background-clip: text; color: transparent;
       }
@@ -92,8 +93,7 @@
     </div>
 
     <div id="boot">
-      <div class="jet">JET</div>
-      <div class="title">ARMOR HEROES</div>
+      <div class="title"><span>JET ARMOR</span><span>HEROES</span></div>
       <div class="tag">ROBOT · VEHICLE · JET</div>
 
       <div id="challenge">
