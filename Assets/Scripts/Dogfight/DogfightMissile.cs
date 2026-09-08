@@ -52,11 +52,32 @@ public class DogfightMissile : MonoBehaviour
         Live.Clear();
     }
 
+    /// <summary>How the flight ended. Decided at the moment of death so the
+    /// missile camera can caption the crater; Flying until then.</summary>
+    public enum Outcome { Flying, Hit, Flared, Missed }
+
     public GenericBolt Bolt { get; private set; }
+
+    /// <summary>Who fired it. Kept here rather than read off the bolt because
+    /// the bolt is already gone by the time <see cref="Ended"/> fires.</summary>
+    public Transform Owner { get; private set; }
+
+    public Outcome Result { get; private set; }
+
+    /// <summary>Fires once, from OnDestroy, whatever killed the missile —
+    /// impact, fuse, lifetime, or a mid-Play recompile wiping the bolt.</summary>
+    public event System.Action<DogfightMissile> Ended;
 
     /// <summary>The root this missile is currently chasing (jet, turret or a
     /// flare that stole the lock). Null once the bolt is coasting on its scan.</summary>
     public Transform Quarry => Bolt != null ? Bolt.homingTarget : null;
+
+    /// <summary>Unit direction of travel; the body's forward when the bolt is
+    /// too slow to say.</summary>
+    public Vector3 Heading =>
+        Bolt != null && Bolt.Velocity.sqrMagnitude > 0.01f
+            ? Bolt.Velocity.normalized
+            : transform.forward;
 
     float _nextSeduce;
 
@@ -105,19 +126,64 @@ public class DogfightMissile : MonoBehaviour
         };
 
         // War FX rides on top of the bolt's own glow splash: the glow is the
-        // energy read, the pack's flame-and-smoke is the WEIGHT.
+        // energy read, the pack's flame-and-smoke is the WEIGHT. The
+        // callbacks also settle the verdict: the bolt tells us what it hit
+        // before it dies, and the missile head is the one thing that
+        // remembers afterwards.
+        DogfightMissile missile = null;
         spec.onImpact = (bolt, hit) =>
+        {
             WarFx.Spawn(WarFx.Kind.Small, hit.point + hit.normal * 0.3f, 1.2f);
+            if (missile != null)
+                missile.NoteImpact(hit);
+        };
         spec.onExpire = bolt =>
+        {
             WarFx.Spawn(WarFx.Kind.Small, bolt.transform.position, 0.7f);
+            if (missile != null)
+                missile.Settle(Outcome.Missed);
+        };
 
         var spawned = GenericBolt.Spawn(from, direction.normalized, spec, teamId, ownerRoot);
         spawned.homingTarget = lockRoot;
         MissileModels.Dress(spawned, jet ? 0 : 2, jet ? 1.1f : 1.5f);
 
-        var missile = spawned.gameObject.AddComponent<DogfightMissile>();
+        missile = spawned.gameObject.AddComponent<DogfightMissile>();
         missile.Bolt = spawned;
+        missile.Owner = ownerRoot;
         return missile;
+    }
+
+    /// <summary>The raycast connected with something. A flare is a decoy
+    /// win for the other side, an enemy shield is the hit, and anything
+    /// else (deck, prop, a wingmate's hull) is a miss even if the splash
+    /// still scratches somebody.</summary>
+    void NoteImpact(RaycastHit hit)
+    {
+        if (Result != Outcome.Flying)
+            return;
+        var root = hit.transform.root;
+        if (root.GetComponentInChildren<DogfightFlare>() != null)
+        {
+            Settle(Outcome.Flared);
+            return;
+        }
+        var shield = root.GetComponent<EnergyShield>();
+        Settle(shield != null && shield.teamId != Bolt.teamId && !shield.IsDown
+            ? Outcome.Hit
+            : Outcome.Missed);
+    }
+
+    void Settle(Outcome outcome)
+    {
+        if (Result == Outcome.Flying)
+            Result = outcome;
+    }
+
+    void OnDestroy()
+    {
+        Ended?.Invoke(this);
+        Ended = null;
     }
 
     void Update()
@@ -149,6 +215,10 @@ public class DogfightMissile : MonoBehaviour
         if ((WeaponUtil.Center(shield) - transform.position).sqrMagnitude
             <= FuseRadius * FuseRadius)
         {
+            // A fuse on a stolen lock went off on the flare, not the jet.
+            Settle(quarry.GetComponent<DogfightFlare>() != null
+                ? Outcome.Flared
+                : Outcome.Hit);
             WarFx.Spawn(WarFx.Kind.Small, transform.position, 1.2f);
             Bolt.Die(transform.position);
         }

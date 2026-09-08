@@ -56,6 +56,9 @@ public class DogfightHud : MonoBehaviour
     GameObject _helpPanel;
     GameObject _helpButton;
     GameObject[] _ordnanceParts;
+    Image[] _missileCamEdges;
+    Text _missileCamLabel;
+    int _magentaRows = 1;
     RectTransform _missileFill;
     Image _missileFillImage;
     Text _missileLabel;
@@ -138,6 +141,81 @@ public class DogfightHud : MonoBehaviour
             BuildPawnBar(cyans[i], true, i, cyans[i] == hero);
         for (int i = 0; i < magentas.Count; i++)
             BuildPawnBar(magentas[i], false, i, false);
+        // The missile inset hangs under the enemy's rows.
+        _magentaRows = Mathf.Max(1, magentas.Count);
+    }
+
+    // ------------------------------------------------------------ missile cam
+
+    /// <summary>Where the missile camera's inset lives, in viewport units:
+    /// the top-right corner, just under the enemy pilot rows, a quarter of
+    /// the screen wide and the same fraction tall so it keeps the screen's
+    /// own aspect. Computed from the canvas scale so the frame drawn here
+    /// and the camera rect land on the same pixels at every resolution.</summary>
+    public Rect MissileCamViewport()
+    {
+        const float Size = 0.24f;
+        float scale = GetComponent<Canvas>().scaleFactor;
+        float rightPx = 16f * scale;
+        float topPx = (50f + (_magentaRows - 1) * 26f + 8f) * scale;
+        float x = 1f - rightPx / Mathf.Max(1f, Screen.width) - Size;
+        float y = 1f - topPx / Mathf.Max(1f, Screen.height) - Size;
+        return new Rect(x, y, Size, Size);
+    }
+
+    /// <summary>The bezel around the inset: four edge bars anchored to the
+    /// viewport rect (a filled panel would paint over the camera — the
+    /// overlay canvas draws on top of everything) and a caption that reads
+    /// MISSILE CAM in flight and the verdict afterwards.</summary>
+    public void SetMissileCamFrame(Rect viewport, bool visible, string caption, Color color)
+    {
+        if (_missileCamEdges == null)
+        {
+            _missileCamEdges = new Image[4];
+            for (int i = 0; i < 4; i++)
+                _missileCamEdges[i] = Box($"MissileCamEdge{i}", Warn, Vector2.zero,
+                    Vector2.zero, Vector2.zero);
+            _missileCamLabel = Label("MissileCamLabel", "MISSILE CAM", 15, Warn,
+                FontStyle.Bold, Vector2.zero, Vector2.zero, new Vector2(160f, 22f));
+            _missileCamLabel.alignment = TextAnchor.MiddleLeft;
+        }
+
+        foreach (var edge in _missileCamEdges)
+            edge.gameObject.SetActive(visible);
+        _missileCamLabel.gameObject.SetActive(visible);
+        if (!visible)
+            return;
+
+        const float Thick = 3f;
+        // Top, bottom, left, right — each spans its side and overhangs by the
+        // thickness so the corners close.
+        Frame(_missileCamEdges[0], new Vector2(viewport.xMin, viewport.yMax),
+            new Vector2(viewport.xMax, viewport.yMax), new Vector2(Thick * 2f, Thick));
+        Frame(_missileCamEdges[1], new Vector2(viewport.xMin, viewport.yMin),
+            new Vector2(viewport.xMax, viewport.yMin), new Vector2(Thick * 2f, Thick));
+        Frame(_missileCamEdges[2], new Vector2(viewport.xMin, viewport.yMin),
+            new Vector2(viewport.xMin, viewport.yMax), new Vector2(Thick, Thick * 2f));
+        Frame(_missileCamEdges[3], new Vector2(viewport.xMax, viewport.yMin),
+            new Vector2(viewport.xMax, viewport.yMax), new Vector2(Thick, Thick * 2f));
+        foreach (var edge in _missileCamEdges)
+            edge.color = color;
+
+        var label = _missileCamLabel.rectTransform;
+        label.anchorMin = label.anchorMax = new Vector2(viewport.xMin, viewport.yMax);
+        label.pivot = new Vector2(0f, 0f);
+        label.anchoredPosition = new Vector2(Thick + 4f, Thick + 2f);
+        _missileCamLabel.text = caption ?? "";
+        _missileCamLabel.color = color;
+    }
+
+    static void Frame(Image edge, Vector2 anchorMin, Vector2 anchorMax, Vector2 size)
+    {
+        var rect = edge.rectTransform;
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.sizeDelta = size;
     }
 
     const float PawnBarWidth = 232f;

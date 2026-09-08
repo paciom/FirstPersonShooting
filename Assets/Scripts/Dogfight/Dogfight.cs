@@ -79,6 +79,7 @@ public class Dogfight : MonoBehaviour
     GameObject _cameraRig;
     Camera _camera;
     DogfightCamera _director;
+    DogfightMissileCam _missileCam;
     DogfightSky _sky;
     DogfightHud _hud;
     ArenaBlockManager _blockManager;
@@ -232,6 +233,11 @@ public class Dogfight : MonoBehaviour
         if (_playerControls)
             DogfightSticks.Build(transform);
 
+        // The pilot's missile inset: lights only while a missile of theirs
+        // is out of the main frame, so a shot fired ahead costs no screen.
+        if (_playerControls)
+            _missileCam = DogfightMissileCam.Build(transform, _camera, _hud);
+
         // The player's tube reloads on the level's clock.
         if (_playerControls && Hero != null)
             Hero.missileCooldownScale = dials.playerReload;
@@ -381,6 +387,13 @@ public class Dogfight : MonoBehaviour
             RunGraceBlink(slot);
         foreach (var slot in _magentaTeam)
             RunGraceBlink(slot);
+        // Wanted-state, asserted every frame: the hero pawn respawns and the
+        // fight stage ends, and the inset must follow both without an event.
+        if (_missileCam != null)
+        {
+            _missileCam.Enabled = _stage == Stage.Fight && heroNow != null;
+            _missileCam.Owner = heroNow != null ? heroNow.transform : null;
+        }
         Readout();
     }
 
@@ -1022,6 +1035,8 @@ public class Dogfight : MonoBehaviour
 
         if (_cameraRig != null)
             Destroy(_cameraRig);
+        if (_missileCam != null)
+            Destroy(_missileCam.gameObject);
         if (_stageRoot != null)
         {
             // Immediate, not deferred: ArenaRuntime.Load re-bakes this same
