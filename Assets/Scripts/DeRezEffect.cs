@@ -15,6 +15,16 @@ public class DeRezEffect : MonoBehaviour
     public float respawnDelay = 3f;
     public Color burstColor = new Color(0.2f, 0.9f, 1f);
 
+    /// <summary>
+    /// While true a de-rez is FINAL: the body dissolves and stays gone until
+    /// something revives it. This is the single switch that turns Gunfight from
+    /// a sandbox into a match — with everyone coming back three seconds later,
+    /// "last team standing" can never happen and nothing can ever end.
+    /// <see cref="GunfightMatch"/> owns it, and clears it on the way out; every
+    /// other mode leaves it off, where the respawn IS the no-death fiction.
+    /// </summary>
+    public static bool Elimination { get; set; }
+
     EnergyShield _shield;
     Vector3 _spawnPosition;
     Quaternion _spawnRotation;
@@ -85,19 +95,15 @@ public class DeRezEffect : MonoBehaviour
         }
         body.localScale = Vector3.zero;
 
+        // Out for the round. Control and colliders went off at the top of this
+        // routine, so the shell just sits there being nobody until the referee
+        // stands it up again — see GunfightMatch.
+        if (Elimination)
+            yield break;
+
         yield return new WaitForSeconds(respawnDelay);
 
-        // Re-materialize at the spawn point. NavMeshAgents must Warp — setting
-        // transform.position while an agent is enabled makes it fight the move.
-        var motor = GetComponent<CharacterMotor>();
-        var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
-        if (motor != null)
-            motor.Teleport(_spawnPosition);
-        else if (agent != null && agent.enabled)
-            agent.Warp(_spawnPosition);
-        else
-            transform.position = _spawnPosition;
-        transform.rotation = _spawnRotation;
+        MoveTo(_spawnPosition, _spawnRotation);
 
         VfxUtil.EnergyBurst(_spawnPosition + Vector3.up * 1f, burstColor, 0.7f);
         for (float t = 0f; t < 1f; t += Time.deltaTime / 0.25f)
@@ -109,6 +115,47 @@ public class DeRezEffect : MonoBehaviour
 
         SetControlEnabled(true);
         _shield.Rematerialize();
+    }
+
+    /// <summary>
+    /// Put this character somewhere, whatever is driving it. NavMeshAgents must
+    /// Warp and CharacterControllers must Teleport — setting transform.position
+    /// under either one makes it fight the move.
+    /// </summary>
+    void MoveTo(Vector3 position, Quaternion rotation)
+    {
+        var motor = GetComponent<CharacterMotor>();
+        var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+        if (motor != null)
+            motor.Teleport(position);
+        else if (agent != null && agent.enabled)
+            agent.Warp(position);
+        else
+            transform.position = position;
+        transform.rotation = rotation;
+    }
+
+    /// <summary>
+    /// Stand this character back up at its spawn, whole: the round reset. Also
+    /// unwinds a de-rez in flight, so a robot that fell as the round ended does
+    /// not finish dissolving into the next one.
+    /// </summary>
+    public void ReviveAtSpawn() => Revive(_spawnPosition, _spawnRotation);
+
+    /// <summary>
+    /// Stand up somewhere else entirely — the player taking over a team-mate's
+    /// body in Player v AI.
+    /// </summary>
+    public void Revive(Vector3 position, Quaternion rotation)
+    {
+        StopAllCoroutines();
+        MoveTo(position, rotation);
+        if (body != null)
+            body.localScale = _bodyScale;
+        SetControlEnabled(true);
+        if (_shield.IsDown)
+            _shield.Rematerialize();
+        VfxUtil.EnergyBurst(position + Vector3.up * 1f, burstColor, 0.7f);
     }
 
     void SetControlEnabled(bool enabled)
